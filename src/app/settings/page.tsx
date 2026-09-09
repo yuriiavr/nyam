@@ -219,6 +219,14 @@ export default function SettingsPage() {
             Дані зберігаються локально у твоєму браузері. Штрихкоди звіряються з відкритою базою
             Open Food Facts, погода — з Open-Meteo.
           </p>
+          <p className="mt-3 flex gap-3 text-[12px]">
+            <Link href="/privacy" className="text-brand underline underline-offset-2">
+              Конфіденційність
+            </Link>
+            <Link href="/terms" className="text-brand underline underline-offset-2">
+              Умови використання
+            </Link>
+          </p>
           {hydrated && (
             <p className="mt-3 flex items-center gap-1.5 text-[11.5px] text-faint">
               <Github size={12} />
