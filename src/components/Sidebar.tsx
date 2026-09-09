@@ -3,16 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  CalendarDays,
-  Compass,
-  House,
-  Plus,
-  Refrigerator,
-  Settings2,
-  Sparkles,
-  User,
-} from "lucide-react";
+import { Bell, CalendarDays, Compass, House, Plus, Refrigerator, Settings2, Sparkles, User, Users } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { cn, haptic } from "@/lib/utils";
 import { Avatar } from "./ui";
@@ -23,6 +14,8 @@ const ITEMS = [
   { href: "/decide", label: "Вирішити", icon: Sparkles },
   { href: "/pantry", label: "Комора", icon: Refrigerator },
   { href: "/plan", label: "План на тиждень", icon: CalendarDays },
+  { href: "/family", label: "Сімʼя", icon: Users },
+  { href: "/notifications", label: "Сповіщення", icon: Bell },
   { href: "/me", label: "Профіль", icon: User },
 ];
 

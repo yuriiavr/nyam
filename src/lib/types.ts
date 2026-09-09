@@ -114,3 +114,33 @@ export interface MatchResult {
   missing: string[];
   pct: number;
 }
+
+/* ── Сімʼя ──────────────────────────────────────────────────────────────── */
+
+export interface Family {
+  id: string;
+  name: string;
+  inviteCode: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface FamilyMember {
+  userId: string;
+  role: "owner" | "member";
+  joinedAt: string;
+  profile: Profile;
+}
+
+/* ── Сповіщення ─────────────────────────────────────────────────────────── */
+
+export type NotificationType = "follow" | "like" | "save" | "cook" | "rating" | "family_join";
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  actorId: string | null;
+  recipeId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}

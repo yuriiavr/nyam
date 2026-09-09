@@ -3,7 +3,7 @@
 import * as api from "./supabase/api";
 import { friendlyError, getSupabase, isSupabaseConfigured } from "./supabase/client";
 import { useApp } from "./store";
-import { setSyncUser } from "./sync";
+import { setSyncFamily, setSyncUser } from "./sync";
 import type { Recipe } from "./types";
 import { newId } from "./utils";
 
@@ -76,9 +76,13 @@ async function loadUserData(userId: string, email: string) {
   store.setAccount({ id: userId, email });
 
   try {
+    // Сімʼю читаємо першою: від складу учасників залежить, які рядки
+    // вважати спільними, тож наступні запити мають знати цей список.
+    const memberIds = await loadFamily(userId);
+
     const [userState, myRecipes] = await Promise.all([
-      api.fetchUserState(userId),
-      api.fetchMyRecipes(userId),
+      api.fetchUserState(userId, memberIds),
+      api.fetchMyRecipes(userId, memberIds),
     ]);
 
     const remoteIds = new Set(myRecipes.map((r) => r.id));
@@ -88,9 +92,60 @@ async function loadUserData(userId: string, email: string) {
 
     // Спільноту перечитуємо, щоб побачити щойно перенесені рецепти.
     await loadCommunity(userId);
+    await refreshNotifications();
     store.setSyncStatus("ready");
   } catch (error) {
     store.setSyncStatus("error", friendlyError(error));
+  }
+}
+
+/**
+ * Читає сімʼю у сховище і повертає id учасників (разом із самим користувачем).
+ * Помилка тут не має ламати вхід — без сімʼї застосунок просто працює як раніше.
+ */
+async function loadFamily(userId: string): Promise<string[]> {
+  const store = useApp.getState();
+  try {
+    const data = await api.fetchFamily();
+    if (!data) {
+      store.setFamily(null, []);
+      setSyncFamily([]);
+      return [userId];
+    }
+    store.setFamily(data.family, data.members);
+    const ids = data.members.map((m) => m.userId);
+    const withMe = ids.includes(userId) ? ids : [...ids, userId];
+    setSyncFamily(withMe);
+    return withMe;
+  } catch (error) {
+    console.warn("[session] сімʼю не вдалося прочитати", error);
+    store.setFamily(null, []);
+    setSyncFamily([]);
+    return [userId];
+  }
+}
+
+/** Перечитує сімʼю і всі залежні від неї дані — після створення/входу/виходу. */
+export async function refreshFamily(): Promise<void> {
+  const store = useApp.getState();
+  const account = store.account;
+  if (!account) return;
+
+  const memberIds = await loadFamily(account.id);
+  const [userState, myRecipes] = await Promise.all([
+    api.fetchUserState(account.id, memberIds),
+    api.fetchMyRecipes(account.id, memberIds),
+  ]);
+  store.applyRemoteUserState(userState, myRecipes);
+}
+
+export async function refreshNotifications(): Promise<void> {
+  const store = useApp.getState();
+  if (!store.account) return;
+  try {
+    store.setNotifications(await api.fetchNotifications());
+  } catch (error) {
+    console.warn("[session] сповіщення не вдалося прочитати", error);
   }
 }
 
@@ -126,6 +181,7 @@ export async function initSession(): Promise<() => void> {
     }
     if (event === "SIGNED_OUT") {
       setSyncUser(null);
+      setSyncFamily([]);
       useApp.getState().resetToLocal();
       void loadCommunity(null).then(() => useApp.getState().setSyncStatus("ready"));
     }

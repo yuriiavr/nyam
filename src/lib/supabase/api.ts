@@ -2,7 +2,10 @@
 
 import { getSupabase } from "./client";
 import type {
+  AppNotification,
   CookEvent,
+  Family,
+  FamilyMember,
   PantryItem,
   PlanSlot,
   Profile,
@@ -180,16 +183,32 @@ export async function fetchCommunity(
   };
 }
 
-/** Усе, що стосується конкретного користувача. */
-export async function fetchUserState(userId: string) {
+/** Один продукт на ingredient_key: перемагає той, кого додали раніше. */
+function dedupePantry(items: PantryItem[]): PantryItem[] {
+  const byKey = new Map<string, PantryItem>();
+  for (const item of items) {
+    const seen = byKey.get(item.key);
+    if (!seen || item.addedAt < seen.addedAt) byKey.set(item.key, item);
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Усе, що стосується користувача. `memberIds` — усі учасники його сімʼї
+ * (включно з ним самим); спільні сутності читаються по цьому списку, а суто
+ * особисті — лайки, оцінки, історія готувань, приховане, підписки — ні.
+ */
+export async function fetchUserState(userId: string, memberIds: string[] = [userId]) {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase не налаштовано");
+
+  const shared = memberIds.length ? memberIds : [userId];
 
   const [likes, saves, wishlist, dismissed, ratings, cooks, follows, pantry, plan, profile] =
     await Promise.all([
       sb.from("likes").select("recipe_id").eq("user_id", userId),
-      sb.from("saves").select("recipe_id").eq("user_id", userId),
-      sb.from("wishlist").select("recipe_id").eq("user_id", userId),
+      sb.from("saves").select("recipe_id").in("user_id", shared),
+      sb.from("wishlist").select("recipe_id").in("user_id", shared),
       sb.from("dismissed").select("recipe_id").eq("user_id", userId),
       sb.from("ratings").select("recipe_id,stars").eq("user_id", userId),
       sb
@@ -199,8 +218,11 @@ export async function fetchUserState(userId: string) {
         .order("cooked_at", { ascending: false })
         .limit(400),
       sb.from("follows").select("followee_id").eq("follower_id", userId),
-      sb.from("pantry_items").select("ingredient_key,label,qty,barcode,added_at").eq("user_id", userId),
-      sb.from("plan_slots").select("day,slot,recipe_id").eq("user_id", userId),
+      sb
+        .from("pantry_items")
+        .select("ingredient_key,label,qty,barcode,added_at")
+        .in("user_id", shared),
+      sb.from("plan_slots").select("day,slot,recipe_id").in("user_id", shared),
       sb
         .from("profiles_with_counts")
         .select("id,handle,name,emoji,gradient,bio,city,avatar_url,followers")
@@ -221,8 +243,9 @@ export async function fetchUserState(userId: string) {
   return {
     profile: profile.data ? rowToProfile(profile.data as unknown as ProfileRow) : null,
     likes: (likes.data ?? []).map((r) => (r as { recipe_id: string }).recipe_id),
-    saves: (saves.data ?? []).map((r) => (r as { recipe_id: string }).recipe_id),
-    wishlist: (wishlist.data ?? []).map((r) => (r as { recipe_id: string }).recipe_id),
+    // Спільні списки сімʼї: двоє могли зберегти той самий рецепт.
+    saves: [...new Set((saves.data ?? []).map((r) => (r as { recipe_id: string }).recipe_id))],
+    wishlist: [...new Set((wishlist.data ?? []).map((r) => (r as { recipe_id: string }).recipe_id))],
     dismissed: (dismissed.data ?? []).map((r) => (r as { recipe_id: string }).recipe_id),
     ratings: Object.fromEntries(
       (ratings.data ?? []).map((r) => {
@@ -235,22 +258,26 @@ export async function fetchUserState(userId: string) {
       return { recipeId: row.recipe_id, at: row.cooked_at };
     }) as CookEvent[],
     following: (follows.data ?? []).map((r) => (r as { followee_id: string }).followee_id),
-    pantry: (pantry.data ?? []).map((r) => {
-      const row = r as {
-        ingredient_key: string;
-        label: string | null;
-        qty: string | null;
-        barcode: string | null;
-        added_at: string;
-      };
-      return {
-        key: row.ingredient_key,
-        label: row.label ?? undefined,
-        qty: row.qty ?? undefined,
-        barcode: row.barcode ?? undefined,
-        addedAt: row.added_at,
-      };
-    }) as PantryItem[],
+    // Комора сімʼї — обʼєднання комор учасників. Один продукт могли додати
+    // двоє, тож лишаємо найраніший запис на кожен ingredient_key.
+    pantry: dedupePantry(
+      (pantry.data ?? []).map((r) => {
+        const row = r as {
+          ingredient_key: string;
+          label: string | null;
+          qty: string | null;
+          barcode: string | null;
+          added_at: string;
+        };
+        return {
+          key: row.ingredient_key,
+          label: row.label ?? undefined,
+          qty: row.qty ?? undefined,
+          barcode: row.barcode ?? undefined,
+          addedAt: row.added_at,
+        };
+      }),
+    ),
     plan: planMap,
   };
 }
@@ -277,12 +304,20 @@ export async function setRelation(
   userId: string,
   recipeId: string,
   on: boolean,
+  memberIds: string[] = [userId],
 ) {
   const sb = getSupabase();
   if (!sb) return;
+  // Прибрати зі спільного списку сімʼї має право будь-хто з неї; лайки та
+  // приховане лишаються особистими, їх чіпаємо тільки свої.
+  const scope = table === "saves" || table === "wishlist" ? memberIds : [userId];
   const { error } = on
     ? await sb.from(table).upsert({ user_id: userId, recipe_id: recipeId })
-    : await sb.from(table).delete().eq("user_id", userId).eq("recipe_id", recipeId);
+    : await sb
+        .from(table)
+        .delete()
+        .in("user_id", scope.length ? scope : [userId])
+        .eq("recipe_id", recipeId);
   if (error) throw error;
 }
 
@@ -331,32 +366,62 @@ export async function upsertPantryItem(userId: string, item: PantryItem) {
   if (error) throw error;
 }
 
-export async function deletePantryItem(userId: string, key: string) {
+/** Прибирає продукт з комори — і з тієї частини, яку додав хтось із сімʼї. */
+export async function deletePantryItem(
+  userId: string,
+  key: string,
+  memberIds: string[] = [userId],
+) {
   const sb = getSupabase();
   if (!sb) return;
   const { error } = await sb
     .from("pantry_items")
     .delete()
-    .eq("user_id", userId)
+    .in("user_id", memberIds.length ? memberIds : [userId])
     .eq("ingredient_key", key);
   if (error) throw error;
 }
 
-export async function clearPantry(userId: string) {
+export async function clearPantry(userId: string, memberIds: string[] = [userId]) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("pantry_items").delete().eq("user_id", userId);
+  const { error } = await sb
+    .from("pantry_items")
+    .delete()
+    .in("user_id", memberIds.length ? memberIds : [userId]);
   if (error) throw error;
 }
 
+/**
+ * Ставить страву в слот плану.
+ *
+ * Ключ таблиці — (user_id, day, slot), тож у сімʼї двоє могли б записати різні
+ * страви на ту саму вечерю і план став би неоднозначним. Тому перед записом
+ * чистимо цей слот у решти учасників: слот один на сімʼю, останній запис
+ * перемагає.
+ */
 export async function setPlanSlot(
   userId: string,
   day: string,
   slot: PlanSlot,
   recipeId: string | null,
+  memberIds: string[] = [userId],
 ) {
   const sb = getSupabase();
   if (!sb) return;
+  const family = memberIds.length ? memberIds : [userId];
+
+  const others = family.filter((id) => id !== userId);
+  if (others.length) {
+    const { error: clashError } = await sb
+      .from("plan_slots")
+      .delete()
+      .in("user_id", others)
+      .eq("day", day)
+      .eq("slot", slot);
+    if (clashError) throw clashError;
+  }
+
   const { error } = recipeId
     ? await sb.from("plan_slots").upsert({ user_id: userId, day, slot, recipe_id: recipeId })
     : await sb.from("plan_slots").delete().eq("user_id", userId).eq("day", day).eq("slot", slot);
@@ -407,29 +472,270 @@ export async function uploadRecipeImage(
 export async function clearRelation(
   table: "likes" | "saves" | "wishlist" | "dismissed",
   userId: string,
+  memberIds: string[] = [userId],
 ) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from(table).delete().eq("user_id", userId);
+  // saves і wishlist спільні для сімʼї, likes і dismissed — особисті.
+  const scope = table === "saves" || table === "wishlist" ? memberIds : [userId];
+  const { error } = await sb
+    .from(table)
+    .delete()
+    .in("user_id", scope.length ? scope : [userId]);
   if (error) throw error;
 }
 
-export async function clearPlan(userId: string) {
+export async function clearPlan(userId: string, memberIds: string[] = [userId]) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("plan_slots").delete().eq("user_id", userId);
+  const { error } = await sb
+    .from("plan_slots")
+    .delete()
+    .in("user_id", memberIds.length ? memberIds : [userId]);
   if (error) throw error;
 }
 
 /** Власні рецепти користувача — включно з тими, що не потрапили у вибірку стрічки. */
-export async function fetchMyRecipes(userId: string): Promise<Recipe[]> {
+/**
+ * Власні рецепти, а разом з ними — рецепти решти сімʼї.
+ * `authorIds` за замовчуванням містить лише самого користувача, тож поведінка
+ * для тих, хто не в сімʼї, не змінюється.
+ */
+export async function fetchMyRecipes(
+  userId: string,
+  authorIds: string[] = [userId],
+): Promise<Recipe[]> {
   const sb = getSupabase();
   if (!sb) return [];
+  const ids = authorIds.length ? authorIds : [userId];
   const { data, error } = await sb
     .from("recipes_with_stats")
     .select(RECIPE_COLUMNS)
-    .eq("author_id", userId)
+    .in("author_id", ids)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data as unknown as RecipeRow[]).map((r) => rowToRecipe(r, userId));
+}
+
+/* ── Сімʼя ────────────────────────────────────────────────────────────── */
+
+const PROFILE_COLUMNS = "id,handle,name,emoji,gradient,bio,city,avatar_url,followers";
+
+interface FamilyRow {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+function rowToFamily(row: FamilyRow): Family {
+  return {
+    id: row.id,
+    name: row.name,
+    inviteCode: row.invite_code,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  };
+}
+
+/** Сімʼя поточного користувача разом з учасниками. null — сімʼї немає. */
+export async function fetchFamily(): Promise<{ family: Family; members: FamilyMember[] } | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  const { data: famRows, error: famError } = await sb
+    .from("families")
+    .select("id,name,invite_code,created_by,created_at")
+    .limit(1);
+  if (famError) throw famError;
+  if (!famRows?.length) return null;
+
+  const family = rowToFamily(famRows[0] as unknown as FamilyRow);
+
+  const { data: memberRows, error: memberError } = await sb
+    .from("family_members")
+    .select("user_id,role,joined_at")
+    .order("joined_at");
+  if (memberError) throw memberError;
+
+  const ids = (memberRows ?? []).map((m) => (m as { user_id: string }).user_id);
+  if (!ids.length) return { family, members: [] };
+
+  const { data: profileRows, error: profileError } = await sb
+    .from("profiles_with_counts")
+    .select(PROFILE_COLUMNS)
+    .in("id", ids);
+  if (profileError) throw profileError;
+
+  const byId = new Map(
+    (profileRows as unknown as ProfileRow[]).map((p) => [p.id, rowToProfile(p)] as const),
+  );
+
+  const members = (memberRows ?? [])
+    .map((m) => {
+      const row = m as { user_id: string; role: "owner" | "member"; joined_at: string };
+      const profile = byId.get(row.user_id);
+      if (!profile) return null;
+      return { userId: row.user_id, role: row.role, joinedAt: row.joined_at, profile };
+    })
+    .filter((m): m is FamilyMember => m !== null);
+
+  return { family, members };
+}
+
+export async function createFamily(name: string): Promise<Family> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase не налаштовано");
+  const { data, error } = await sb.rpc("create_family", { family_name: name });
+  if (error) throw error;
+  return rowToFamily(data as unknown as FamilyRow);
+}
+
+export async function joinFamily(code: string): Promise<Family> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase не налаштовано");
+  const { data, error } = await sb.rpc("join_family", { code });
+  if (error) throw error;
+  return rowToFamily(data as unknown as FamilyRow);
+}
+
+export async function leaveFamily(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.rpc("leave_family");
+  if (error) throw error;
+}
+
+export async function renameFamily(name: string): Promise<Family> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase не налаштовано");
+  const { data, error } = await sb.rpc("rename_family", { family_name: name });
+  if (error) throw error;
+  return rowToFamily(data as unknown as FamilyRow);
+}
+
+export async function removeFamilyMember(target: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.rpc("remove_family_member", { target });
+  if (error) throw error;
+}
+
+/* ── Сповіщення ───────────────────────────────────────────────────────── */
+
+export async function fetchNotifications(limit = 100): Promise<AppNotification[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("notifications")
+    .select("id,type,actor_id,recipe_id,read_at,created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []).map((n) => {
+    const row = n as {
+      id: string;
+      type: AppNotification["type"];
+      actor_id: string | null;
+      recipe_id: string | null;
+      read_at: string | null;
+      created_at: string;
+    };
+    return {
+      id: row.id,
+      type: row.type,
+      actorId: row.actor_id,
+      recipeId: row.recipe_id,
+      readAt: row.read_at,
+      createdAt: row.created_at,
+    };
+  });
+}
+
+export async function markNotificationsRead(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.rpc("mark_notifications_read");
+  if (error) throw error;
+}
+
+/* ── Підписники й пошук кухарів ───────────────────────────────────────── */
+
+/** Хто підписався на цього користувача. */
+export async function fetchFollowers(userId: string): Promise<Profile[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("follows")
+    .select("follower_id")
+    .eq("followee_id", userId);
+  if (error) throw error;
+
+  const ids = (data ?? []).map((f) => (f as { follower_id: string }).follower_id);
+  if (!ids.length) return [];
+
+  const { data: profiles, error: profileError } = await sb
+    .from("profiles_with_counts")
+    .select(PROFILE_COLUMNS)
+    .in("id", ids);
+  if (profileError) throw profileError;
+  return (profiles as unknown as ProfileRow[]).map(rowToProfile);
+}
+
+/** На кого підписаний цей користувач. */
+export async function fetchFollowing(userId: string): Promise<Profile[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("follows")
+    .select("followee_id")
+    .eq("follower_id", userId);
+  if (error) throw error;
+
+  const ids = (data ?? []).map((f) => (f as { followee_id: string }).followee_id);
+  if (!ids.length) return [];
+
+  const { data: profiles, error: profileError } = await sb
+    .from("profiles_with_counts")
+    .select(PROFILE_COLUMNS)
+    .in("id", ids);
+  if (profileError) throw profileError;
+  return (profiles as unknown as ProfileRow[]).map(rowToProfile);
+}
+
+/**
+ * Пошук кухаря за ніком або імʼям. Шукаємо на сервері, а не серед уже
+ * завантажених профілів: у вибірку стрічки потрапляють не всі.
+ */
+export async function searchProfiles(query: string, limit = 30): Promise<Profile[]> {
+  const sb = getSupabase();
+  const q = query.trim();
+  if (!sb || q.length < 2) return [];
+
+  // Екрануємо символи, які PostgREST тлумачить структурно.
+  const safe = q.replace(/[,()*%\\]/g, " ").trim();
+  if (!safe) return [];
+
+  const { data, error } = await sb
+    .from("profiles_with_counts")
+    .select(PROFILE_COLUMNS)
+    .or(`handle.ilike.%${safe}%,name.ilike.%${safe}%`)
+    .order("followers", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as unknown as ProfileRow[]).map(rowToProfile);
+}
+
+/** Профілі за списком id — щоб показати, хто саме зробив дію у сповіщенні. */
+export async function fetchProfilesByIds(ids: string[]): Promise<Profile[]> {
+  const sb = getSupabase();
+  const unique = [...new Set(ids)].filter(Boolean);
+  if (!sb || !unique.length) return [];
+  const { data, error } = await sb
+    .from("profiles_with_counts")
+    .select(PROFILE_COLUMNS)
+    .in("id", unique);
+  if (error) throw error;
+  return (data as unknown as ProfileRow[]).map(rowToProfile);
 }

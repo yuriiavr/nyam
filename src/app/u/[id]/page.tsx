@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Flame, MapPin, Star, Users } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { RecipeTile } from "@/components/RecipeCard";
@@ -89,6 +90,7 @@ export default function UserPage() {
               icon={<Users size={13} />}
               value={compactNumber(profile.followers + (following ? 1 : 0))}
               label="підписників"
+              href={`/u/${params.id}/followers`}
             />
             <MiniStat value={String(recipes.length)} label="рецептів" />
             <MiniStat
@@ -161,18 +163,30 @@ function MiniStat({
   icon,
   value,
   label,
+  href,
 }: {
   icon?: React.ReactNode;
   value: string;
   label: string;
+  /** Якщо задано — клітинка веде на окремий екран (напр. список підписників). */
+  href?: string;
 }) {
-  return (
-    <div className="bg-surface px-1 py-2.5 text-center">
+  const body = (
+    <>
       <p className="flex items-center justify-center gap-1 font-display text-[15px] font-extrabold leading-none">
         {icon && <span className="text-brand">{icon}</span>}
         {value}
       </p>
       <p className="mt-1 truncate text-[10px] text-muted">{label}</p>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="bg-surface px-1 py-2.5 text-center active:bg-surface-2">
+        {body}
+      </Link>
+    );
+  }
+  return <div className="bg-surface px-1 py-2.5 text-center">{body}</div>;
 }

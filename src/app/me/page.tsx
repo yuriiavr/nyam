@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Flame, Pencil, Plus, Settings2 } from "lucide-react";
+import { Bell, Flame, Pencil, Plus, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -65,19 +65,35 @@ function MeContent() {
 
   const current = tab === "history" ? [] : lists[tab];
 
+  const unread = state.notifications.filter((n) => !n.readAt).length;
+
   return (
     <div className="pb-8">
       <TopBar
         back={false}
         title="Мій профіль"
         right={
-          <Link
-            href="/settings"
-            aria-label="Налаштування"
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
-          >
-            <Settings2 size={18} />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/notifications"
+              aria-label={unread ? `Сповіщення, непрочитаних: ${unread}` : "Сповіщення"}
+              className="relative grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
+            >
+              <Bell size={18} />
+              {unread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-bg bg-brand px-1 text-[10px] font-extrabold leading-none text-brand-ink">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
+            </Link>
+            <Link
+              href="/settings"
+              aria-label="Налаштування"
+              className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
+            >
+              <Settings2 size={18} />
+            </Link>
+          </div>
         }
       />
 

@@ -153,6 +153,8 @@ src/
    Префікс `NEXT_PUBLIC_` обовʼязковий — інакше Next.js не віддасть змінну у браузер.
 4. SQL Editor → виконай [`supabase/schema.sql`](supabase/schema.sql) *(таблиці, RLS, вʼюхи, бакет для фото)*
 5. SQL Editor → виконай [`supabase/seed.sql`](supabase/seed.sql) *(демо-спільнота, щоб стрічка не була порожня)*
+6. SQL Editor → виконай [`supabase/family.sql`](supabase/family.sql) *(сімʼї: спільні комора, план, рецепти, збережене)*
+7. SQL Editor → виконай [`supabase/notifications.sql`](supabase/notifications.sql) *(стрічка сповіщень і тригери до неї)*
 6. Authentication → Sign In / Providers → Email → вимкни **Confirm email** на час розробки:
    вбудована пошта Supabase шле 2–3 листи на годину і часто в спам
 7. Перевір: `npm run db:check`

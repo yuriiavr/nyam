@@ -17,12 +17,27 @@ import type { PantryItem, PlanSlot, Profile, Recipe } from "./types";
 
 let userId: string | null = null;
 
+/**
+ * Учасники сімʼї, включно з самим користувачем. Порожній масив — сімʼї немає,
+ * і тоді все працює рівно як до неї: у межах одного user_id.
+ */
+let familyMemberIds: string[] = [];
+
 export function setSyncUser(id: string | null) {
   userId = id;
 }
 
+export function setSyncFamily(ids: string[]) {
+  familyMemberIds = ids;
+}
+
 export function getSyncUser(): string | null {
   return userId;
+}
+
+/** Кого зачіпає спільна дія: сімʼю або лише самого користувача. */
+function scope(uid: string): string[] {
+  return familyMemberIds.length ? familyMemberIds : [uid];
 }
 
 /** Чи є куди писати: бекенд налаштовано і користувач авторизований. */
@@ -61,10 +76,10 @@ export const pushLike = (recipeId: string, on: boolean) =>
   fire("лайк", (uid) => api.setRelation("likes", uid, recipeId, on));
 
 export const pushSave = (recipeId: string, on: boolean) =>
-  fire("збереження", (uid) => api.setRelation("saves", uid, recipeId, on));
+  fire("збереження", (uid) => api.setRelation("saves", uid, recipeId, on, scope(uid)));
 
 export const pushWish = (recipeId: string, on: boolean) =>
-  fire("список бажань", (uid) => api.setRelation("wishlist", uid, recipeId, on));
+  fire("список бажань", (uid) => api.setRelation("wishlist", uid, recipeId, on, scope(uid)));
 
 export const pushDismiss = (recipeId: string, on: boolean) =>
   fire("приховування", (uid) => api.setRelation("dismissed", uid, recipeId, on));
@@ -84,12 +99,12 @@ export const pushPantryAdd = (item: PantryItem) =>
   fire("комора", (uid) => api.upsertPantryItem(uid, item));
 
 export const pushPantryRemove = (key: string) =>
-  fire("комора", (uid) => api.deletePantryItem(uid, key));
+  fire("комора", (uid) => api.deletePantryItem(uid, key, scope(uid)));
 
-export const pushPantryClear = () => fire("комора", (uid) => api.clearPantry(uid));
+export const pushPantryClear = () => fire("комора", (uid) => api.clearPantry(uid, scope(uid)));
 
 export const pushPlanSlot = (day: string, slot: PlanSlot, recipeId: string | null) =>
-  fire("план", (uid) => api.setPlanSlot(uid, day, slot, recipeId));
+  fire("план", (uid) => api.setPlanSlot(uid, day, slot, recipeId, scope(uid)));
 
 export const pushProfile = (patch: Partial<Profile>) =>
   fire("профіль", (uid) => api.updateProfile(uid, patch));
@@ -127,4 +142,4 @@ export function pushRecipe(recipe: Recipe, onImageUploaded?: (url: string) => vo
 export const pushDismissClear = () =>
   fire("приховані страви", (uid) => api.clearRelation("dismissed", uid));
 
-export const pushPlanClear = () => fire("план", (uid) => api.clearPlan(uid));
+export const pushPlanClear = () => fire("план", (uid) => api.clearPlan(uid, scope(uid)));

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChevronRight,
   CloudOff,
   Download,
   Eye,
@@ -15,6 +16,7 @@ import {
   Smartphone,
   Sun,
   Trash2,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -30,12 +32,15 @@ import {
   onInstallAvailability,
   promptInstall,
 } from "@/lib/pwa";
-import { haptic } from "@/lib/utils";
+import { haptic, plural } from "@/lib/utils";
 
 export default function SettingsPage() {
   const state = useApp();
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
+
+  const family = useApp((st) => st.family);
+  const familyMembers = useApp((st) => st.familyMembers);
 
   const [installable, setInstallable] = useState(false);
   const [standalone, setStandalone] = useState(false);
@@ -72,6 +77,28 @@ export default function SettingsPage() {
       {/* Акаунт */}
       <section className="px-4 pt-4">
         <AccountCard />
+      </section>
+
+      {/* Сімʼя */}
+      <section className="px-4 pt-4">
+        <Link href="/family">
+          <Card className="flex items-center gap-3 p-4">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-surface-2">
+              <Users size={18} className="text-brand" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-bold">
+                {family ? family.name : "Сімʼя"}
+              </p>
+              <p className="truncate text-[12px] text-muted">
+                {family
+                  ? `${familyMembers.length} ${plural(familyMembers.length, "учасник", "учасники", "учасників")} · спільна комора`
+                  : "Спільна комора, план і рецепти для всіх удома"}
+              </p>
+            </div>
+            <ChevronRight size={17} className="shrink-0 text-muted" />
+          </Card>
+        </Link>
       </section>
 
       {/* Встановлення */}

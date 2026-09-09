@@ -5,7 +5,10 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { SEED_PROFILES, SEED_RECIPES } from "@/data/seed";
 import * as sync from "./sync";
 import type {
+  AppNotification,
   CookEvent,
+  Family,
+  FamilyMember,
   PantryItem,
   PlanSlot,
   Profile,
@@ -70,6 +73,11 @@ export interface AppState {
   syncStatus: SyncStatus;
   syncError: string | null;
 
+  /** Сімʼя користувача; null — не входить у жодну. */
+  family: Family | null;
+  familyMembers: FamilyMember[];
+  notifications: AppNotification[];
+
   setHydrated: (v: boolean) => void;
   setTheme: (t: "dark" | "light") => void;
   setOnboarded: (v: boolean) => void;
@@ -79,6 +87,9 @@ export interface AppState {
   setCommunity: (data: { recipes: Recipe[]; profiles: Profile[] }) => void;
   setSyncStatus: (status: SyncStatus, error?: string | null) => void;
   applyRemoteUserState: (data: RemoteUserState, myRecipes: Recipe[]) => void;
+  setFamily: (family: Family | null, members: FamilyMember[]) => void;
+  setNotifications: (items: AppNotification[]) => void;
+  markNotificationsRead: () => void;
   resetToLocal: () => void;
 
   toggleLike: (id: string) => void;
@@ -139,6 +150,9 @@ export const useApp = create<AppState>()(
       remoteReady: false,
       syncStatus: "offline",
       syncError: null,
+      family: null,
+      familyMembers: [],
+      notifications: [],
 
       setHydrated: (v) => set({ hydrated: v }),
       setTheme: (theme) => set({ theme }),
@@ -171,10 +185,24 @@ export const useApp = create<AppState>()(
           plan: data.plan,
         }),
 
+      setFamily: (family, members) => set({ family, familyMembers: members }),
+
+      setNotifications: (notifications) => set({ notifications }),
+
+      markNotificationsRead: () =>
+        set({
+          notifications: get().notifications.map((n) =>
+            n.readAt ? n : { ...n, readAt: new Date().toISOString() },
+          ),
+        }),
+
       /** Вихід з акаунта — повертаємось до демо-режиму з чистим станом. */
       resetToLocal: () =>
         set({
           account: null,
+          family: null,
+          familyMembers: [],
+          notifications: [],
           profile: defaultProfile,
           myRecipes: [],
           saved: [],
@@ -329,6 +357,9 @@ export const useApp = create<AppState>()(
         account: _account,
         syncStatus: _syncStatus,
         syncError: _syncError,
+        family: _family,
+        familyMembers: _familyMembers,
+        notifications: _notifications,
         ...rest
       }) => rest,
       /**
