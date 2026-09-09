@@ -155,6 +155,7 @@ src/
 5. SQL Editor → виконай [`supabase/seed.sql`](supabase/seed.sql) *(демо-спільнота, щоб стрічка не була порожня)*
 6. SQL Editor → виконай [`supabase/family.sql`](supabase/family.sql) *(сімʼї: спільні комора, план, рецепти, збережене)*
 7. SQL Editor → виконай [`supabase/notifications.sql`](supabase/notifications.sql) *(стрічка сповіщень і тригери до неї)*
+8. SQL Editor → виконай [`supabase/realtime.sql`](supabase/realtime.sql) *(живі оновлення — без нього дані оновлюються лише при перезапуску)*
 6. Authentication → Sign In / Providers → Email → вимкни **Confirm email** на час розробки:
    вбудована пошта Supabase шле 2–3 листи на годину і часто в спам
 7. Перевір: `npm run db:check`

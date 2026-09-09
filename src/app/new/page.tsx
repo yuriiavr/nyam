@@ -7,6 +7,7 @@ import {
   GripVertical,
   ImagePlus,
   Plus,
+  ScanBarcode,
   Search,
   Timer,
   Trash2,
@@ -16,7 +17,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Button, Card, Chip, Sheet, useToast } from "@/components/ui";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
+import { lookupBarcode } from "@/lib/barcode";
 import { recipeById, useApp } from "@/lib/store";
 import type {
   IngredientCat,
@@ -85,6 +88,8 @@ function RecipeForm() {
   const [costLevel, setCostLevel] = useState<1 | 2 | 3>(1);
   const [kcal, setKcal] = useState("");
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
   const [steps, setSteps] = useState<RecipeStep[]>([{ text: "" }]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -181,6 +186,50 @@ function RecipeForm() {
 
   const toggle = <T,>(arr: T[], v: T, set: (v: T[]) => void) =>
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  /**
+   * Додає товар зі штрихкоду. Якщо він зіставився з каталогом — беремо звідти
+   * ключ і емодзі, але харчову цінність лишаємо з етикетки: вона стосується
+   * саме цього товару, а не усередненої категорії.
+   */
+  const onScanned = async (code: string) => {
+    setScanOpen(false);
+    setScanBusy(true);
+    try {
+      const product = await lookupBarcode(code);
+      const matched = product.ingredient;
+      // Для товару поза каталогом синтетичний ключ, щоб він не зливався
+      // з іншими й не ламав список покупок.
+      const key = matched?.key ?? `barcode:${product.barcode}`;
+
+      if (ingredients.some((i) => i.key === key)) {
+        toast("Цей продукт уже в списку", "ℹ️");
+        return;
+      }
+
+      setIngredients((prev) => [
+        ...prev,
+        {
+          key,
+          unit: matched?.defaultUnit ?? "g",
+          label: matched ? undefined : product.name,
+          nutrition: product.nutrition,
+        },
+      ]);
+
+      haptic(14);
+      toast(
+        product.nutrition
+          ? `${product.name} — КБЖВ з етикетки`
+          : `${product.name} — без даних про склад`,
+        product.nutrition ? "✅" : "⚠️",
+      );
+    } catch {
+      toast("Не вдалося прочитати товар", "⚠️");
+    } finally {
+      setScanBusy(false);
+    }
+  };
 
   return (
     <div className="pb-32">
@@ -389,10 +438,24 @@ function RecipeForm() {
           <h2 className="font-display text-[16px] font-bold">
             Інгредієнти{ingredients.length > 0 && ` · ${ingredients.length}`}
           </h2>
-          <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-            <Plus size={15} />
-            Додати
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={scanBusy}
+              onClick={() => {
+                haptic(10);
+                setScanOpen(true);
+              }}
+            >
+              <ScanBarcode size={15} />
+              Сканувати
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
+              <Plus size={15} />
+              Додати
+            </Button>
+          </div>
         </div>
 
         {ingredients.length === 0 ? (
@@ -403,6 +466,9 @@ function RecipeForm() {
             <p className="text-[13.5px] font-semibold">Додай перший інгредієнт</p>
             <p className="mt-1 text-[12px] text-muted">
               Це потрібно, щоб рецепт зʼявлявся в підборі за холодильником
+            </p>
+            <p className="mt-2 text-[11.5px] text-brand">
+              Або скануй штрихкод — калорії підтягнуться з етикетки
             </p>
           </button>
         ) : (
@@ -419,9 +485,14 @@ function RecipeForm() {
                     exit={{ opacity: 0, height: 0 }}
                     className="flex items-center gap-2.5 px-3 py-2.5"
                   >
-                    <span className="text-lg">{def.emoji}</span>
+                    <span className="text-lg">{item.label ? "🏷️" : def.emoji}</span>
                     <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
-                      {def.label}
+                      {item.label ?? def.label}
+                      {item.nutrition && (
+                        <span className="ml-1.5 text-[10px] font-bold text-mint">
+                          {item.nutrition.kcal} ккал/100 г
+                        </span>
+                      )}
                     </span>
                     <input
                       value={item.amount ?? ""}
@@ -651,6 +722,12 @@ function RecipeForm() {
       </Sheet>
 
       {/* Вибір інгредієнта */}
+      <BarcodeScanner
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onDetect={onScanned}
+      />
+
       <IngredientPicker
         open={pickerOpen}
         onClose={() => {

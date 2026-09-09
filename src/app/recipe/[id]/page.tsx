@@ -329,11 +329,11 @@ export default function RecipePage() {
             return (
               <div key={item.key} className="flex items-center gap-3 px-3.5 py-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-lg">
-                  {def.emoji}
+                  {item.label ? "🏷️" : def.emoji}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold">
-                    {def.label}
+                    {item.label ?? def.label}
                     {item.optional && (
                       <span className="ml-1.5 text-[11px] font-normal text-faint">(за бажанням)</span>
                     )}

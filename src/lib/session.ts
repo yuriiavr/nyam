@@ -3,6 +3,7 @@
 import * as api from "./supabase/api";
 import { friendlyError, getSupabase, isSupabaseConfigured } from "./supabase/client";
 import { useApp } from "./store";
+import { subscribeRealtime, unsubscribeRealtime } from "./realtime";
 import { setSyncFamily, setSyncUser } from "./sync";
 import type { Recipe } from "./types";
 import { newId } from "./utils";
@@ -94,6 +95,14 @@ async function loadUserData(userId: string, email: string) {
     await loadCommunity(userId);
     await refreshNotifications();
     store.setSyncStatus("ready");
+
+    // Далі за оновлення відповідає база: без цього нове сповіщення чи чужий
+    // рецепт зʼявлялись би лише після перезапуску застосунку.
+    subscribeRealtime(userId, {
+      reloadCommunity: () => void loadCommunity(userId),
+      reloadUserState: () => void refreshUserState(),
+      reloadFamily: () => void refreshFamily(),
+    });
   } catch (error) {
     store.setSyncStatus("error", friendlyError(error));
   }
@@ -122,6 +131,27 @@ async function loadFamily(userId: string): Promise<string[]> {
     store.setFamily(null, []);
     setSyncFamily([]);
     return [userId];
+  }
+}
+
+/** Перечитує особисті та спільні дані, не чіпаючи сімʼю й спільноту. */
+export async function refreshUserState(): Promise<void> {
+  const store = useApp.getState();
+  const account = store.account;
+  if (!account) return;
+
+  const memberIds = store.familyMembers.length
+    ? store.familyMembers.map((m) => m.userId)
+    : [account.id];
+
+  try {
+    const [userState, myRecipes] = await Promise.all([
+      api.fetchUserState(account.id, memberIds),
+      api.fetchMyRecipes(account.id, memberIds),
+    ]);
+    store.applyRemoteUserState(userState, myRecipes);
+  } catch (error) {
+    console.warn("[session] не вдалося оновити особисті дані", error);
   }
 }
 
@@ -182,12 +212,16 @@ export async function initSession(): Promise<() => void> {
     if (event === "SIGNED_OUT") {
       setSyncUser(null);
       setSyncFamily([]);
+      unsubscribeRealtime();
       useApp.getState().resetToLocal();
       void loadCommunity(null).then(() => useApp.getState().setSyncStatus("ready"));
     }
   });
 
-  return () => listener.subscription.unsubscribe();
+  return () => {
+    listener.subscription.unsubscribe();
+    unsubscribeRealtime();
+  };
 }
 
 /** Ручне перезавантаження — кнопка «оновити» в налаштуваннях. */

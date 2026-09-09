@@ -64,21 +64,23 @@ export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
 
   for (const item of recipe.ingredients) {
     const def = ing(item.key);
+    // Етикетка конкретного товару точніша за довідник по категорії.
+    const nut = item.nutrition ?? def.nutrition;
     const grams = ingredientGrams(item);
 
-    if (!def.nutrition || grams == null) {
+    if (!nut || grams == null) {
       // «За смаком» — сіль і спеції — на калорійність не впливають,
       // тож у пропущені їх не пишемо, щоб не псувати покриття даремно.
       const q = quantityOf(item);
-      if (q?.unit !== "taste" && !def.staple) skipped.push(def.label);
+      if (q?.unit !== "taste" && !def.staple) skipped.push(item.label ?? def.label);
       continue;
     }
 
     const k = grams / 100;
-    counted.kcal += def.nutrition.kcal * k;
-    counted.protein += def.nutrition.protein * k;
-    counted.fat += def.nutrition.fat * k;
-    counted.carbs += def.nutrition.carbs * k;
+    counted.kcal += nut.kcal * k;
+    counted.protein += nut.protein * k;
+    counted.fat += nut.fat * k;
+    counted.carbs += nut.carbs * k;
     usable += 1;
   }
 
