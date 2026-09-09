@@ -85,6 +85,29 @@ check(
   "200 г",
 );
 
+// Регресія: кількість без одиниці. Форма зберігала amount без unit, якщо
+// селект не чіпали руками, і кількість зникала з екрана.
+check(
+  "150 без одиниці → мл для молока",
+  units.ingredientQtyLabel({ key: "moloko", amount: 150 }, 1),
+  "150 мл",
+);
+check(
+  "2 без одиниці → шт для яєць",
+  units.ingredientQtyLabel({ key: "yajtsya", amount: 2 }, 1),
+  "2 шт",
+);
+check(
+  "200 без одиниці → г для борошна",
+  units.ingredientQtyLabel({ key: "boroshno", amount: 200 }, 1),
+  "200 г",
+);
+check(
+  "без числа й одиниці нічого не вигадуємо",
+  units.ingredientQtyLabel({ key: "moloko" }, 1),
+  "",
+);
+
 console.log("── Калорії ──");
 
 // Яйця: 60 г × 2 шт = 120 г, 155 ккал/100 г → 186 ккал
@@ -92,6 +115,7 @@ check("2 яйця = 120 г", nutrition.ingredientGrams({ key: "yajtsya", amount:
 check("0,5 кг = 500 г", nutrition.ingredientGrams({ key: "kurka", amount: 0.5, unit: "kg" }), 500);
 check("1 ст. л. олії = 15 г", nutrition.ingredientGrams({ key: "oliya", amount: 1, unit: "tbsp" }), 15);
 check("«за смаком» не важить", nutrition.ingredientGrams({ key: "sil", unit: "taste" }), null);
+check("150 мл молока без unit = 150 г", nutrition.ingredientGrams({ key: "moloko", amount: 150 }), 150);
 
 // Рецепт: 200 г курячого філе (165 ккал/100г) + 100 г рису (360) на 2 порції
 const recipe = {

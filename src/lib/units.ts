@@ -1,3 +1,4 @@
+import { ing } from "@/data/ingredients";
 import type { RecipeIngredient, Unit } from "./types";
 
 /**
@@ -71,11 +72,25 @@ export function formatQuantity(amount: number | undefined, unit: Unit | undefine
  * бо надійно масштабувати довільний рядок не вийде.
  */
 export function ingredientQtyLabel(item: RecipeIngredient, factor = 1): string {
-  if (item.amount != null && item.unit) {
-    return formatQuantity(scaleAmount(item.amount, item.unit, factor), item.unit);
+  const unit = resolveUnit(item);
+  if (item.amount != null && unit) {
+    return formatQuantity(scaleAmount(item.amount, unit, factor), unit);
   }
-  if (item.unit === "taste") return unitLabel("taste");
+  if (unit === "taste") return unitLabel("taste");
   return scaleLegacyQty(item.qty, factor);
+}
+
+/**
+ * Одиниця інгредієнта з підстраховкою.
+ *
+ * Якщо число є, а одиниці немає — беремо типову для цього продукту (молоко в
+ * мл, яйця в штуках). Без цього кількість просто зникала б з екрана: показати
+ * «150 мл» за замовчуванням чесніше, ніж не показати нічого.
+ */
+export function resolveUnit(item: RecipeIngredient): Unit | undefined {
+  if (item.unit) return item.unit;
+  if (item.amount == null) return undefined;
+  return ing(item.key).defaultUnit ?? "g";
 }
 
 /**
@@ -151,7 +166,8 @@ export function parseQty(raw: string | undefined): { amount?: number; unit: Unit
 
 /** Кількість інгредієнта у придатному для сумування вигляді. */
 export function quantityOf(item: RecipeIngredient): { amount?: number; unit: Unit } | null {
-  if (item.unit) return { amount: item.amount, unit: item.unit };
+  const unit = resolveUnit(item);
+  if (unit) return { amount: item.amount, unit };
   return parseQty(item.qty);
 }
 
