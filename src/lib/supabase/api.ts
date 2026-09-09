@@ -220,7 +220,7 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
       sb.from("follows").select("followee_id").eq("follower_id", userId),
       sb
         .from("pantry_items")
-        .select("ingredient_key,label,qty,barcode,added_at")
+        .select("ingredient_key,label,qty,barcode,added_at,expires_at")
         .in("user_id", shared),
       sb.from("plan_slots").select("day,slot,recipe_id").in("user_id", shared),
       sb
@@ -268,6 +268,7 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
           qty: string | null;
           barcode: string | null;
           added_at: string;
+          expires_at: string | null;
         };
         return {
           key: row.ingredient_key,
@@ -275,6 +276,7 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
           qty: row.qty ?? undefined,
           barcode: row.barcode ?? undefined,
           addedAt: row.added_at,
+          expiresAt: row.expires_at ?? undefined,
         };
       }),
     ),
@@ -362,6 +364,7 @@ export async function upsertPantryItem(userId: string, item: PantryItem) {
     qty: item.qty ?? null,
     barcode: item.barcode ?? null,
     added_at: item.addedAt,
+    expires_at: item.expiresAt ?? null,
   });
   if (error) throw error;
 }
@@ -523,7 +526,6 @@ const PROFILE_COLUMNS = "id,handle,name,emoji,gradient,bio,city,avatar_url,follo
 
 interface FamilyRow {
   id: string;
-  name: string;
   invite_code: string;
   created_by: string | null;
   created_at: string;
@@ -532,7 +534,6 @@ interface FamilyRow {
 function rowToFamily(row: FamilyRow): Family {
   return {
     id: row.id,
-    name: row.name,
     inviteCode: row.invite_code,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -546,7 +547,7 @@ export async function fetchFamily(): Promise<{ family: Family; members: FamilyMe
 
   const { data: famRows, error: famError } = await sb
     .from("families")
-    .select("id,name,invite_code,created_by,created_at")
+    .select("id,invite_code,created_by,created_at")
     .limit(1);
   if (famError) throw famError;
   if (!famRows?.length) return null;
@@ -584,10 +585,10 @@ export async function fetchFamily(): Promise<{ family: Family; members: FamilyMe
   return { family, members };
 }
 
-export async function createFamily(name: string): Promise<Family> {
+export async function createFamily(): Promise<Family> {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase не налаштовано");
-  const { data, error } = await sb.rpc("create_family", { family_name: name });
+  const { data, error } = await sb.rpc("create_family");
   if (error) throw error;
   return rowToFamily(data as unknown as FamilyRow);
 }
@@ -605,14 +606,6 @@ export async function leaveFamily(): Promise<void> {
   if (!sb) return;
   const { error } = await sb.rpc("leave_family");
   if (error) throw error;
-}
-
-export async function renameFamily(name: string): Promise<Family> {
-  const sb = getSupabase();
-  if (!sb) throw new Error("Supabase не налаштовано");
-  const { data, error } = await sb.rpc("rename_family", { family_name: name });
-  if (error) throw error;
-  return rowToFamily(data as unknown as FamilyRow);
 }
 
 export async function removeFamilyMember(target: string): Promise<void> {

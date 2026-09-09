@@ -122,8 +122,14 @@ create table if not exists public.pantry_items (
   qty            text,
   barcode        text,
   added_at       timestamptz not null default now(),
+  -- Строк придатності. Дата, а не мітка часу: година тут нічого не означає.
+  expires_at     date,
   primary key (user_id, ingredient_key)
 );
+
+create index if not exists pantry_items_expires_idx
+  on public.pantry_items (user_id, expires_at)
+  where expires_at is not null;
 
 create table if not exists public.plan_slots (
   user_id    uuid not null references public.profiles (id) on delete cascade,

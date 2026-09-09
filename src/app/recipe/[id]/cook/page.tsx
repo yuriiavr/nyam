@@ -34,9 +34,15 @@ export default function CookPage() {
   const [done, setDone] = useState(false);
   const [rating, setRating] = useState(0);
 
-  // Таймер
+  /* Таймер.
+     Лічильник тримаємо не як «мінус секунда щотику», а як абсолютний момент
+     завершення. Браузер у фоні душить setInterval (аж до повної зупинки), і
+     на старій схемі таймер «ставав на паузу», коли вийти із застосунку.
+     З дедлайном час іде за годинником, а тік лише перемальовує число. */
   const [remaining, setRemaining] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
+  const deadlineRef = useRef<number | null>(null);
+  const firedRef = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Не давати екрану гаснути
@@ -69,28 +75,94 @@ export default function CookPage() {
   // Скидаємо таймер при зміні кроку
   useEffect(() => {
     setRunning(false);
+    deadlineRef.current = null;
+    firedRef.current = false;
     setRemaining(currentStep?.timerSec ?? null);
   }, [step, currentStep?.timerSec]);
 
-  // Тік таймера
+  const finish = useCallback(() => {
+    if (firedRef.current) return;
+    firedRef.current = true;
+    setRunning(false);
+    deadlineRef.current = null;
+    setRemaining(0);
+    haptic([200, 100, 200, 100, 300]);
+    toast("Час вийшов!", "⏰");
+
+    // Якщо застосунок згорнули — систему сповіщень просимо докласти голосу.
+    // Без дозволу просто мовчимо: набридати запитом посеред готування не варто.
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        new Notification("Ням", { body: "Час вийшов — перевір страву", tag: "nyam-timer" });
+      }
+    } catch {
+      /* не критично */
+    }
+  }, [toast]);
+
+  /* Один тік: перерахунок від дедлайну. Частота 250 мс, щоб число не «стрибало»
+     через півсекунди після повернення у застосунок. */
+  const tick = useCallback(() => {
+    const deadline = deadlineRef.current;
+    if (deadline == null) return;
+    const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    setRemaining(left);
+    if (left === 0) finish();
+  }, [finish]);
+
   useEffect(() => {
-    if (!running || remaining == null) return;
-    intervalRef.current = setInterval(() => {
-      setRemaining((r) => {
-        if (r == null) return r;
-        if (r <= 1) {
-          haptic([200, 100, 200, 100, 300]);
-          setRunning(false);
-          toast("Час вийшов!", "⏰");
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
+    if (!running) return;
+    intervalRef.current = setInterval(tick, 250);
+    // Повернення на вкладку — одразу підтягуємо реальний час, не чекаючи тіку.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [running, remaining, toast]);
+  }, [running, tick]);
+
+  /** Запускає або ставить на паузу, перераховуючи дедлайн. */
+  const toggleTimer = useCallback(() => {
+    haptic(12);
+    setRunning((was) => {
+      if (was) {
+        // Пауза: лишаємо на екрані те, що дійсно лишилось.
+        const deadline = deadlineRef.current;
+        if (deadline != null) {
+          setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+        }
+        deadlineRef.current = null;
+        return false;
+      }
+      const base = remaining && remaining > 0 ? remaining : (currentStep?.timerSec ?? 0);
+      if (base <= 0) return false;
+      firedRef.current = false;
+      deadlineRef.current = Date.now() + base * 1000;
+      setRemaining(base);
+
+      // Дозвіл питаємо один раз і саме тут — у момент, коли користувач сам
+      // запускає таймер, тобто запит очікуваний.
+      try {
+        if (typeof Notification !== "undefined" && Notification.permission === "default") {
+          void Notification.requestPermission();
+        }
+      } catch {
+        /* не критично */
+      }
+      return true;
+    });
+  }, [remaining, currentStep?.timerSec]);
+
+  const resetTimer = useCallback(() => {
+    haptic(10);
+    setRunning(false);
+    deadlineRef.current = null;
+    firedRef.current = false;
+    setRemaining(currentStep?.timerSec ?? 0);
+  }, [currentStep?.timerSec]);
 
   const goNext = useCallback(() => {
     if (!recipe) return;
@@ -298,22 +370,14 @@ export default function CookPage() {
                 {formatClock(remaining)}
               </span>
               <button
-                onClick={() => {
-                  haptic(10);
-                  setRemaining(currentStep?.timerSec ?? 0);
-                  setRunning(false);
-                }}
+                onClick={resetTimer}
                 aria-label="Скинути таймер"
                 className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2 text-muted"
               >
                 <RotateCcw size={17} />
               </button>
               <button
-                onClick={() => {
-                  haptic(12);
-                  if (remaining === 0) setRemaining(currentStep?.timerSec ?? 0);
-                  setRunning((r) => !r);
-                }}
+                onClick={toggleTimer}
                 aria-label={running ? "Пауза" : "Старт"}
                 className="grid h-12 w-12 place-items-center rounded-2xl brand-gradient text-brand-ink"
               >

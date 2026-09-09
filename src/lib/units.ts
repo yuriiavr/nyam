@@ -1,0 +1,190 @@
+import type { RecipeIngredient, Unit } from "./types";
+
+/**
+ * Одиниці виміру для інгредієнтів.
+ *
+ * Навіщо структура замість рядка «200 г»: щоб список покупок міг додавати
+ * однакове разом (200 г + 300 г = 500 г), а перерахунок на іншу кількість
+ * порцій не залежав від регулярки по тексту.
+ */
+
+export interface UnitDef {
+  key: Unit;
+  label: string;
+  /** Одиниця, до якої зводимо для сумування. null — не сумується. */
+  base: Unit | null;
+  /** Скільки базових одиниць в одній цій. */
+  factor: number;
+  /** Скільки знаків після коми має сенс показувати. */
+  decimals: number;
+}
+
+export const UNITS: UnitDef[] = [
+  { key: "g", label: "г", base: "g", factor: 1, decimals: 0 },
+  { key: "kg", label: "кг", base: "g", factor: 1000, decimals: 2 },
+  { key: "ml", label: "мл", base: "ml", factor: 1, decimals: 0 },
+  { key: "l", label: "л", base: "ml", factor: 1000, decimals: 2 },
+  { key: "pcs", label: "шт", base: "pcs", factor: 1, decimals: 1 },
+  { key: "tbsp", label: "ст. л.", base: "tbsp", factor: 1, decimals: 1 },
+  { key: "tsp", label: "ч. л.", base: "tsp", factor: 1, decimals: 1 },
+  { key: "cup", label: "скл.", base: "cup", factor: 1, decimals: 2 },
+  { key: "bunch", label: "пучок", base: "bunch", factor: 1, decimals: 1 },
+  { key: "pinch", label: "дрібка", base: "pinch", factor: 1, decimals: 1 },
+  // «За смаком» свідомо без бази: складати такі не можна й не треба.
+  { key: "taste", label: "за смаком", base: null, factor: 1, decimals: 0 },
+];
+
+const BY_KEY = new Map(UNITS.map((u) => [u.key, u]));
+
+export const unitDef = (unit: Unit): UnitDef => BY_KEY.get(unit) ?? UNITS[0];
+export const unitLabel = (unit: Unit): string => unitDef(unit).label;
+
+/** Одиниці, які має сенс пропонувати у формі рецепта, згруповані. */
+export const UNIT_GROUPS: Array<{ title: string; units: Unit[] }> = [
+  { title: "Вага", units: ["g", "kg"] },
+  { title: "Обʼєм", units: ["ml", "l", "cup"] },
+  { title: "Штуки", units: ["pcs", "bunch"] },
+  { title: "Ложки", units: ["tbsp", "tsp", "pinch"] },
+  { title: "Без міри", units: ["taste"] },
+];
+
+/* ── Форматування ─────────────────────────────────────────────────────── */
+
+/** 1500 → «1,5»; 4 → «4». Кома, бо українською так пишуть. */
+export function formatNumber(value: number, decimals = 2): string {
+  if (!isFinite(value)) return "";
+  const rounded = Number(value.toFixed(decimals));
+  return String(rounded).replace(".", ",");
+}
+
+/** Готовий підпис на кшталт «200 г» або «за смаком». */
+export function formatQuantity(amount: number | undefined, unit: Unit | undefined): string {
+  if (!unit) return amount != null ? formatNumber(amount) : "";
+  if (unit === "taste") return unitLabel(unit);
+  if (amount == null) return unitLabel(unit);
+  return `${formatNumber(amount, unitDef(unit).decimals)} ${unitLabel(unit)}`;
+}
+
+/**
+ * Підпис кількості інгредієнта з урахуванням множника порцій.
+ * Старі рецепти зберігали лише текст `qty` — його показуємо як є,
+ * бо надійно масштабувати довільний рядок не вийде.
+ */
+export function ingredientQtyLabel(item: RecipeIngredient, factor = 1): string {
+  if (item.amount != null && item.unit) {
+    return formatQuantity(scaleAmount(item.amount, item.unit, factor), item.unit);
+  }
+  if (item.unit === "taste") return unitLabel("taste");
+  return item.qty ?? "";
+}
+
+/** Масштабування з підйомом у більшу одиницю: 1500 г → лишається 1500 г. */
+export function scaleAmount(amount: number, unit: Unit, factor: number): number {
+  if (factor === 1) return amount;
+  const scaled = amount * factor;
+  // Дрібні значення округлюємо до чверті, щоб не було «0,3333 ч. л.».
+  const def = unitDef(unit);
+  if (scaled < 1 && def.decimals > 0) return Math.round(scaled * 4) / 4;
+  return Number(scaled.toFixed(def.decimals));
+}
+
+/* ── Розбір старих рядків ─────────────────────────────────────────────── */
+
+const ALIASES: Array<[RegExp, Unit]> = [
+  [/^(кг|kg|кілограм\w*)$/iu, "kg"],
+  [/^(г|гр|g|грам\w*)$/iu, "g"],
+  [/^(мл|ml|мілілітр\w*)$/iu, "ml"],
+  [/^(л|l|літр\w*)$/iu, "l"],
+  [/^(шт|шт\.|штук\w*|pcs)$/iu, "pcs"],
+  [/^(ст\.?\s*л\.?|столов\w*\s*ложк\w*|tbsp)$/iu, "tbsp"],
+  [/^(ч\.?\s*л\.?|чайн\w*\s*ложк\w*|tsp)$/iu, "tsp"],
+  [/^(скл\.?|склянк\w*|cup)$/iu, "cup"],
+  [/^(пучок|пучк\w*|bunch)$/iu, "bunch"],
+  [/^(дрібк\w*|щіпк\w*|pinch)$/iu, "pinch"],
+  [/^(за\s+смаком|до\s+смаку|taste)$/iu, "taste"],
+];
+
+/**
+ * Витягує число й одиницю зі старого рядка: «200 г» → { amount: 200, unit: 'g' }.
+ * Якщо не вдалося — повертає null, і рядок далі живе як вільний текст.
+ */
+export function parseQty(raw: string | undefined): { amount?: number; unit: Unit } | null {
+  if (!raw) return null;
+  const text = raw.trim().toLowerCase();
+  if (!text) return null;
+
+  for (const [re, unit] of ALIASES) {
+    if (re.test(text)) return { unit };
+  }
+
+  const match = text.match(/^([\d]+(?:[.,]\d+)?)\s*(.*)$/u);
+  if (!match) return null;
+
+  const amount = Number(match[1].replace(",", "."));
+  if (!isFinite(amount)) return null;
+
+  const tail = match[2].trim();
+  if (!tail) return { amount, unit: "pcs" };
+
+  for (const [re, unit] of ALIASES) {
+    if (re.test(tail)) return { amount, unit };
+  }
+  return null;
+}
+
+/** Кількість інгредієнта у придатному для сумування вигляді. */
+export function quantityOf(item: RecipeIngredient): { amount?: number; unit: Unit } | null {
+  if (item.unit) return { amount: item.amount, unit: item.unit };
+  return parseQty(item.qty);
+}
+
+/* ── Сумування для списку покупок ─────────────────────────────────────── */
+
+export interface SummedQuantity {
+  amount?: number;
+  unit: Unit;
+}
+
+/**
+ * Складає кількості одного інгредієнта. Те, що зводиться до спільної бази
+ * (г і кг, мл і л), сумується в одне; решта лишається окремими рядками —
+ * «2 шт» і «1 ст. л.» об'єднати чесно неможливо.
+ */
+export function sumQuantities(list: Array<{ amount?: number; unit: Unit }>): SummedQuantity[] {
+  const byBase = new Map<string, { total: number; unit: Unit }>();
+  const loose: SummedQuantity[] = [];
+
+  for (const q of list) {
+    const def = unitDef(q.unit);
+    if (!def.base || q.amount == null) {
+      // «за смаком» і кількості без числа не сумуються — але показати варто раз.
+      if (!loose.some((l) => l.unit === q.unit && l.amount == null)) {
+        loose.push({ unit: q.unit });
+      }
+      continue;
+    }
+    const entry = byBase.get(def.base) ?? { total: 0, unit: def.base };
+    entry.total += q.amount * def.factor;
+    byBase.set(def.base, entry);
+  }
+
+  const summed: SummedQuantity[] = [];
+  for (const [base, { total }] of byBase) {
+    summed.push(prettify(total, base as Unit));
+  }
+  return [...summed, ...loose];
+}
+
+/** 1500 г → 1,5 кг; 2500 мл → 2,5 л. Дрібне лишаємо як є. */
+function prettify(totalInBase: number, base: Unit): SummedQuantity {
+  const bigger = UNITS.find((u) => u.base === base && u.factor > 1);
+  if (bigger && totalInBase >= bigger.factor) {
+    return { amount: totalInBase / bigger.factor, unit: bigger.key };
+  }
+  return { amount: totalInBase, unit: base };
+}
+
+/** Готовий підпис для списку покупок: «500 г», «1,5 кг · 2 шт». */
+export function formatSummed(list: SummedQuantity[]): string {
+  return list.map((q) => formatQuantity(q.amount, q.unit)).filter(Boolean).join(" · ");
+}

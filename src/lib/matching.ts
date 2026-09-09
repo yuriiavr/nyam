@@ -1,7 +1,8 @@
 import { ing } from "@/data/ingredients";
 import type { AppState } from "./store";
 import { allRecipes, daysSinceCooked, effectiveStats } from "./store";
-import type { MatchResult, MealType, Mood, Recipe } from "./types";
+import type { MatchResult, MealType, Mood, Recipe, Unit } from "./types";
+import { formatSummed, quantityOf, sumQuantities, type SummedQuantity } from "./units";
 import { avgRating, currentMeal } from "./utils";
 
 /* ── Фільтри ──────────────────────────────────────────────────────────── */
@@ -410,24 +411,40 @@ export function generateWeekPlan(
   return plan;
 }
 
-/** Об'єднаний список покупок для набору рецептів з урахуванням комори. */
+/**
+ * Об'єднаний список покупок для набору рецептів з урахуванням комори.
+ *
+ * Кількості складаються, а не перелічуються: якщо в одній страві 200 г
+ * борошна, а в іншій 300 г — у списку буде «500 г», і в магазині не треба
+ * рахувати в голові. Те, що не звести до спільної одиниці, лишається окремо.
+ */
 export function shoppingListFor(
   recipes: Recipe[],
   pantry: string[],
-): Array<{ key: string; qtys: string[]; count: number }> {
+): Array<{ key: string; quantities: SummedQuantity[]; label: string; count: number }> {
   const have = new Set(pantry);
-  const map = new Map<string, { qtys: string[]; count: number }>();
+  const map = new Map<string, { parts: Array<{ amount?: number; unit: Unit }>; free: string[]; count: number }>();
+
   for (const r of recipes) {
     for (const item of r.ingredients) {
       if (item.optional) continue;
       if (have.has(item.key) || ing(item.key).staple) continue;
-      const entry = map.get(item.key) ?? { qtys: [], count: 0 };
-      if (item.qty) entry.qtys.push(item.qty);
+
+      const entry = map.get(item.key) ?? { parts: [], free: [], count: 0 };
+      const q = quantityOf(item);
+      if (q) entry.parts.push(q);
+      else if (item.qty) entry.free.push(item.qty);
       entry.count += 1;
       map.set(item.key, entry);
     }
   }
+
   return [...map.entries()]
-    .map(([key, v]) => ({ key, ...v }))
+    .map(([key, v]) => {
+      const quantities = sumQuantities(v.parts);
+      // Нерозпізнані рядки дописуємо як є — краще показати, ніж загубити.
+      const label = [formatSummed(quantities), ...v.free].filter(Boolean).join(" + ");
+      return { key, quantities, label, count: v.count };
+    })
     .sort((a, b) => b.count - a.count);
 }

@@ -16,6 +16,13 @@ export type IngredientCat =
   | "veg" | "fruit" | "meat" | "fish" | "dairy" | "grain"
   | "spice" | "sauce" | "bakery" | "other";
 
+export interface Nutrition {
+  kcal: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+}
+
 export interface IngredientDef {
   key: string;
   label: string;
@@ -25,10 +32,37 @@ export interface IngredientDef {
   aliases?: string[];
   /** Вважається базовим — майже завжди є вдома, не штрафує match */
   staple?: boolean;
+  /** Харчова цінність на 100 г. Відсутня — рахунок калорій пропускає продукт. */
+  nutrition?: Nutrition;
+  /** Середня вага однієї штуки в грамах: «2 яйця» → 120 г. */
+  gramsPerPiece?: number;
+  /** Одиниця, яку підставляти у формі рецепта за замовчуванням. */
+  defaultUnit?: Unit;
 }
+
+/** Одиниці виміру; описані в src/lib/units.ts */
+export type Unit =
+  | "g"
+  | "kg"
+  | "ml"
+  | "l"
+  | "pcs"
+  | "tbsp"
+  | "tsp"
+  | "cup"
+  | "bunch"
+  | "pinch"
+  | "taste";
 
 export interface RecipeIngredient {
   key: string;
+  /** Число окремо від одиниці — щоб список покупок міг сумувати. */
+  amount?: number;
+  unit?: Unit;
+  /**
+   * Старий вільний текст («2-3 шт», «до смаку»). Лишається заради рецептів,
+   * створених до появи одиниць, і як запасний варіант для нестандартних мір.
+   */
   qty?: string;
   optional?: boolean;
 }
@@ -96,6 +130,8 @@ export interface PantryItem {
   label?: string;
   qty?: string;
   addedAt: string;
+  /** Строк придатності, дата у форматі YYYY-MM-DD. */
+  expiresAt?: string;
   /** штрихкод, якщо додано сканером */
   barcode?: string;
 }
@@ -117,9 +153,9 @@ export interface MatchResult {
 
 /* ── Сімʼя ──────────────────────────────────────────────────────────────── */
 
+/** Сімʼя не має назви — це просто набір людей, повʼязаних кодом запрошення. */
 export interface Family {
   id: string;
-  name: string;
   inviteCode: string;
   createdBy: string | null;
   createdAt: string;

@@ -176,3 +176,38 @@ export const MOOD_META: Record<string, { label: string; emoji: string }> = {
 };
 
 export const DIFFICULTY_LABEL = ["", "Просто", "Середньо", "Складно"];
+
+/* ── Строк придатності ────────────────────────────────────────────────── */
+
+export interface ExpiryInfo {
+  /** Днів до кінця; відʼємне — вже прострочено. */
+  days: number;
+  label: string;
+  tone: "expired" | "soon" | "ok";
+}
+
+/**
+ * Скільки лишилось продукту. Рахуємо в цілих днях за місцевою датою:
+ * «сьогодні» для користувача важливіше за точність до годин.
+ */
+export function expiryInfo(expiresAt: string | undefined, now = new Date()): ExpiryInfo | null {
+  if (!expiresAt) return null;
+  const end = new Date(`${expiresAt}T00:00:00`);
+  if (isNaN(end.getTime())) return null;
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((end.getTime() - today.getTime()) / 86_400_000);
+
+  if (days < 0) {
+    const ago = Math.abs(days);
+    return {
+      days,
+      tone: "expired",
+      label: ago === 1 ? "прострочено вчора" : `прострочено ${ago} дн. тому`,
+    };
+  }
+  if (days === 0) return { days, tone: "soon", label: "сьогодні останній день" };
+  if (days === 1) return { days, tone: "soon", label: "завтра" };
+  if (days <= 3) return { days, tone: "soon", label: `${days} дні` };
+  return { days, tone: "ok", label: `${days} ${plural(days, "день", "дні", "днів")}` };
+}

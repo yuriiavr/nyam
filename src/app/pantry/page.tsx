@@ -12,7 +12,7 @@ import { lookupBarcode, type ProductInfo } from "@/lib/barcode";
 import { fridgeMatches, shoppingSuggestions } from "@/lib/matching";
 import { allRecipes, useApp } from "@/lib/store";
 import type { IngredientCat, IngredientDef } from "@/lib/types";
-import { haptic, plural } from "@/lib/utils";
+import { expiryInfo, haptic, plural } from "@/lib/utils";
 
 const POPULAR = [
   "yajtsya",
@@ -40,8 +40,23 @@ export default function PantryPage() {
   const [scanned, setScanned] = useState<ProductInfo | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [pickFor, setPickFor] = useState<ProductInfo | null>(null);
+  /** Ключ продукту, якому зараз виставляють строк придатності. */
+  const [expiryFor, setExpiryFor] = useState<string | null>(null);
 
   const pantryKeys = state.pantry.map((p) => p.key);
+
+  /* Те, що псується: спершу прострочене, далі найближче за датою.
+     Показуємо лише коли є про що попереджати. */
+  const expiring = useMemo(
+    () =>
+      state.pantry
+        .map((item) => ({ item, exp: expiryInfo(item.expiresAt) }))
+        .filter((x): x is { item: (typeof state.pantry)[number]; exp: NonNullable<ReturnType<typeof expiryInfo>> } =>
+          x.exp !== null && x.exp.days <= 3,
+        )
+        .sort((a, b) => a.exp.days - b.exp.days),
+    [state.pantry],
+  );
 
   const grouped = useMemo(() => {
     const map = new Map<IngredientCat, typeof state.pantry>();
@@ -194,6 +209,30 @@ export default function PantryPage() {
 
       {/* Список комори */}
       <section className="px-4 pt-6">
+        {hydrated && expiring.length > 0 && (
+          <Card className="mb-4 border-brand-2/40 bg-brand-2/8 p-3.5">
+            <p className="text-[13px] font-bold">Треба зʼїсти найближчим часом</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {expiring.map(({ item, exp }) => (
+                <button
+                  key={item.key}
+                  onClick={() => {
+                    haptic(8);
+                    setExpiryFor(item.key);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-[12px] font-semibold"
+                >
+                  <span>{ing(item.key).emoji}</span>
+                  <span>{ing(item.key).label}</span>
+                  <span className={exp.tone === "expired" ? "text-berry" : "text-brand-2"}>
+                    · {exp.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {!hydrated ? null : state.pantry.length === 0 ? (
           <EmptyState
             emoji="🧊"
@@ -212,24 +251,59 @@ export default function PantryPage() {
                   <AnimatePresence initial={false}>
                     {items.map((item) => {
                       const def = ing(item.key);
+                      const exp = expiryInfo(item.expiresAt);
                       return (
-                        <motion.button
+                        <motion.div
                           key={item.key}
                           layout
                           initial={{ opacity: 0, scale: 0.85 }}
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.85 }}
-                          onClick={() => {
-                            haptic(10);
-                            state.removePantry(item.key);
-                          }}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-2 text-[13px] font-semibold"
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-2 pl-3 pr-2 text-[13px] font-semibold ${
+                            exp?.tone === "expired"
+                              ? "border-berry/50 bg-berry/10"
+                              : exp?.tone === "soon"
+                                ? "border-brand-2/50 bg-brand-2/10"
+                                : "border-line bg-surface"
+                          }`}
                         >
-                          <span>{def.emoji}</span>
-                          <span>{def.label}</span>
-                          {item.barcode && <span className="text-[9px] text-faint">скан</span>}
-                          <X size={13} className="text-faint" />
-                        </motion.button>
+                          <button
+                            onClick={() => {
+                              haptic(8);
+                              setExpiryFor(item.key);
+                            }}
+                            className="inline-flex items-center gap-1.5"
+                          >
+                            <span>{def.emoji}</span>
+                            <span>{def.label}</span>
+                            {exp && (
+                              <span
+                                className={`text-[10px] font-bold ${
+                                  exp.tone === "expired"
+                                    ? "text-berry"
+                                    : exp.tone === "soon"
+                                      ? "text-brand-2"
+                                      : "text-faint"
+                                }`}
+                              >
+                                {exp.label}
+                              </span>
+                            )}
+                            {item.barcode && !exp && (
+                              <span className="text-[9px] text-faint">скан</span>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              haptic(10);
+                              state.removePantry(item.key);
+                            }}
+                            aria-label={`Прибрати ${def.label}`}
+                            className="grid h-5 w-5 place-items-center"
+                          >
+                            <X size={13} className="text-faint" />
+                          </button>
+                        </motion.div>
                       );
                     })}
                   </AnimatePresence>
@@ -271,6 +345,11 @@ export default function PantryPage() {
       )}
 
       {/* Сканер */}
+      <ExpirySheet
+        itemKey={expiryFor}
+        onClose={() => setExpiryFor(null)}
+      />
+
       <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onDetect={handleDetect} />
 
       {/* Індикатор пошуку товару */}
@@ -487,6 +566,65 @@ function IngredientPicker({
           ))}
         </div>
       )}
+    </Sheet>
+  );
+}
+
+/** Вибір строку придатності для одного продукту з комори. */
+function ExpirySheet({ itemKey, onClose }: { itemKey: string | null; onClose: () => void }) {
+  const state = useApp();
+  const item = state.pantry.find((p) => p.key === itemKey);
+  const def = itemKey ? ing(itemKey) : null;
+
+  const save = (expiresAt: string | undefined) => {
+    if (!item) return;
+    haptic(10);
+    state.addPantry({ ...item, expiresAt });
+    onClose();
+  };
+
+  // Швидкі варіанти замість вибору дати: так зазвичай і думають про продукти.
+  const inDays = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+
+  return (
+    <Sheet open={itemKey !== null} onClose={onClose} title={def ? `${def.emoji} ${def.label}` : ""}>
+      <div className="pb-4">
+        <p className="text-[13px] leading-relaxed text-muted">
+          До якого числа це ще їстівне? Застосунок нагадає, коли строк добігатиме кінця.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[
+            { label: "Завтра", days: 1 },
+            { label: "3 дні", days: 3 },
+            { label: "Тиждень", days: 7 },
+            { label: "2 тижні", days: 14 },
+            { label: "Місяць", days: 30 },
+          ].map((opt) => (
+            <Chip key={opt.days} onClick={() => save(inDays(opt.days))}>
+              {opt.label}
+            </Chip>
+          ))}
+        </div>
+
+        <label className="mt-4 block text-[12px] text-muted">Або точна дата</label>
+        <input
+          type="date"
+          value={item?.expiresAt ?? ""}
+          onChange={(e) => save(e.target.value || undefined)}
+          className="mt-1.5 h-11 w-full rounded-2xl border border-line bg-surface-2 px-3.5 text-[15px]"
+        />
+
+        {item?.expiresAt && (
+          <Button full variant="secondary" className="mt-3" onClick={() => save(undefined)}>
+            Прибрати строк
+          </Button>
+        )}
+      </div>
     </Sheet>
   );
 }

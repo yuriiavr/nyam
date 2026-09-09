@@ -323,7 +323,7 @@ export default function PlanPage() {
           Зібрано з {plannedRecipes.length} страв у плані. Те, що вже є в коморі, не показуємо.
         </p>
         <div className="flex flex-col gap-2 pb-4">
-          {shoppingList.map(({ key, qtys, count }) => {
+          {shoppingList.map(({ key, label: qtyLabel, count }) => {
             const def = ing(key);
             const checked = bought.has(key);
             return (
@@ -361,8 +361,8 @@ export default function PlanPage() {
                     </span>
                   )}
                 </span>
-                {qtys.length > 0 && (
-                  <span className="shrink-0 text-[12px] text-muted">{qtys.join(" + ")}</span>
+                {qtyLabel && (
+                  <span className="shrink-0 text-[12px] font-semibold text-muted">{qtyLabel}</span>
                 )}
               </motion.button>
             );

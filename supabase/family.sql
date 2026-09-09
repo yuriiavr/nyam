@@ -11,10 +11,10 @@
 -- ============================================================================
 
 -- ── Таблиці ────────────────────────────────────────────────────────────────
+-- Назви у сімʼї немає навмисно: вона нікому не показується назовні,
+-- це просто набір людей, повʼязаних кодом запрошення.
 create table if not exists public.families (
   id          uuid primary key default uuid_generate_v4(),
-  name        text not null default 'Моя сімʼя'
-                check (char_length(name) between 1 and 60),
   invite_code text not null unique,
   created_by  uuid references public.profiles (id) on delete set null,
   created_at  timestamptz not null default now()
@@ -91,7 +91,7 @@ $$;
 -- Усе через RPC: так у families/family_members не потрібні політики на запис,
 -- а перевірки («вже в сімʼї», «код не існує») дають зрозумілі помилки.
 
-create or replace function public.create_family(family_name text default null)
+create or replace function public.create_family()
 returns public.families
 language plpgsql
 security definer
@@ -108,12 +108,8 @@ begin
     raise exception 'Ти вже в сімʼї' using errcode = 'P0001';
   end if;
 
-  insert into public.families (name, invite_code, created_by)
-  values (
-    coalesce(nullif(btrim(family_name), ''), 'Моя сімʼя'),
-    public.gen_invite_code(),
-    uid
-  )
+  insert into public.families (invite_code, created_by)
+  values (public.gen_invite_code(), uid)
   returning * into fam;
 
   insert into public.family_members (user_id, family_id, role)
@@ -192,32 +188,6 @@ begin
 
     update public.family_members set role = 'owner' where user_id = heir;
   end if;
-end;
-$$;
-
-create or replace function public.rename_family(family_name text)
-returns public.families
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  uid uuid := auth.uid();
-  fam public.families;
-begin
-  if not exists (
-    select 1 from public.family_members
-    where user_id = uid and role = 'owner'
-  ) then
-    raise exception 'Перейменувати може лише власник сімʼї' using errcode = '42501';
-  end if;
-
-  update public.families
-  set name = coalesce(nullif(btrim(family_name), ''), name)
-  where id = public.my_family_id()
-  returning * into fam;
-
-  return fam;
 end;
 $$;
 
@@ -309,16 +279,14 @@ create policy "recipes readable" on public.recipes
 
 revoke all on function public.gen_invite_code() from public, anon, authenticated;
 
-revoke all on function public.create_family(text)        from public, anon;
+revoke all on function public.create_family()            from public, anon;
 revoke all on function public.join_family(text)          from public, anon;
 revoke all on function public.leave_family()             from public, anon;
-revoke all on function public.rename_family(text)        from public, anon;
 revoke all on function public.remove_family_member(uuid) from public, anon;
 
-grant execute on function public.create_family(text)        to authenticated;
+grant execute on function public.create_family()            to authenticated;
 grant execute on function public.join_family(text)          to authenticated;
 grant execute on function public.leave_family()             to authenticated;
-grant execute on function public.rename_family(text)        to authenticated;
 grant execute on function public.remove_family_member(uuid) to authenticated;
 
 -- my_family_id і shares_family лишаються доступними навмисно: їх викликають

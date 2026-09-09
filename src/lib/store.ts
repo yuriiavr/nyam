@@ -307,11 +307,38 @@ export const useApp = create<AppState>()(
         }
       },
 
+      /**
+       * Видаляє рецепт звідусіль, де на нього є посилання.
+       *
+       * remoteRecipes чистимо обовʼязково: це кеш стрічки, він переживає
+       * перезапуск застосунку через localStorage, тож без цього видалений
+       * рецепт лишався б у стрічці й пошуку до наступного успішного
+       * завантаження спільноти.
+       */
       deleteRecipe: (id) => {
+        const state = get();
+
+        const plan: WeekPlan = {};
+        for (const [day, slots] of Object.entries(state.plan)) {
+          const kept = Object.fromEntries(
+            Object.entries(slots ?? {}).filter(([, recipeId]) => recipeId !== id),
+          );
+          if (Object.keys(kept).length) plan[day] = kept;
+        }
+
+        const ratings = { ...state.ratings };
+        delete ratings[id];
+
         set({
-          myRecipes: get().myRecipes.filter((r) => r.id !== id),
-          saved: get().saved.filter((x) => x !== id),
-          wishlist: get().wishlist.filter((x) => x !== id),
+          myRecipes: state.myRecipes.filter((r) => r.id !== id),
+          remoteRecipes: state.remoteRecipes.filter((r) => r.id !== id),
+          saved: state.saved.filter((x) => x !== id),
+          wishlist: state.wishlist.filter((x) => x !== id),
+          likes: state.likes.filter((x) => x !== id),
+          dismissed: state.dismissed.filter((x) => x !== id),
+          cooked: state.cooked.filter((c) => c.recipeId !== id),
+          ratings,
+          plan,
         });
         sync.pushRecipeDelete(id);
       },

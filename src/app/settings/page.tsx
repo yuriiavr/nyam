@@ -87,9 +87,7 @@ export default function SettingsPage() {
               <Users size={18} className="text-brand" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-bold">
-                {family ? family.name : "Сімʼя"}
-              </p>
+              <p className="text-[15px] font-bold">Сімʼя</p>
               <p className="truncate text-[12px] text-muted">
                 {family
                   ? `${familyMembers.length} ${plural(familyMembers.length, "учасник", "учасники", "учасників")} · спільна комора`
