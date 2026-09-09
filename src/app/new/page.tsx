@@ -25,7 +25,9 @@ import type {
   Recipe,
   RecipeIngredient,
   RecipeStep,
+  Unit,
 } from "@/lib/types";
+import { UNIT_GROUPS, unitLabel } from "@/lib/units";
 import { compressImage, haptic, MEAL_LABEL, MOOD_META, newId } from "@/lib/utils";
 
 const EMOJIS = [
@@ -422,15 +424,58 @@ function RecipeForm() {
                       {def.label}
                     </span>
                     <input
-                      value={item.qty ?? ""}
+                      value={item.amount ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(",", ".");
+                        const amount = raw === "" ? undefined : Number(raw);
+                        setIngredients((prev) =>
+                          prev.map((x, j) =>
+                            j === i
+                              ? {
+                                  ...x,
+                                  amount: Number.isFinite(amount) ? amount : undefined,
+                                  // Старий вільний текст більше не потрібен, щойно
+                                  // зʼявились число й одиниця — інакше вони конфліктують.
+                                  qty: undefined,
+                                }
+                              : x,
+                          ),
+                        );
+                      }}
+                      inputMode="decimal"
+                      placeholder="200"
+                      disabled={item.unit === "taste"}
+                      className="h-9 w-[62px] rounded-xl bg-surface-2 px-2 text-center text-[13px] disabled:opacity-40"
+                    />
+                    <select
+                      value={item.unit ?? def.defaultUnit ?? "g"}
                       onChange={(e) =>
                         setIngredients((prev) =>
-                          prev.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)),
+                          prev.map((x, j) =>
+                            j === i
+                              ? {
+                                  ...x,
+                                  unit: e.target.value as Unit,
+                                  amount: e.target.value === "taste" ? undefined : x.amount,
+                                  qty: undefined,
+                                }
+                              : x,
+                          ),
                         )
                       }
-                      placeholder="200 г"
-                      className="h-9 w-[86px] rounded-xl bg-surface-2 px-2.5 text-center text-[13px]"
-                    />
+                      aria-label={`Одиниця для ${def.label}`}
+                      className="h-9 w-[76px] shrink-0 rounded-xl bg-surface-2 px-1.5 text-center text-[12px] font-semibold"
+                    >
+                      {UNIT_GROUPS.map((group) => (
+                        <optgroup key={group.title} label={group.title}>
+                          {group.units.map((u) => (
+                            <option key={u} value={u}>
+                              {unitLabel(u)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
                     <button
                       onClick={() =>
                         setIngredients((prev) =>
@@ -612,7 +657,9 @@ function RecipeForm() {
         exclude={ingredients.map((i) => i.key)}
         onPick={(key) => {
           haptic(10);
-          setIngredients((p) => [...p, { key }]);
+          // Одиниця за замовчуванням залежить від продукту: молоко в мл,
+          // яйця в штуках, борошно в грамах — щоб не перемикати щоразу.
+          setIngredients((p) => [...p, { key, unit: ing(key).defaultUnit ?? "g" }]);
         }}
       />
     </div>

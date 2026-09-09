@@ -75,7 +75,24 @@ export function ingredientQtyLabel(item: RecipeIngredient, factor = 1): string {
     return formatQuantity(scaleAmount(item.amount, item.unit, factor), item.unit);
   }
   if (item.unit === "taste") return unitLabel("taste");
-  return item.qty ?? "";
+  return scaleLegacyQty(item.qty, factor);
+}
+
+/**
+ * Масштабує старий вільний рядок («200 г», «1/2 склянки») через перше число
+ * в ньому. Менш надійно за структуровану кількість, але краще, ніж показати
+ * рецепт на 2 порції як рецепт на 4.
+ */
+export function scaleLegacyQty(qty: string | undefined, factor: number): string {
+  if (!qty) return "";
+  if (factor === 1) return qty;
+  return qty.replace(/(\d+(?:[.,]\d+)?)(\s*\/\s*(\d+))?/, (match, a: string, _frac, b: string) => {
+    const num = b ? Number(a.replace(",", ".")) / Number(b) : Number(a.replace(",", "."));
+    if (!isFinite(num)) return match;
+    const scaled = num * factor;
+    const rounded = scaled < 1 ? Math.round(scaled * 4) / 4 : Math.round(scaled * 10) / 10;
+    return String(rounded).replace(".", ",");
+  });
 }
 
 /** Масштабування з підйомом у більшу одиницю: 1500 г → лишається 1500 г. */

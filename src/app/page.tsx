@@ -16,7 +16,8 @@ import {
 import { useMemo } from "react";
 import { FeedCard, RecipeScroller } from "@/components/RecipeCard";
 import { Avatar, Card, SectionTitle, Skeleton } from "@/components/ui";
-import { allRecipes, cookStreak, useApp } from "@/lib/store";
+import { allRecipes, cookStreak, recipeById, useApp } from "@/lib/store";
+import { dayTotals, macroShares } from "@/lib/nutrition";
 import { recommend, topBy } from "@/lib/matching";
 import { greeting, haptic, MEAL_LABEL, currentMeal, plural } from "@/lib/utils";
 
@@ -78,6 +79,9 @@ export default function HomePage() {
           </Link>
         </div>
       </header>
+
+      {/* Скільки зʼїдено сьогодні */}
+      <TodayNutrition />
 
       {/* Головний CTA */}
       <section className="px-4 pt-4">
@@ -272,5 +276,59 @@ function HomeSkeleton() {
         <span className="text-[12px]">Готуємо стрічку…</span>
       </div>
     </div>
+  );
+}
+
+/**
+ * Підсумок за день з історії готувань. Зʼявляється лише коли сьогодні щось
+ * готували — порожня картка «0 ккал» щодня не додає нічого корисного.
+ */
+function TodayNutrition() {
+  const state = useApp();
+  const hydrated = useApp((s) => s.hydrated);
+
+  const totals = useMemo(
+    () => (hydrated ? dayTotals(state.cooked, (id) => recipeById(state, id)) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hydrated, state.cooked, state.myRecipes, state.remoteRecipes],
+  );
+
+  if (!totals || totals.meals === 0) return null;
+
+  const shares = macroShares(totals);
+
+  return (
+    <section className="px-4 pt-4">
+      <Card className="p-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[12px] text-muted">Сьогодні приготовано</p>
+            <p className="mt-0.5 font-display text-[26px] font-extrabold leading-none">
+              {totals.kcal} <span className="text-[14px] font-bold text-muted">ккал</span>
+            </p>
+          </div>
+          <p className="text-right text-[11.5px] leading-snug text-faint">
+            {totals.meals} {plural(totals.meals, "страва", "страви", "страв")}
+            {totals.unknown > 0 && (
+              <>
+                <br />
+                {totals.unknown} без даних
+              </>
+            )}
+          </p>
+        </div>
+
+        <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-surface-2">
+          <div style={{ width: `${shares.protein * 100}%` }} className="bg-sky" />
+          <div style={{ width: `${shares.fat * 100}%` }} className="bg-brand-2" />
+          <div style={{ width: `${shares.carbs * 100}%` }} className="bg-mint" />
+        </div>
+        <p className="mt-2 text-[11.5px] text-muted">
+          <span className="font-bold text-sky">Б {totals.protein} г</span> ·{" "}
+          <span className="font-bold text-brand-2">Ж {totals.fat} г</span> ·{" "}
+          <span className="font-bold text-mint">В {totals.carbs} г</span>
+        </p>
+      </Card>
+    </section>
   );
 }

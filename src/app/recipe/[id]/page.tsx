@@ -23,29 +23,21 @@ import { useMemo, useState } from "react";
 import { RecipeMedia, RecipeRow } from "@/components/RecipeCard";
 import { Avatar, Button, Card, EmptyState, Sheet, Stars, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
+import type { Recipe } from "@/lib/types";
 import { matchRecipe } from "@/lib/matching";
 import { allRecipes, effectiveStats, profileById, recipeById, useApp } from "@/lib/store";
 import {
   avgRating,
   compactNumber,
+  plural,
   DIFFICULTY_LABEL,
   formatMinutes,
   haptic,
   MEAL_LABEL,
   MOOD_META,
 } from "@/lib/utils";
-
-/** Масштабує кількість під іншу кількість порцій ("400 г" ×1.5 → "600 г"). */
-function scaleQty(qty: string | undefined, factor: number): string | undefined {
-  if (!qty || factor === 1) return qty;
-  return qty.replace(/(\d+(?:[.,]\d+)?)(\s*\/\s*(\d+))?/, (match, a: string, _frac, b: string) => {
-    const num = b ? Number(a.replace(",", ".")) / Number(b) : Number(a.replace(",", "."));
-    if (!isFinite(num)) return match;
-    const scaled = num * factor;
-    const rounded = scaled < 1 ? Math.round(scaled * 4) / 4 : Math.round(scaled * 10) / 10;
-    return String(rounded).replace(".", ",");
-  });
-}
+import { macroShares, recipeNutrition } from "@/lib/nutrition";
+import { ingredientQtyLabel } from "@/lib/units";
 
 export default function RecipePage() {
   const params = useParams<{ id: string }>();
@@ -353,13 +345,16 @@ export default function RecipePage() {
                   )}
                 </div>
                 <span className="shrink-0 text-[13px] font-bold text-muted">
-                  {scaleQty(item.qty, factor)}
+                  {ingredientQtyLabel(item, factor)}
                 </span>
               </div>
             );
           })}
         </Card>
       </section>
+
+      {/* Харчова цінність */}
+      <NutritionCard recipe={recipe} servings={currentServings} />
 
       {/* Кроки */}
       <section className="px-4 pt-7">
@@ -490,6 +485,74 @@ function Metric({
       <span className="mx-auto mb-1 grid w-fit place-items-center text-brand">{icon}</span>
       <p className="truncate text-[12.5px] font-bold leading-tight">{value}</p>
       <p className="mt-0.5 truncate text-[10px] text-muted">{label}</p>
+    </div>
+  );
+}
+
+/**
+ * Калорії та БЖВ, пораховані з інгредієнтів.
+ *
+ * Показуємо разом із покриттям: якщо половина складу без даних, число
+ * оманливе, і чесніше сказати про це, ніж робити вигляд точності.
+ */
+function NutritionCard({ recipe, servings }: { recipe: Recipe; servings: number }) {
+  const n = useMemo(() => recipeNutrition(recipe), [recipe]);
+  if (!n) return null;
+
+  const per = {
+    kcal: Math.round(n.perServing.kcal),
+    protein: Math.round(n.perServing.protein * 10) / 10,
+    fat: Math.round(n.perServing.fat * 10) / 10,
+    carbs: Math.round(n.perServing.carbs * 10) / 10,
+  };
+  const shares = macroShares(n.perServing);
+  const low = n.coverage < 0.6;
+
+  return (
+    <section className="px-4 pt-7">
+      <h2 className="mb-3 font-display text-[17px] font-bold">На порцію</h2>
+      <Card className="p-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="font-display text-[30px] font-extrabold leading-none">{per.kcal}</p>
+            <p className="mt-1 text-[12px] text-muted">ккал у порції</p>
+          </div>
+          <p className="text-right text-[11.5px] leading-snug text-faint">
+            {servings} {plural(servings, "порція", "порції", "порцій")} ·{" "}
+            {Math.round(per.kcal * servings)} ккал разом
+          </p>
+        </div>
+
+        {/* Смужка розподілу БЖВ за калоріями, а не за грамами:
+            грам жиру дає вдвічі більше енергії за грам білка. */}
+        <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-surface-2">
+          <div style={{ width: `${shares.protein * 100}%` }} className="bg-sky" />
+          <div style={{ width: `${shares.fat * 100}%` }} className="bg-brand-2" />
+          <div style={{ width: `${shares.carbs * 100}%` }} className="bg-mint" />
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <Macro label="Білки" value={per.protein} tone="text-sky" />
+          <Macro label="Жири" value={per.fat} tone="text-brand-2" />
+          <Macro label="Вуглеводи" value={per.carbs} tone="text-mint" />
+        </div>
+
+        <p className="mt-3 text-[11px] leading-relaxed text-faint">
+          {low
+            ? `Оцінка приблизна: пораховано лише ${Math.round(n.coverage * 100)}% складу.`
+            : "Оцінка за довідковими даними продуктів — без урахування втрат при готуванні."}
+          {n.skipped.length > 0 && ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
+        </p>
+      </Card>
+    </section>
+  );
+}
+
+function Macro({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className="rounded-2xl bg-surface-2 py-2.5">
+      <p className={`font-display text-[17px] font-extrabold leading-none ${tone}`}>{value} г</p>
+      <p className="mt-1 text-[11px] text-muted">{label}</p>
     </div>
   );
 }
