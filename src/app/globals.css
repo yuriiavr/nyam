@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
+/* ── Design tokens ─────────────────────────────────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  --bg: #0d0a09;
+  --bg-elev: #141010;
+  --surface: #1a1414;
+  --surface-2: #241c1b;
+  --line: #2e2523;
+  --ink: #fdf6f2;
+  --muted: #a1908a;
+  --faint: #6d5e59;
+
+  --brand: #ff6b35;
+  --brand-2: #ffb020;
+  --brand-ink: #1a0d05;
+  --mint: #34d399;
+  --berry: #f43f6a;
+  --grape: #a78bfa;
+  --sky: #38bdf8;
+
+  --shadow-card: 0 8px 32px -12px rgb(0 0 0 / 0.7);
+  --shadow-pop: 0 20px 60px -20px rgb(255 107 53 / 0.45);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fff8f3;
+  --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #fdeee3;
+  --line: #f0ded1;
+  --ink: #1c1110;
+  --muted: #7d6960;
+  --faint: #b4a096;
+  --brand-ink: #ffffff;
+  --shadow-card: 0 8px 28px -14px rgb(94 55 30 / 0.28);
+  --shadow-pop: 0 20px 50px -20px rgb(255 107 53 / 0.5);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-brand-ink: var(--brand-ink);
+  --color-mint: var(--mint);
+  --color-berry: var(--berry);
+  --color-grape: var(--grape);
+  --color-sky: var(--sky);
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-unbounded), var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xl2: 1.25rem;
+  --radius-xl3: 1.75rem;
+  --radius-xl4: 2.25rem;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+}
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+* { -webkit-tap-highlight-color: transparent; }
+
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar { display: none; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+  min-height: 100dvh;
+}
+
+button, input, textarea, select { font: inherit; color: inherit; }
+input, textarea { background: transparent; }
+input:focus, textarea:focus, select:focus, button:focus { outline: none; }
+::placeholder { color: var(--faint); }
+
+/* Prevent iOS zoom on focus */
+input, textarea, select { font-size: 16px; }
+
+/* ── Utilities ─────────────────────────────────────────────────────────── */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@utility pad-safe-b {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+@utility pad-safe-t {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+
+@utility glass {
+  background: color-mix(in oklab, var(--bg-elev) 86%, transparent);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+@utility brand-gradient {
+  background-image: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(120deg, var(--brand) 10%, var(--brand-2) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility hairline {
+  border: 1px solid color-mix(in oklab, var(--line) 100%, transparent);
+}
+
+/* Shimmer skeleton */
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+@utility shimmer {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(90deg, transparent, color-mix(in oklab, var(--ink) 8%, transparent), transparent);
+    animation: shimmer 1.6s infinite;
+  }
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@utility floaty { animation: float-y 4s ease-in-out infinite; }
+
+@keyframes pop-in {
+  0% { transform: scale(.8); opacity: 0; }
+  60% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@utility pop-in { animation: pop-in .38s cubic-bezier(.34,1.56,.64,1) both; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

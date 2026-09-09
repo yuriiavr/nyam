@@ -1,0 +1,57 @@
+{
+  "name": "Ням — що поїсти сьогодні",
+  "short_name": "Ням",
+  "description": "Соціальна кулінарна книга з рулеткою страв, підбором за холодильником і сканером штрихкодів.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#0d0a09",
+  "theme_color": "#0d0a09",
+  "lang": "uk",
+  "dir": "ltr",
+  "categories": ["food", "lifestyle", "social"],
+  "icons": [
+    {
+      "src": "/api/icon?size=192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/api/icon?size=512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/api/icon?size=512&maskable=1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Крутити рулетку",
+      "short_name": "Рулетка",
+      "url": "/decide/roulette"
+    },
+    {
+      "name": "Що в холодильнику",
+      "short_name": "Холодильник",
+      "url": "/decide/fridge"
+    },
+    {
+      "name": "Сканувати продукт",
+      "short_name": "Сканер",
+      "url": "/pantry"
+    },
+    {
+      "name": "Новий рецепт",
+      "short_name": "Додати",
+      "url": "/new"
+    }
+  ]
+}

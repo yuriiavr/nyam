@@ -1,0 +1,482 @@
+"use client";
+
+import {
+  AnimatePresence,
+  motion,
+  type PanInfo,
+  type HTMLMotionProps,
+} from "framer-motion";
+import { Loader2, Star, X } from "lucide-react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { cn, haptic } from "@/lib/utils";
+
+/* ── Button ───────────────────────────────────────────────────────────── */
+
+type ButtonVariant = "primary" | "secondary" | "ghost" | "outline" | "danger";
+type ButtonSize = "sm" | "md" | "lg";
+
+const VARIANTS: Record<ButtonVariant, string> = {
+  primary: "brand-gradient text-brand-ink font-bold shadow-[0_10px_30px_-12px] shadow-brand/70",
+  secondary: "bg-surface-2 text-ink font-semibold",
+  ghost: "bg-transparent text-muted font-semibold",
+  outline: "bg-transparent text-ink font-semibold border border-line",
+  danger: "bg-berry/15 text-berry font-semibold border border-berry/30",
+};
+
+const SIZES: Record<ButtonSize, string> = {
+  sm: "h-9 px-3.5 text-[13px] rounded-xl gap-1.5",
+  md: "h-12 px-5 text-[15px] rounded-2xl gap-2",
+  lg: "h-14 px-6 text-base rounded-xl3 gap-2.5",
+};
+
+export interface ButtonProps extends HTMLMotionProps<"button"> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
+  full?: boolean;
+  children?: ReactNode;
+}
+
+export function Button({
+  variant = "primary",
+  size = "md",
+  loading,
+  full,
+  className,
+  children,
+  onClick,
+  disabled,
+  ...rest
+}: ButtonProps) {
+  return (
+    <motion.button
+      whileTap={{ scale: disabled || loading ? 1 : 0.95 }}
+      transition={{ type: "spring", stiffness: 520, damping: 28 }}
+      disabled={disabled || loading}
+      onClick={(e) => {
+        if (!disabled && !loading) haptic(10);
+        onClick?.(e);
+      }}
+      className={cn(
+        "inline-flex select-none items-center justify-center whitespace-nowrap transition-colors",
+        "disabled:opacity-45",
+        VARIANTS[variant],
+        SIZES[size],
+        full && "w-full",
+        className,
+      )}
+      {...rest}
+    >
+      {loading ? <Loader2 size={18} className="animate-spin" /> : children}
+    </motion.button>
+  );
+}
+
+export function IconButton({
+  className,
+  children,
+  label,
+  ...rest
+}: ButtonProps & { label: string }) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.88 }}
+      aria-label={label}
+      onClick={(e) => {
+        haptic(8);
+        rest.onClick?.(e);
+      }}
+      className={cn(
+        "grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface-2 text-ink transition-colors active:bg-line",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+/* ── Chip ─────────────────────────────────────────────────────────────── */
+
+export function Chip({
+  active,
+  onClick,
+  children,
+  className,
+  size = "md",
+}: {
+  active?: boolean;
+  onClick?: () => void;
+  children: ReactNode;
+  className?: string;
+  size?: "sm" | "md";
+}) {
+  const Comp = onClick ? motion.button : motion.div;
+  return (
+    <Comp
+      whileTap={onClick ? { scale: 0.94 } : undefined}
+      onClick={
+        onClick
+          ? () => {
+              haptic(8);
+              onClick();
+            }
+          : undefined
+      }
+      className={cn(
+        "inline-flex shrink-0 select-none items-center gap-1.5 rounded-full border font-semibold transition-colors",
+        size === "sm" ? "h-7 px-2.5 text-[12px]" : "h-9 px-3.5 text-[13px]",
+        active
+          ? "border-transparent brand-gradient text-brand-ink"
+          : "border-line bg-surface text-muted",
+        className,
+      )}
+    >
+      {children}
+    </Comp>
+  );
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────── */
+
+export function Card({
+  className,
+  children,
+  ...rest
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl3 border border-line bg-surface shadow-[var(--shadow-card)]",
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ── Bottom sheet ─────────────────────────────────────────────────────── */
+
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  maxHeight = "88dvh",
+}: {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  maxHeight?: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    if (info.offset.y > 110 || info.velocity.y > 620) {
+      haptic(10);
+      onClose();
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px]"
+          />
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 340, damping: 34 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={handleDragEnd}
+            style={{ maxHeight }}
+            className="fixed bottom-0 left-1/2 z-50 flex w-full max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[28px] border border-line bg-bg-elev"
+          >
+            <div className="flex cursor-grab justify-center pt-3 pb-1 active:cursor-grabbing">
+              <div className="h-1.5 w-11 rounded-full bg-line" />
+            </div>
+            {title && (
+              <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-1">
+                <h2 className="font-display text-lg font-bold">{title}</h2>
+                <IconButton label="Закрити" onClick={onClose} className="h-9 w-9 rounded-xl">
+                  <X size={17} />
+                </IconButton>
+              </div>
+            )}
+            <div className="no-scrollbar flex-1 overflow-y-auto overscroll-contain px-5 pb-2">
+              {children}
+            </div>
+            {footer && (
+              <div className="pad-safe-b border-t border-line bg-bg-elev px-5 py-3">{footer}</div>
+            )}
+            <div className="pad-safe-b" />
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* ── Rating ───────────────────────────────────────────────────────────── */
+
+export function Stars({
+  value,
+  size = 14,
+  onChange,
+  className,
+}: {
+  value: number;
+  size?: number;
+  onChange?: (v: number) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center gap-0.5", className)}>
+      {[1, 2, 3, 4, 5].map((i) => {
+        const filled = value >= i - 0.25;
+        const star = (
+          <Star
+            size={size}
+            className={filled ? "fill-brand-2 text-brand-2" : "text-faint"}
+            strokeWidth={2}
+          />
+        );
+        return onChange ? (
+          <motion.button
+            key={i}
+            whileTap={{ scale: 0.8 }}
+            aria-label={`${i} з 5`}
+            onClick={() => {
+              haptic(12);
+              onChange(i);
+            }}
+            className="p-1"
+          >
+            {star}
+          </motion.button>
+        ) : (
+          <span key={i}>{star}</span>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Skeleton / empty ─────────────────────────────────────────────────── */
+
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("shimmer rounded-2xl bg-surface-2", className)} />;
+}
+
+export function EmptyState({
+  emoji,
+  title,
+  note,
+  action,
+}: {
+  emoji: string;
+  title: string;
+  note?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+      <div className="floaty text-5xl">{emoji}</div>
+      <h3 className="font-display text-lg font-bold">{title}</h3>
+      {note && <p className="max-w-[280px] text-sm leading-relaxed text-muted">{note}</p>}
+      {action && <div className="pt-2">{action}</div>}
+    </div>
+  );
+}
+
+/* ── Segmented control ────────────────────────────────────────────────── */
+
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  className,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: Array<{ value: T; label: string }>;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "no-scrollbar flex gap-1 overflow-x-auto rounded-2xl bg-surface-2 p-1",
+        className,
+      )}
+    >
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
+            key={o.value}
+            onClick={() => {
+              haptic(8);
+              onChange(o.value);
+            }}
+            className="relative shrink-0 flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-semibold"
+          >
+            {active && (
+              <motion.span
+                layoutId={`seg-${options.map((x) => x.value).join()}`}
+                transition={{ type: "spring", stiffness: 480, damping: 38 }}
+                className="absolute inset-0 rounded-xl bg-bg-elev shadow-[var(--shadow-card)]"
+              />
+            )}
+            <span className={cn("relative z-10", active ? "text-ink" : "text-muted")}>
+              {o.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+
+interface ToastItem {
+  id: number;
+  text: string;
+  emoji?: string;
+}
+
+const ToastCtx = createContext<(text: string, emoji?: string) => void>(() => {});
+
+export const useToast = () => useContext(ToastCtx);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState<ToastItem[]>([]);
+
+  const push = useCallback((text: string, emoji?: string) => {
+    const id = Date.now() + Math.random();
+    setItems((prev) => [...prev, { id, text, emoji }].slice(-3));
+    setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), 2600);
+  }, []);
+
+  const value = useMemo(() => push, [push]);
+
+  return (
+    <ToastCtx.Provider value={value}>
+      {children}
+      <div className="pad-safe-t pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-4 pt-3">
+        <AnimatePresence initial={false}>
+          {items.map((t) => (
+            <motion.div
+              key={t.id}
+              initial={{ y: -40, opacity: 0, scale: 0.9 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: -20, opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 420, damping: 30 }}
+              className="glass flex max-w-[92%] items-center gap-2.5 rounded-full border border-line px-4 py-2.5 shadow-[var(--shadow-card)]"
+            >
+              {t.emoji && <span className="text-base leading-none">{t.emoji}</span>}
+              <span className="text-[13px] font-semibold leading-tight">{t.text}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </ToastCtx.Provider>
+  );
+}
+
+/* ── Дрібниці ─────────────────────────────────────────────────────────── */
+
+export function Spinner({ className }: { className?: string }) {
+  return <Loader2 className={cn("animate-spin text-muted", className)} size={20} />;
+}
+
+export function SectionTitle({
+  title,
+  note,
+  action,
+}: {
+  title: string;
+  note?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-3 px-4">
+      <div className="min-w-0">
+        <h2 className="font-display text-[17px] font-bold leading-tight">{title}</h2>
+        {note && <p className="mt-0.5 truncate text-[12px] text-muted">{note}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function Avatar({
+  emoji,
+  gradient,
+  src,
+  size = 40,
+  ring,
+}: {
+  emoji: string;
+  gradient: [string, string];
+  src?: string | null;
+  size?: number;
+  ring?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        backgroundImage: src ? undefined : `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
+        fontSize: size * 0.46,
+      }}
+      className={cn(
+        "grid shrink-0 place-items-center overflow-hidden rounded-full",
+        ring && "ring-2 ring-brand ring-offset-2 ring-offset-bg",
+      )}
+    >
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="leading-none">{emoji}</span>
+      )}
+    </div>
+  );
+}
