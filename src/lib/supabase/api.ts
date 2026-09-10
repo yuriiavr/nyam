@@ -45,6 +45,43 @@ interface RecipeRow {
   rating_count?: number;
 }
 
+/** Рядок комори так, як він лежить у базі. */
+interface PantryRow {
+  ingredient_key: string;
+  label: string | null;
+  amount: number | string | null;
+  unit: string | null;
+  qty: string | null;
+  barcode: string | null;
+  added_at: string;
+  expires_at: string | null;
+}
+
+/**
+ * Колонки комори для select.
+ *
+ * Список виводимо з типу рядка, а не пишемо окремим текстом. Так було не
+ * завжди, і це коштувало реального бага: у таблицю додали amount і unit,
+ * запис їх зберігав, тип рядка про них знав, а рядок select лишився старим.
+ * Кількість, яку щойно ввели, зникала при першому ж перечитуванні — і ні
+ * типи, ні збірка цього не бачили, бо перелік колонок був просто текстом.
+ *
+ * `satisfies Record<keyof PantryRow, true>` вимагає перелічити геть усі поля:
+ * додати колонку в тип і забути тут більше не вийде — не збереться.
+ */
+const PANTRY_COLUMNS = {
+  ingredient_key: true,
+  label: true,
+  amount: true,
+  unit: true,
+  qty: true,
+  barcode: true,
+  added_at: true,
+  expires_at: true,
+} satisfies Record<keyof PantryRow, true>;
+
+export const PANTRY_SELECT = Object.keys(PANTRY_COLUMNS).join(",");
+
 interface ProfileRow {
   id: string;
   handle: string;
@@ -220,7 +257,7 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
       sb.from("follows").select("followee_id").eq("follower_id", userId),
       sb
         .from("pantry_items")
-        .select("ingredient_key,label,qty,barcode,added_at,expires_at")
+        .select(PANTRY_SELECT)
         .in("user_id", shared),
       sb.from("plan_slots").select("day,slot,recipe_id").in("user_id", shared),
       sb
@@ -262,16 +299,9 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
     // двоє, тож лишаємо найраніший запис на кожен ingredient_key.
     pantry: dedupePantry(
       (pantry.data ?? []).map((r) => {
-        const row = r as {
-          ingredient_key: string;
-          label: string | null;
-          amount: number | string | null;
-          unit: string | null;
-          qty: string | null;
-          barcode: string | null;
-          added_at: string;
-          expires_at: string | null;
-        };
+        // Через unknown, бо select зібрано з PANTRY_COLUMNS, а не заданий
+        // рядковим літералом — вивести форму рядка supabase-js уже не може.
+        const row = r as unknown as PantryRow;
         // amount приїжджає з numeric — postgrest віддає його рядком.
         const amount = row.amount == null ? undefined : Number(row.amount);
         return {

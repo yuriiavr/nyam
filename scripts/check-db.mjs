@@ -5,6 +5,8 @@
  *   npm run db:check
  */
 import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { createJiti } from "jiti";
 
 function loadEnv() {
   const merged = {};
@@ -58,8 +60,7 @@ if (!auth) {
 }
 console.log("✓ Ключі валідні");
 console.log(
-  `  вхід поштою: ${auth.external?.email ? "увімкнено" : "вимкнено"}` +
-    `, підтвердження пошти: ${auth.mailer_autoconfirm === false ? "ОБОВʼЯЗКОВЕ" : "вимкнено"}`,
+  `  вхід через Google: ${auth.external?.google ? "увімкнено" : "ВИМКНЕНО — увійти буде неможливо"}`,
 );
 
 const checks = [
@@ -86,6 +87,49 @@ for (const [name, path] of checks) {
 
 if (missing) {
   console.log("\n→ Виконай supabase/schema.sql у Supabase SQL Editor.");
+  process.exit(1);
+}
+
+/*
+ * Кожен список колонок із api.ts має існувати в базі.
+ *
+ * Перевірка зʼявилась після реального збою: у комору додали amount і unit,
+ * запис їх зберігав, а select лишився старим — і кількість, яку щойно ввели,
+ * зникала при першому ж перечитуванні. Помилку такого роду не бачать ані
+ * типи, ані збірка: рядок із колонками — це просто текст.
+ */
+const source = readFileSync("src/lib/supabase/api.ts", "utf8");
+const selects = [];
+for (const m of source.matchAll(/\.from\("([a-z_]+)"\)/g)) {
+  const rest = source.slice(m.index + m[0].length);
+  const nextFrom = rest.search(/\.from\("/);
+  const scope = nextFrom === -1 ? rest : rest.slice(0, nextFrom);
+  const select = scope.match(/\.select\(\s*"([^"]+)"/);
+  if (select) selects.push([m[1], select[1].replace(/\s+/g, "")]);
+}
+
+// Комора збирає свій список колонок із типу рядка, тож у коді немає літерала,
+// який можна прочитати регуляркою. Беремо саму константу.
+const { PANTRY_SELECT } = await createJiti(import.meta.url, {
+  alias: { "@": resolve("src") },
+  interopDefault: true,
+}).import(resolve("src/lib/supabase/api.ts"));
+selects.push(["pantry_items", PANTRY_SELECT]);
+
+console.log("\nКолонки, які запитує код:");
+let broken = 0;
+for (const [table, columns] of selects) {
+  const r = await get(`${table}?select=${encodeURIComponent(columns)}&limit=0`);
+  if (r.ok) {
+    console.log(`  ✓ ${table.padEnd(22)} ${columns}`);
+  } else {
+    broken++;
+    console.log(`  ✗ ${table.padEnd(22)} ${r.body ?? r.status}`);
+  }
+}
+
+if (broken) {
+  console.log("\n→ Список колонок у api.ts розійшовся зі схемою бази.");
   process.exit(1);
 }
 
