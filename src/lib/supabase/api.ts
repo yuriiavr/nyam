@@ -265,14 +265,20 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
         const row = r as {
           ingredient_key: string;
           label: string | null;
+          amount: number | string | null;
+          unit: string | null;
           qty: string | null;
           barcode: string | null;
           added_at: string;
           expires_at: string | null;
         };
+        // amount приїжджає з numeric — postgrest віддає його рядком.
+        const amount = row.amount == null ? undefined : Number(row.amount);
         return {
           key: row.ingredient_key,
           label: row.label ?? undefined,
+          amount: Number.isFinite(amount) ? amount : undefined,
+          unit: (row.unit as PantryItem["unit"]) ?? undefined,
           qty: row.qty ?? undefined,
           barcode: row.barcode ?? undefined,
           addedAt: row.added_at,
@@ -361,6 +367,8 @@ export async function upsertPantryItem(userId: string, item: PantryItem) {
     user_id: userId,
     ingredient_key: item.key,
     label: item.label ?? null,
+    amount: item.amount ?? null,
+    unit: item.unit ?? null,
     qty: item.qty ?? null,
     barcode: item.barcode ?? null,
     added_at: item.addedAt,

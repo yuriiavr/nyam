@@ -16,7 +16,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, Chip, Sheet, useToast } from "@/components/ui";
+import { Button, Card, Chip, QuantityInput, Sheet, useToast } from "@/components/ui";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
 import { lookupBarcode } from "@/lib/barcode";
@@ -28,9 +28,7 @@ import type {
   Recipe,
   RecipeIngredient,
   RecipeStep,
-  Unit,
 } from "@/lib/types";
-import { UNIT_GROUPS, unitLabel } from "@/lib/units";
 import { compressImage, haptic, MEAL_LABEL, MOOD_META, newId } from "@/lib/utils";
 
 const EMOJIS = [
@@ -494,64 +492,28 @@ function RecipeForm() {
                         </span>
                       )}
                     </span>
-                    <input
-                      value={item.amount ?? ""}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(",", ".");
-                        const amount = raw === "" ? undefined : Number(raw);
+                    <QuantityInput
+                      amount={item.amount}
+                      unit={item.unit}
+                      defaultUnit={def.defaultUnit}
+                      label={item.label ?? def.label}
+                      onChange={({ amount, unit }) =>
                         setIngredients((prev) =>
                           prev.map((x, j) =>
                             j === i
                               ? {
                                   ...x,
-                                  amount: Number.isFinite(amount) ? amount : undefined,
-                                  // Одиницю фіксуємо разом із числом. Селект показує
-                                  // типову для продукту, але поки її не перемкнули
-                                  // руками, у стані її не було — і кількість
-                                  // зберігалась без одиниці.
-                                  unit: x.unit ?? ing(x.key).defaultUnit ?? "g",
+                                  amount,
+                                  unit,
                                   // Старий вільний текст більше не потрібен, щойно
                                   // зʼявились число й одиниця — інакше вони конфліктують.
                                   qty: undefined,
                                 }
                               : x,
                           ),
-                        );
-                      }}
-                      inputMode="decimal"
-                      placeholder="200"
-                      disabled={item.unit === "taste"}
-                      className="h-9 w-[62px] rounded-xl bg-surface-2 px-2 text-center text-[13px] disabled:opacity-40"
-                    />
-                    <select
-                      value={item.unit ?? def.defaultUnit ?? "g"}
-                      onChange={(e) =>
-                        setIngredients((prev) =>
-                          prev.map((x, j) =>
-                            j === i
-                              ? {
-                                  ...x,
-                                  unit: e.target.value as Unit,
-                                  amount: e.target.value === "taste" ? undefined : x.amount,
-                                  qty: undefined,
-                                }
-                              : x,
-                          ),
                         )
                       }
-                      aria-label={`Одиниця для ${def.label}`}
-                      className="h-9 w-[76px] shrink-0 rounded-xl bg-surface-2 px-1.5 text-center text-[12px] font-semibold"
-                    >
-                      {UNIT_GROUPS.map((group) => (
-                        <optgroup key={group.title} label={group.title}>
-                          {group.units.map((u) => (
-                            <option key={u} value={u}>
-                              {unitLabel(u)}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                    />
                     <button
                       onClick={() =>
                         setIngredients((prev) =>

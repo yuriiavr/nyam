@@ -6,12 +6,22 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, Chip, EmptyState, Sheet, Spinner, useToast } from "@/components/ui";
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  QuantityInput,
+  Sheet,
+  Spinner,
+  useToast,
+} from "@/components/ui";
 import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
 import { lookupBarcode, type ProductInfo } from "@/lib/barcode";
 import { fridgeMatches, shoppingSuggestions } from "@/lib/matching";
 import { allRecipes, useApp } from "@/lib/store";
-import type { IngredientCat, IngredientDef } from "@/lib/types";
+import type { IngredientCat, IngredientDef, PantryItem } from "@/lib/types";
+import { ingredientQtyLabel } from "@/lib/units";
 import { expiryInfo, haptic, plural } from "@/lib/utils";
 
 const POPULAR = [
@@ -40,8 +50,8 @@ export default function PantryPage() {
   const [scanned, setScanned] = useState<ProductInfo | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [pickFor, setPickFor] = useState<ProductInfo | null>(null);
-  /** Ключ продукту, якому зараз виставляють строк придатності. */
-  const [expiryFor, setExpiryFor] = useState<string | null>(null);
+  /** Ключ продукту, картку якого зараз відкрито: кількість і строк придатності. */
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
 
   const pantryKeys = state.pantry.map((p) => p.key);
 
@@ -218,7 +228,7 @@ export default function PantryPage() {
                   key={item.key}
                   onClick={() => {
                     haptic(8);
-                    setExpiryFor(item.key);
+                    setDetailsFor(item.key);
                   }}
                   className="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-[12px] font-semibold"
                 >
@@ -270,12 +280,17 @@ export default function PantryPage() {
                           <button
                             onClick={() => {
                               haptic(8);
-                              setExpiryFor(item.key);
+                              setDetailsFor(item.key);
                             }}
                             className="inline-flex items-center gap-1.5"
                           >
                             <span>{def.emoji}</span>
                             <span>{def.label}</span>
+                            {qtyLabel(item) && (
+                              <span className="text-[11px] font-bold text-brand">
+                                {qtyLabel(item)}
+                              </span>
+                            )}
                             {exp && (
                               <span
                                 className={`text-[10px] font-bold ${
@@ -344,10 +359,14 @@ export default function PantryPage() {
         </section>
       )}
 
-      {/* Сканер */}
-      <ExpirySheet
-        itemKey={expiryFor}
-        onClose={() => setExpiryFor(null)}
+      {/* Картка продукту: скільки є і доки придатний */}
+      <ItemSheet
+        itemKey={detailsFor}
+        onClose={() => setDetailsFor(null)}
+        onAddMore={() => {
+          setDetailsFor(null);
+          setAddOpen(true);
+        }}
       />
 
       <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onDetect={handleDetect} />
@@ -389,7 +408,14 @@ export default function PantryPage() {
                 <p className="text-[13px] font-bold text-mint">
                   ✓ Додано в комору як «{scanned.ingredient.label}»
                 </p>
-                <p className="mt-1 text-[12px] text-muted">
+
+                {/* Скільки саме принесли — етикетка цього не знає. */}
+                <div className="mt-3 flex items-center gap-2.5">
+                  <span className="text-[12px] font-semibold text-muted">Скільки:</span>
+                  <ScannedQuantity itemKey={scanned.ingredient.key} />
+                </div>
+
+                <p className="mt-3 text-[12px] text-muted">
                   Не те? Обери правильний продукт зі списку.
                 </p>
                 <Button
@@ -452,7 +478,7 @@ export default function PantryPage() {
         onPick={(def) => {
           add(def.key, { label: pickFor?.name, barcode: pickFor?.barcode });
           setPickFor(null);
-          toast(`${def.label} у коморі`, def.emoji);
+          setDetailsFor(def.key);
         }}
       />
 
@@ -470,9 +496,11 @@ export default function PantryPage() {
         results={searchResults}
         onPick={(def) => {
           add(def.key);
-          toast(`${def.label} у коморі`, def.emoji);
+          setQuery("");
+          // Одразу відкриваємо картку: питання «скільки його є» краще
+          // ставити тоді, коли продукт щойно в руках, а не колись потім.
+          setDetailsFor(def.key);
         }}
-        keepOpen
       />
     </div>
   );
@@ -489,7 +517,6 @@ function IngredientPicker({
   query: controlledQuery,
   onQueryChange,
   results,
-  keepOpen,
 }: {
   open: boolean;
   onClose: () => void;
@@ -499,7 +526,6 @@ function IngredientPicker({
   query?: string;
   onQueryChange?: (v: string) => void;
   results?: IngredientDef[];
-  keepOpen?: boolean;
 }) {
   const [localQuery, setLocalQuery] = useState("");
   const q = controlledQuery ?? localQuery;
@@ -552,7 +578,7 @@ function IngredientPicker({
                     key={def.key}
                     onClick={() => {
                       onPick(def);
-                      if (!keepOpen) onClose();
+                      onClose();
                     }}
                     className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"
                   >
@@ -570,16 +596,67 @@ function IngredientPicker({
   );
 }
 
-/** Вибір строку придатності для одного продукту з комори. */
-function ExpirySheet({ itemKey, onClose }: { itemKey: string | null; onClose: () => void }) {
+/**
+ * Кількість щойно відсканованого продукту — прямо в аркуші результату,
+ * щоб не змушувати шукати той самий чип у списку після сканування.
+ */
+function ScannedQuantity({ itemKey }: { itemKey: string }) {
+  const state = useApp();
+  const item = state.pantry.find((p) => p.key === itemKey);
+  const def = ing(itemKey);
+  if (!item) return null;
+
+  return (
+    <QuantityInput
+      amount={item.amount}
+      unit={item.unit}
+      defaultUnit={def.defaultUnit}
+      label={item.label ?? def.label}
+      allowTaste={false}
+      onChange={({ amount, unit }) =>
+        state.addPantry({ ...item, amount, unit, qty: undefined })
+      }
+    />
+  );
+}
+
+/**
+ * Підпис кількості для чипа: «200 г», «2 шт». Порожньо, якщо не вказано —
+ * комора має сенс і без цифр, це не обовʼязкове поле.
+ */
+function qtyLabel(item: PantryItem): string {
+  return ingredientQtyLabel(item);
+}
+
+/**
+ * Картка продукту з комори: скільки його є і доки він придатний.
+ *
+ * Кількість вводиться тим самим контролом, що й у формі рецепта, — число
+ * плюс одиниця. Раніше комора знала тільки «є / немає», тож на питання
+ * «чи вистачить на цей рецепт» відповісти не могла.
+ */
+function ItemSheet({
+  itemKey,
+  onClose,
+  onAddMore,
+}: {
+  itemKey: string | null;
+  onClose: () => void;
+  /** Показує кнопку «додати ще» — щоб наповнювати комору не по одному аркушу. */
+  onAddMore?: () => void;
+}) {
   const state = useApp();
   const item = state.pantry.find((p) => p.key === itemKey);
   const def = itemKey ? ing(itemKey) : null;
 
-  const save = (expiresAt: string | undefined) => {
+  const patch = (changes: Partial<PantryItem>) => {
     if (!item) return;
+    state.addPantry({ ...item, ...changes });
+  };
+
+  const saveExpiry = (expiresAt: string | undefined) => {
     haptic(10);
-    state.addPantry({ ...item, expiresAt });
+    patch({ expiresAt });
     onClose();
   };
 
@@ -591,9 +668,42 @@ function ExpirySheet({ itemKey, onClose }: { itemKey: string | null; onClose: ()
   };
 
   return (
-    <Sheet open={itemKey !== null} onClose={onClose} title={def ? `${def.emoji} ${def.label}` : ""}>
+    <Sheet
+      open={itemKey !== null}
+      onClose={onClose}
+      title={def ? `${def.emoji} ${item?.label ?? def.label}` : ""}
+    >
       <div className="pb-4">
-        <p className="text-[13px] leading-relaxed text-muted">
+        <label className="block text-[12px] font-semibold text-muted">Скільки є вдома</label>
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          <QuantityInput
+            amount={item?.amount}
+            unit={item?.unit}
+            defaultUnit={def?.defaultUnit}
+            label={def?.label}
+            allowTaste={false}
+            onChange={({ amount, unit }) => {
+              // Старий вільний текст прибираємо: разом із числом він
+              // конфліктував би за те, що саме показувати.
+              patch({ amount, unit, qty: undefined });
+            }}
+          />
+          {item?.amount != null && (
+            <button
+              onClick={() => patch({ amount: undefined, unit: undefined, qty: undefined })}
+              className="text-[12px] font-semibold text-faint"
+            >
+              Прибрати
+            </button>
+          )}
+        </div>
+        {item?.qty && item.amount == null && (
+          <p className="mt-1.5 text-[11.5px] text-faint">Було записано як «{item.qty}»</p>
+        )}
+
+        <div className="mt-5 h-px bg-line" />
+
+        <p className="mt-4 text-[13px] leading-relaxed text-muted">
           До якого числа це ще їстівне? Застосунок нагадає, коли строк добігатиме кінця.
         </p>
 
@@ -605,7 +715,7 @@ function ExpirySheet({ itemKey, onClose }: { itemKey: string | null; onClose: ()
             { label: "2 тижні", days: 14 },
             { label: "Місяць", days: 30 },
           ].map((opt) => (
-            <Chip key={opt.days} onClick={() => save(inDays(opt.days))}>
+            <Chip key={opt.days} onClick={() => saveExpiry(inDays(opt.days))}>
               {opt.label}
             </Chip>
           ))}
@@ -615,15 +725,26 @@ function ExpirySheet({ itemKey, onClose }: { itemKey: string | null; onClose: ()
         <input
           type="date"
           value={item?.expiresAt ?? ""}
-          onChange={(e) => save(e.target.value || undefined)}
+          onChange={(e) => saveExpiry(e.target.value || undefined)}
           className="mt-1.5 h-11 w-full rounded-2xl border border-line bg-surface-2 px-3.5 text-[15px]"
         />
 
         {item?.expiresAt && (
-          <Button full variant="secondary" className="mt-3" onClick={() => save(undefined)}>
+          <Button full variant="secondary" className="mt-3" onClick={() => saveExpiry(undefined)}>
             Прибрати строк
           </Button>
         )}
+
+        <div className="mt-3 flex gap-2">
+          {onAddMore && (
+            <Button variant="secondary" className="flex-1" onClick={onAddMore}>
+              Додати ще
+            </Button>
+          )}
+          <Button className="flex-1" onClick={onClose}>
+            Готово
+          </Button>
+        </div>
       </div>
     </Sheet>
   );

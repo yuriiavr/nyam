@@ -16,6 +16,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { UNIT_GROUPS, unitLabel } from "@/lib/units";
+import type { Unit } from "@/lib/types";
 import { cn, haptic } from "@/lib/utils";
 
 /* ── Button ───────────────────────────────────────────────────────────── */
@@ -477,6 +479,85 @@ export function Avatar({
       ) : (
         <span className="leading-none">{emoji}</span>
       )}
+    </div>
+  );
+}
+
+/* ── Кількість ────────────────────────────────────────────────────────── */
+
+/**
+ * Число плюс одиниця виміру — той самий контрол у формі рецепта і в коморі.
+ *
+ * Свідомо один компонент на обидва місця: кількість продукту вдома і
+ * кількість у рецепті мають вводитись однаково, інакше «200 г» в одному
+ * екрані й вільний текст в іншому неможливо ані порівняти, ані скласти.
+ *
+ * `defaultUnit` — типова одиниця продукту (молоко в мл, яйця в штуках).
+ * Її показуємо в селекті ще до вибору, але щойно вводять число, вона
+ * фіксується у стані: інакше кількість зберігалась би без одиниці.
+ */
+export function QuantityInput({
+  amount,
+  unit,
+  defaultUnit = "g",
+  onChange,
+  allowTaste = true,
+  placeholder = "200",
+  label,
+  className,
+}: {
+  amount?: number;
+  unit?: Unit;
+  defaultUnit?: Unit;
+  onChange: (next: { amount?: number; unit: Unit }) => void;
+  /** «За смаком» доречне в рецепті, але не в коморі. */
+  allowTaste?: boolean;
+  placeholder?: string;
+  /** Для доступності: до чого саме ця кількість. */
+  label?: string;
+  className?: string;
+}) {
+  const current = unit ?? defaultUnit;
+  const groups = allowTaste
+    ? UNIT_GROUPS
+    : UNIT_GROUPS.map((g) => ({ ...g, units: g.units.filter((u) => u !== "taste") })).filter(
+        (g) => g.units.length > 0,
+      );
+
+  return (
+    <div className={cn("flex items-center gap-1.5", className)}>
+      <input
+        value={amount ?? ""}
+        onChange={(e) => {
+          const raw = e.target.value.replace(",", ".");
+          const next = raw === "" ? undefined : Number(raw);
+          onChange({ amount: Number.isFinite(next) ? next : undefined, unit: current });
+        }}
+        inputMode="decimal"
+        placeholder={placeholder}
+        disabled={current === "taste"}
+        aria-label={label ? `Кількість: ${label}` : "Кількість"}
+        className="h-9 w-[62px] rounded-xl bg-surface-2 px-2 text-center text-[13px] disabled:opacity-40"
+      />
+      <select
+        value={current}
+        onChange={(e) => {
+          const next = e.target.value as Unit;
+          onChange({ amount: next === "taste" ? undefined : amount, unit: next });
+        }}
+        aria-label={label ? `Одиниця для ${label}` : "Одиниця виміру"}
+        className="h-9 w-[76px] shrink-0 rounded-xl bg-surface-2 px-1.5 text-center text-[12px] font-semibold"
+      >
+        {groups.map((group) => (
+          <optgroup key={group.title} label={group.title}>
+            {group.units.map((u) => (
+              <option key={u} value={u}>
+                {unitLabel(u)}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
     </div>
   );
 }

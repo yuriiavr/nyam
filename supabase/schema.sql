@@ -119,6 +119,11 @@ create table if not exists public.pantry_items (
   user_id        uuid not null references public.profiles (id) on delete cascade,
   ingredient_key text not null,
   label          text,
+  -- Скільки продукту вдома: число окремо від одиниці, як і в рецептах.
+  -- Так «200 г» можна порівняти з потребою рецепта, а не лише показати.
+  amount         numeric(10, 2),
+  unit           text,
+  -- Старий вільний текст кількості; лишається заради записів до появи одиниць.
   qty            text,
   barcode        text,
   added_at       timestamptz not null default now(),

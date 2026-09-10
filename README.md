@@ -199,6 +199,10 @@ npm run db:seed-sql   # перегенерувати supabase/seed.sql з src/da
 Якщо базу вже налаштовано раніше, виконай ще [`supabase/google-auth.sql`](supabase/google-auth.sql) —
 він навчає тригер брати з Google справжнє імʼя та аватар.
 
+Якщо база створена до появи кількостей у коморі, виконай ще
+[`supabase/pantry-amounts.sql`](supabase/pantry-amounts.sql) — він додає
+в `pantry_items` колонки `amount` і `unit`.
+
 ### Як влаштована синхронізація
 
 Інтерфейс ніколи не чекає на мережу. Дія одразу змінює локальний стан, а в базу

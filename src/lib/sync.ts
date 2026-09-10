@@ -93,15 +93,59 @@ export const pushCook = (recipeId: string, at: string) =>
 export const pushFollow = (profileId: string, on: boolean) =>
   fire("підписка", (uid) => api.setFollow(uid, profileId, on));
 
+/**
+ * Те саме, але з відкладенням: усі виклики з однаковим `key` за час затримки
+ * зливаються в один запис останнього стану.
+ *
+ * Потрібно там, де значення міняється посимвольно — наприклад, кількість
+ * продукту в коморі. Без цього «200» летіло б у базу трьома запитами, і
+ * відповіді могли прийти не в тому порядку, лишивши в рядку «2».
+ */
+const pending = new Map<string, ReturnType<typeof setTimeout>>();
+
+function fireDebounced(
+  context: string,
+  key: string,
+  delayMs: number,
+  run: (uid: string) => Promise<unknown>,
+) {
+  const existing = pending.get(key);
+  if (existing) clearTimeout(existing);
+  pending.set(
+    key,
+    setTimeout(() => {
+      pending.delete(key);
+      fire(context, run);
+    }, delayMs),
+  );
+}
+
 /* ── Комора і план ────────────────────────────────────────────────────── */
 
 export const pushPantryAdd = (item: PantryItem) =>
-  fire("комора", (uid) => api.upsertPantryItem(uid, item));
+  fireDebounced("комора", `pantry:${item.key}`, 500, (uid) =>
+    api.upsertPantryItem(uid, item),
+  );
 
-export const pushPantryRemove = (key: string) =>
+export const pushPantryRemove = (key: string) => {
+  // Знімаємо відкладений запис: інакше він відтворив би щойно видалений рядок.
+  const timer = pending.get(`pantry:${key}`);
+  if (timer) {
+    clearTimeout(timer);
+    pending.delete(`pantry:${key}`);
+  }
   fire("комора", (uid) => api.deletePantryItem(uid, key, scope(uid)));
+};
 
-export const pushPantryClear = () => fire("комора", (uid) => api.clearPantry(uid, scope(uid)));
+export const pushPantryClear = () => {
+  for (const [key, timer] of pending) {
+    if (key.startsWith("pantry:")) {
+      clearTimeout(timer);
+      pending.delete(key);
+    }
+  }
+  fire("комора", (uid) => api.clearPantry(uid, scope(uid)));
+};
 
 export const pushPlanSlot = (day: string, slot: PlanSlot, recipeId: string | null) =>
   fire("план", (uid) => api.setPlanSlot(uid, day, slot, recipeId, scope(uid)));
