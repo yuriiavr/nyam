@@ -17,7 +17,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, EmptyState, Stars, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
+import type { Consumed } from "@/lib/pantry";
 import { recipeById, useApp } from "@/lib/store";
+import type { PantryItem } from "@/lib/types";
 import { formatClock, haptic } from "@/lib/utils";
 
 export default function CookPage() {
@@ -156,6 +158,17 @@ export default function CookPage() {
     });
   }, [remaining, currentStep?.timerSec]);
 
+  /** Що списали з комори — показуємо на екрані завершення. */
+  const [consumed, setConsumed] = useState<Consumed[]>([]);
+  const [pantryBefore, setPantryBefore] = useState<PantryItem[]>([]);
+
+  const undoConsume = () => {
+    haptic(12);
+    state.restorePantry(pantryBefore);
+    setConsumed([]);
+    toast("Продукти повернуто в комору", "↩️");
+  };
+
   const resetTimer = useCallback(() => {
     haptic(10);
     setRunning(false);
@@ -170,6 +183,15 @@ export default function CookPage() {
     if (step + 1 >= recipe.steps.length) {
       setDone(true);
       state.markCooked(recipe.id);
+      // Комора має відповідати холодильнику: продукти, що пішли на страву,
+      // з неї зникають. Знімок «до» лишаємо, щоб списання можна було
+      // скасувати — помилитись кроком у готуванні легко.
+      const before = state.pantry;
+      const changes = state.consumePantry(recipe);
+      if (changes.length > 0) {
+        setConsumed(changes);
+        setPantryBefore(before.filter((p) => changes.some((c) => c.key === p.key)));
+      }
       haptic([30, 60, 30, 60, 50]);
     } else {
       setStep((s) => s + 1);
@@ -209,6 +231,30 @@ export default function CookPage() {
         <p className="mt-2 text-[14px] leading-relaxed text-muted">
           «{recipe.title}» додано в історію приготувань.
         </p>
+
+        {consumed.length > 0 && (
+          <div className="mt-6 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4 text-left">
+            <p className="text-[13px] font-bold">Списано з комори</p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {consumed.map((c) => (
+                <li key={c.key} className="flex items-baseline gap-1.5 text-[12.5px]">
+                  <span>{c.emoji}</span>
+                  <span className="font-semibold">{c.label}</span>
+                  <span className="text-muted">−{c.used}</span>
+                  <span className={`ml-auto ${c.left ? "text-faint" : "text-berry"}`}>
+                    {c.left ? `лишилось ${c.left}` : "закінчилось"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={undoConsume}
+              className="mt-2.5 text-[12px] font-semibold text-muted underline"
+            >
+              Скасувати списання
+            </button>
+          </div>
+        )}
 
         <div className="mt-7 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
           <p className="text-[13px] font-bold">Як вийшло?</p>

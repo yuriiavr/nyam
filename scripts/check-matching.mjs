@@ -66,7 +66,7 @@ byName("Масло солодковершкове 82%", "maslo");
 // знаходився всередині «Nutella», «Peanut», «Coconut».
 byName("Nutella", null);
 byName("Nutella Biscuits", "pechyvo");
-byName("Coca-Cola", null);
+byName("Coca-Cola", "lymonad");
 
 console.log("── Категорії Open Food Facts ──");
 
@@ -79,12 +79,15 @@ byCat(["en:potatoes"], "kartoplya");
 byCat(["en:olive-oils"], "olyvkova");
 
 // Регресія: у ланцюжку категорій Fanta є "orange-soft-drinks", і слово
-// «orange» саме по собі робило з газованки апельсин.
+// «orange» саме по собі робило з газованки апельсин. Лимонад — правильна
+// відповідь, апельсин — ні, і саме це тут перевіряється.
 byCat(
   ["en:beverages", "en:carbonated-drinks", "en:sodas", "en:orange-soft-drinks"],
-  null,
+  "lymonad",
 );
-byCat(["en:beverages", "en:waters", "en:sparkling-waters"], "voda");
+byCat(["en:beverages", "en:waters", "en:sparkling-waters"], "voda_gazovana");
+byCat(["en:beverages", "en:juices"], "sik");
+byCat(["en:beverages", "en:alcoholic-beverages", "en:beers"], "pyvo");
 
 // Конкретніший тег важить більше за загальний
 byCat(["en:groceries", "en:canned-foods", "en:canned-tomatoes"], "pomidory_konserv");

@@ -19,6 +19,7 @@ const jiti = createJiti(import.meta.url, {
 
 const units = await jiti.import(path.join(root, "src/lib/units.ts"));
 const nutrition = await jiti.import(path.join(root, "src/lib/nutrition.ts"));
+const pantry = await jiti.import(path.join(root, "src/lib/pantry.ts"));
 
 let pass = 0;
 let fail = 0;
@@ -226,6 +227,75 @@ const onlyToday = nutrition.dayTotals(
   (id) => (id === "t" ? recipe : undefined),
 );
 check("вчорашнє не рахується", onlyToday.kcal, 0);
+
+console.log("── Списання з комори ──");
+
+const dish = (ingredients) => ({ ...recipe, ingredients });
+
+// Літр соку мінус 200 мл на страву — лишається 0,8 л, а не літр
+{
+  const { pantry: left, consumed } = pantry.consumeForRecipe(
+    [{ key: "sik", amount: 1, unit: "l", addedAt: today }],
+    dish([{ key: "sik", amount: 200, unit: "ml" }]),
+  );
+  check("сік: лишилось 0,8 л", left[0].amount, 0.8);
+  check("сік: списано 0,2 л", consumed[0].used, "0,2 л");
+  check("сік: підпис залишку", consumed[0].left, "0,8 л");
+}
+
+// Різні міри зводяться через грами: склянка борошна це 120 г
+{
+  const { pantry: left } = pantry.consumeForRecipe(
+    [{ key: "boroshno", amount: 1, unit: "kg", addedAt: today }],
+    dish([{ key: "boroshno", amount: 1, unit: "cup" }]),
+  );
+  check("борошно: 1 кг − 1 скл = 0,88 кг", left[0].amount, 0.88);
+}
+
+// Не вистачило — продукт зникає з комори
+{
+  const { pantry: left, consumed } = pantry.consumeForRecipe(
+    [{ key: "yajtsya", amount: 2, unit: "pcs", addedAt: today }],
+    dish([{ key: "yajtsya", amount: 3, unit: "pcs" }]),
+  );
+  check("яйця закінчились", left.length, 0);
+  check("яйця: позначено як закінчені", consumed[0].left, null);
+}
+
+// Кількість у коморі не вказана — не вигадуємо, скільки лишилось
+{
+  const { pantry: left, consumed } = pantry.consumeForRecipe(
+    [{ key: "rys", addedAt: today }],
+    dish([{ key: "rys", amount: 100, unit: "g" }]),
+  );
+  check("без кількості продукт лишається", left.length, 1);
+  check("без кількості нічого не списано", consumed.length, 0);
+}
+
+// «За бажанням» могли й не покласти, «за смаком» не зважити
+{
+  const { consumed } = pantry.consumeForRecipe(
+    [
+      { key: "smetana", amount: 200, unit: "g", addedAt: today },
+      { key: "sil", amount: 500, unit: "g", addedAt: today },
+    ],
+    dish([
+      { key: "smetana", amount: 50, unit: "g", optional: true },
+      { key: "sil", unit: "taste" },
+    ]),
+  );
+  check("опційне й «за смаком» не списуються", consumed.length, 0);
+}
+
+// Множник порцій: готували вдвічі більше — і списалось удвічі більше
+{
+  const { pantry: left } = pantry.consumeForRecipe(
+    [{ key: "moloko", amount: 1, unit: "l", addedAt: today }],
+    dish([{ key: "moloko", amount: 250, unit: "ml" }]),
+    2,
+  );
+  check("подвійна порція списує 500 мл", left[0].amount, 0.5);
+}
 
 console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
 process.exit(fail ? 1 : 0);

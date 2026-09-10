@@ -170,6 +170,45 @@ export function Card({
 
 /* ── Bottom sheet ─────────────────────────────────────────────────────── */
 
+/**
+ * Скільки знизу займає екранна клавіатура.
+ *
+ * Одиниці dvh на неї не реагують: клавіатура не змінює layout viewport, тож
+ * аркуш, притиснутий до низу екрана, опиняється просто під нею. Через це в
+ * пошуку продуктів останній результат ховався за клавіатурою, і щоб його
+ * натиснути, її доводилось щоразу згортати.
+ *
+ * Дрібні зміни ігноруємо: адресний рядок браузера теж рухає visualViewport,
+ * але це не клавіатура.
+ */
+function useKeyboardInset(active: boolean): number {
+  const [inset, setInset] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setInset(0);
+      return;
+    }
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+
+    const update = () => {
+      const covered = window.innerHeight - vv.height - vv.offsetTop;
+      setInset(covered > 80 ? Math.round(covered) : 0);
+    };
+
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, [active]);
+
+  return inset;
+}
+
 export function Sheet({
   open,
   onClose,
@@ -196,6 +235,8 @@ export function Sheet({
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
+
+  const keyboard = useKeyboardInset(open);
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 620) {
@@ -226,8 +267,11 @@ export function Sheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={handleDragEnd}
-            style={{ maxHeight }}
-            className="fixed bottom-0 left-1/2 z-50 flex w-full max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[28px] border border-line bg-bg-elev"
+            style={{
+              maxHeight: keyboard ? `calc(${maxHeight} - ${keyboard}px)` : maxHeight,
+              bottom: keyboard,
+            }}
+            className="fixed left-1/2 z-50 flex w-full max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[28px] border border-line bg-bg-elev"
           >
             <div className="flex cursor-grab justify-center pt-3 pb-1 active:cursor-grabbing">
               <div className="h-1.5 w-11 rounded-full bg-line" />
@@ -246,7 +290,9 @@ export function Sheet({
             {footer && (
               <div className="pad-safe-b border-t border-line bg-bg-elev px-5 py-3">{footer}</div>
             )}
-            <div className="pad-safe-b" />
+            {/* Відступ під вирізи телефона потрібен лише коли аркуш справді
+                внизу екрана: над клавіатурою він просто марно займає місце. */}
+            {keyboard === 0 && <div className="pad-safe-b" />}
           </motion.div>
         </>
       )}
@@ -518,6 +564,22 @@ export function QuantityInput({
   className?: string;
 }) {
   const current = unit ?? defaultUnit;
+
+  /*
+   * Поле тримає сирий текст, а не число зі стану.
+   *
+   * Інакше «2,» одразу перетворювалось на «2» — Number("2,") це 2, і кома
+   * зникала просто під пальцями, набрати «2,5» ставало неможливо.
+   * Зі стану підхоплюємо лише тоді, коли там справді інше число: так
+   * значення, що прийшло ззовні, поле побачить, а набір не переб'ється.
+   */
+  const [text, setText] = useState(amount != null ? String(amount) : "");
+  useEffect(() => {
+    const typed = Number(text.replace(",", "."));
+    const same = amount == null ? text === "" : Number.isFinite(typed) && typed === amount;
+    if (!same) setText(amount != null ? String(amount) : "");
+  }, [amount]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const groups = allowTaste
     ? UNIT_GROUPS
     : UNIT_GROUPS.map((g) => ({ ...g, units: g.units.filter((u) => u !== "taste") })).filter(
@@ -527,10 +589,11 @@ export function QuantityInput({
   return (
     <div className={cn("flex items-center gap-1.5", className)}>
       <input
-        value={amount ?? ""}
+        value={text}
         onChange={(e) => {
-          const raw = e.target.value.replace(",", ".");
-          const next = raw === "" ? undefined : Number(raw);
+          const raw = e.target.value.replace(/[^\d.,]/g, "");
+          setText(raw);
+          const next = raw === "" ? undefined : Number(raw.replace(",", "."));
           onChange({ amount: Number.isFinite(next) ? next : undefined, unit: current });
         }}
         inputMode="decimal"

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { SEED_PROFILES, SEED_RECIPES } from "@/data/seed";
+import { consumeForRecipe, type Consumed } from "./pantry";
 import * as sync from "./sync";
 import type {
   AppNotification,
@@ -108,6 +109,10 @@ export interface AppState {
   clearDismissed: () => void;
   rate: (id: string, stars: number) => void;
   markCooked: (id: string) => void;
+  /** Списує з комори те, що пішло на страву; повертає список списаного. */
+  consumePantry: (recipe: Recipe, factor?: number) => Consumed[];
+  /** Повертає в комору перелічені продукти — скасування списання. */
+  restorePantry: (items: PantryItem[]) => void;
 
   addPantry: (item: PantryItem) => void;
   removePantry: (key: string) => void;
@@ -132,6 +137,21 @@ const emptyStats: RecipeStats = {
 
 const toggleIn = (arr: string[], id: string) =>
   arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+
+/**
+ * Зводить комору з бази з локальною.
+ *
+ * База — джерело правди для всього, крім продуктів, чий запис ще стоїть у
+ * черзі: їх лишаємо як є. Інакше знімок, замовлений іншою подією, приносив
+ * старе значення й затирав те, що користувач саме зараз набирає.
+ */
+function mergePantry(local: PantryItem[], remote: PantryItem[]): PantryItem[] {
+  const unsaved = local.filter((p) => sync.hasPendingPantryWrite(p.key));
+  if (unsaved.length === 0) return remote;
+
+  const keys = new Set(unsaved.map((p) => p.key));
+  return [...unsaved, ...remote.filter((p) => !keys.has(p.key))];
+}
 
 export const useApp = create<AppState>()(
   persist(
@@ -190,7 +210,7 @@ export const useApp = create<AppState>()(
           ratings: data.ratings,
           cooked: data.cooked,
           following: data.following,
-          pantry: data.pantry,
+          pantry: mergePantry(get().pantry, data.pantry),
           plan: data.plan,
         }),
 
@@ -272,6 +292,35 @@ export const useApp = create<AppState>()(
       rate: (id, stars) => {
         set({ ratings: { ...get().ratings, [id]: stars } });
         sync.pushRating(id, stars);
+      },
+
+      /*
+       * Списання після приготування.
+       *
+       * Окремо від markCooked, бо це різні події: «я це готував» іде в
+       * історію завжди, а «продукти скінчились» стосується лише тих, чию
+       * кількість у коморі вказано. Повертаємо перелік змін, щоб екран
+       * завершення міг показати їх і дати скасувати.
+       */
+      consumePantry: (recipe, factor = 1) => {
+        const { pantry, consumed } = consumeForRecipe(get().pantry, recipe, factor);
+        if (consumed.length === 0) return [];
+
+        set({ pantry });
+        for (const change of consumed) {
+          const item = pantry.find((p) => p.key === change.key);
+          if (item) sync.pushPantryAdd(item);
+          else sync.pushPantryRemove(change.key);
+        }
+        return consumed;
+      },
+
+      restorePantry: (items) => {
+        // Повертаємо саме ті продукти, які змінились, а не всю комору:
+        // поки тривало готування, у ній могло зʼявитись щось іще.
+        const restored = new Set(items.map((i) => i.key));
+        set({ pantry: [...items, ...get().pantry.filter((p) => !restored.has(p.key))] });
+        for (const item of items) sync.pushPantryAdd(item);
       },
 
       markCooked: (id) => {

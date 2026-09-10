@@ -14,7 +14,7 @@ export type Mood =
 
 export type IngredientCat =
   | "veg" | "fruit" | "meat" | "fish" | "dairy" | "grain"
-  | "spice" | "sauce" | "bakery" | "other";
+  | "spice" | "sauce" | "bakery" | "drink" | "other";
 
 export interface Nutrition {
   kcal: number;
