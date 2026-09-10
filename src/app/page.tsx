@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   ChefHat,
+  ChevronRight,
   Dices,
   Flame,
   Heart,
@@ -15,9 +16,9 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { FeedCard, RecipeScroller } from "@/components/RecipeCard";
-import { Avatar, Card, SectionTitle, Skeleton } from "@/components/ui";
+import { Avatar, Card, MacroBar, SectionTitle, Skeleton } from "@/components/ui";
 import { allRecipes, cookStreak, recipeById, useApp } from "@/lib/store";
-import { dayTotals, macroShares } from "@/lib/nutrition";
+import { dayTotals } from "@/lib/nutrition";
 import { recommend, topBy } from "@/lib/matching";
 import { greeting, haptic, MEAL_LABEL, currentMeal, plural } from "@/lib/utils";
 
@@ -295,8 +296,6 @@ function TodayNutrition() {
 
   if (!totals || totals.meals === 0) return null;
 
-  const shares = macroShares(totals);
-
   return (
     <section className="px-4 pt-4">
       <Card className="p-4">
@@ -318,16 +317,16 @@ function TodayNutrition() {
           </p>
         </div>
 
-        <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-surface-2">
-          <div style={{ width: `${shares.protein * 100}%` }} className="bg-sky" />
-          <div style={{ width: `${shares.fat * 100}%` }} className="bg-brand-2" />
-          <div style={{ width: `${shares.carbs * 100}%` }} className="bg-mint" />
-        </div>
-        <p className="mt-2 text-[11.5px] text-muted">
-          <span className="font-bold text-sky">Б {totals.protein} г</span> ·{" "}
-          <span className="font-bold text-brand-2">Ж {totals.fat} г</span> ·{" "}
-          <span className="font-bold text-mint">В {totals.carbs} г</span>
-        </p>
+        <MacroBar nutrition={totals} className="mt-3" />
+
+        <Link
+          href="/diary"
+          onClick={() => haptic(10)}
+          className="mt-3 flex items-center justify-between rounded-2xl bg-surface-2 px-3 py-2 text-[12.5px] font-semibold"
+        >
+          Щоденник за два тижні
+          <ChevronRight size={15} className="text-muted" />
+        </Link>
       </Card>
     </section>
   );

@@ -23,6 +23,21 @@
   --grape: #a78bfa;
   --sky: #38bdf8;
 
+  /*
+   * Кольори макронутрієнтів окремо від решти палітри.
+   *
+   * У темній темі це ті самі --sky/--brand-2/--mint: на майже чорній картці
+   * вони дають потрібний контраст. У світлій — ні: перевірка палітри дає
+   * 1,8–2,1 замість 3:1, тобто смужка на білому просто вицвітає. Тому світла
+   * тема бере темніші кроки тих самих відтінків. Відтінок за нутрієнтом
+   * закріплений назавжди: колір тут означає «білок», а не «перший ряд».
+   */
+  /* Стовпчики графіків: на майже чорному тлі це фірмовий помаранчевий. */
+  --chart-bar: #ff6b35;
+  --macro-protein: #38bdf8;
+  --macro-fat: #ffb020;
+  --macro-carbs: #34d399;
+
   --shadow-card: 0 8px 32px -12px rgb(0 0 0 / 0.7);
   --shadow-pop: 0 20px 60px -20px rgb(255 107 53 / 0.45);
 }
@@ -38,6 +53,11 @@
   --muted: #7d6960;
   --faint: #b4a096;
   --brand-ink: #ffffff;
+  /* На білому фірмовий дає 2,84:1 — замало, тож крок темніший. */
+  --chart-bar: #ea580c;
+  --macro-protein: #0284c7;
+  --macro-fat: #d97706;
+  --macro-carbs: #059669;
   --shadow-card: 0 8px 28px -14px rgb(94 55 30 / 0.28);
   --shadow-pop: 0 20px 50px -20px rgb(255 107 53 / 0.5);
 }
@@ -58,6 +78,10 @@
   --color-berry: var(--berry);
   --color-grape: var(--grape);
   --color-sky: var(--sky);
+  --color-chart-bar: var(--chart-bar);
+  --color-macro-protein: var(--macro-protein);
+  --color-macro-fat: var(--macro-fat);
+  --color-macro-carbs: var(--macro-carbs);
 
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: var(--font-unbounded), var(--font-manrope), ui-sans-serif, system-ui, sans-serif;

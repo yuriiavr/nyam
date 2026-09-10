@@ -16,8 +16,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { macroShares } from "@/lib/nutrition";
 import { UNIT_GROUPS, unitLabel } from "@/lib/units";
-import type { Unit } from "@/lib/types";
+import type { Nutrition, Unit } from "@/lib/types";
 import { cn, haptic } from "@/lib/utils";
 
 /* ── Button ───────────────────────────────────────────────────────────── */
@@ -621,6 +622,56 @@ export function QuantityInput({
           </optgroup>
         ))}
       </select>
+    </div>
+  );
+}
+
+/* ── Розподіл БЖВ ─────────────────────────────────────────────────────── */
+
+/**
+ * Смужка розподілу білків, жирів і вуглеводів у калоріях.
+ *
+ * Відтінок закріплений за нутрієнтом, а не за порядком: синій завжди білок,
+ * бурштиновий завжди жир, зелений завжди вуглеводи — і на головній, і в
+ * щоденнику. Підписи з цифрами під смужкою обовʼязкові, а не для краси:
+ * зелений і бурштиновий сусідять, і при дальтонізмі їх розрізняє саме
+ * підпис, а не колір. З тієї ж причини між сегментами є проміжок.
+ */
+export function MacroBar({
+  nutrition,
+  className,
+}: {
+  nutrition: Nutrition;
+  className?: string;
+}) {
+  const shares = macroShares(nutrition);
+  const parts = [
+    { key: "protein", share: shares.protein, grams: nutrition.protein, label: "Б", color: "var(--macro-protein)" },
+    { key: "fat", share: shares.fat, grams: nutrition.fat, label: "Ж", color: "var(--macro-fat)" },
+    { key: "carbs", share: shares.carbs, grams: nutrition.carbs, label: "В", color: "var(--macro-carbs)" },
+  ];
+
+  return (
+    <div className={className}>
+      <div className="flex h-2 gap-[2px] overflow-hidden rounded-full bg-surface-2">
+        {parts.map((p) => (
+          <div
+            key={p.key}
+            style={{ width: `${p.share * 100}%`, background: p.color }}
+            className="rounded-full"
+          />
+        ))}
+      </div>
+      <p className="mt-2 text-[11.5px] text-muted">
+        {parts.map((p, i) => (
+          <span key={p.key}>
+            {i > 0 && " · "}
+            <span className="font-bold" style={{ color: p.color }}>
+              {p.label} {p.grams} г
+            </span>
+          </span>
+        ))}
+      </p>
     </div>
   );
 }
