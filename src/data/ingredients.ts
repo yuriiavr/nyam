@@ -86,7 +86,7 @@ export const INGREDIENTS: IngredientDef[] = [
   D("brusselska", "Брюссельська капуста", "🥬", "veg", ["брюссельська", "brussels sprouts"], [43, 3.4, 0.3, 9]),
   D("brokoli", "Броколі", "🥦", "veg", ["броколі", "броколи", "broccoli"], [34, 2.8, 0.4, 7]),
   D("pomidor", "Помідор", "🍅", "veg", ["помідор", "томат", "tomato", "tomatoes"], [18, 0.9, 0.2, 3.9], { perPiece: 120 }),
-  D("pomidory_cherri", "Помідори чері", "🍅", "veg", ["чері", "черри", "cherry tomatoes"], [18, 0.9, 0.2, 3.9]),
+  D("pomidory_cherri", "Помідори чері", "🍅", "veg", ["чері", "черри", "cherry tomatoes", "помідори чері", "томати чері"], [18, 0.9, 0.2, 3.9]),
   D("ogirok", "Огірок", "🥒", "veg", ["огірок", "огурец", "cucumber"], [15, 0.7, 0.1, 3.6], { perPiece: 100 }),
   D("perets", "Солодкий перець", "🫑", "veg", ["болгарський перець", "паприка свіжа", "bell pepper"], [31, 1, 0.3, 6], { perPiece: 150 }),
   D("chili", "Перець чилі", "🌶️", "veg", ["чилі", "гострий перець", "chili"], [40, 1.9, 0.4, 9], { perPiece: 15 }),
@@ -196,7 +196,7 @@ export const INGREDIENTS: IngredientDef[] = [
   D("ryazhanka", "Ряжанка", "🥛", "dairy", ["ряжанка"], [54, 2.9, 2.5, 4.2], { unit: "ml" }),
   D("smetana", "Сметана", "🥣", "dairy", ["сметана", "sour cream", "сметанний", "smetana"], [193, 2.8, 20, 3.4], { cup: 230 }),
   D("vershky", "Вершки", "🍶", "dairy", ["вершки", "сливки", "cream", "вершки кулінарні", "вершки для збивання", "heavy cream", "whipping cream"], [292, 2.5, 30, 3.2], { unit: "ml" }),
-  D("syr", "Твердий сир", "🧀", "dairy", ["твердий сир", "гауда", "чедер", "cheese", "сир твердий", "сирний", "hard cheese"], [380, 25, 30, 2], { cup: 100, perPiece: 20, unit: "g" }),
+  D("syr", "Твердий сир", "🧀", "dairy", ["твердий сир", "гауда", "чедер", "cheese", "сир твердий", "сирний", "hard cheese", "сир"], [380, 25, 30, 2], { cup: 100, perPiece: 20, unit: "g" }),
   D("parmezan", "Пармезан", "🧀", "dairy", ["пармезан", "пекорино", "parmesan", "parmigiano reggiano", "parmigiano", "grana padano"], [431, 38, 29, 4.1], { cup: 90 }),
   D("motsarela", "Моцарела", "🧀", "dairy", ["моцарела", "mozzarella"], [280, 22, 22, 2.2]),
   D("feta", "Фета", "🧀", "dairy", ["фета", "бринза", "feta"], [264, 14, 21, 4.1]),
@@ -397,6 +397,32 @@ const ENDINGS = [
   "а", "я", "и", "і", "ї", "у", "ю", "е", "є", "о", "й",
 ];
 
+const VOWELS = "аеєиіїоуюяʼ'";
+const isConsonant = (ch: string) => /\p{L}/u.test(ch) && !VOWELS.includes(ch);
+
+/**
+ * Форма без мʼякого знака й випадного голосного: «огірок» → «огірк»,
+ * «перець» → «перц», «оселедець» → «оселедц».
+ *
+ * Потрібна тому, що в називному відмінку цей голосний є, а в решті форм
+ * зникає: «огірки», «перцю», «оселедця». Відкидання закінчень такої пари не
+ * зводить — воно ріже кінець слова, а тут випадає буква всередині.
+ *
+ * Коротші за пʼять букв не чіпаємо: там «мед» перетворювався б на «мд».
+ */
+function fleeting(word: string): string | null {
+  const bare = word.endsWith("ь") ? word.slice(0, -1) : word;
+  if (bare.length < 5) return bare === word ? null : bare;
+
+  const last = bare[bare.length - 1];
+  const vowel = bare[bare.length - 2];
+  const before = bare[bare.length - 3];
+  if (isConsonant(last) && (vowel === "о" || vowel === "е") && isConsonant(before)) {
+    return bare.slice(0, -2) + last;
+  }
+  return bare === word ? null : bare;
+}
+
 /**
  * Можливі основи слова.
  *
@@ -418,6 +444,11 @@ function stems(word: string): string[] {
       forms.push(word.slice(0, -end.length));
       break;
     }
+  }
+
+  for (const form of [...forms]) {
+    const short = fleeting(form);
+    if (short && !forms.includes(short)) forms.push(short);
   }
 
   return forms;
@@ -445,6 +476,11 @@ function phraseIn(phrase: string[], target: string[]): boolean {
  * знайшлись. Порядок слів при цьому не має значення — «Сік томатний» на
  * полиці й «томатний сік» у довіднику це те саме.
  *
+ * За однакової кількості слів перемагає той синонім, що зачепив ПЕРШЕ
+ * значуще слово назви. Українська назва товару починається з того, чим цей
+ * товар є, а далі йдуть ознаки: «Ковбаса Молочна» — це ковбаса, і без цього
+ * правила вона ставала молоком, бо синонім «молочний» довший за «ковбаса».
+ *
  * Порядок джерел (назва, опис, категорії) вибирає той, хто викликає:
  * тут ми зіставляємо рівно те, що дали.
  */
@@ -459,9 +495,12 @@ export function findIngredient(text: string): IngredientDef | null {
       const phrase = words(raw);
       if (phrase.length === 0 || !phraseIn(phrase, target)) continue;
 
-      // Головне — скільки слів синоніма збіглося; довжина лише розрізняє
-      // синоніми з однаковою кількістю слів.
-      const score = phrase.length * 100 + phrase.join("").length;
+      // Головне — скільки слів синоніма збіглося; далі — чи серед них головне
+      // слово назви; довжина лише розрізняє однакові за обома ознаками.
+      const score =
+        phrase.length * 1000 +
+        (phrase.some((p) => sameWord(p, target[0])) ? 500 : 0) +
+        phrase.join("").length;
       if (!best || score > best.score) best = { def, score };
     }
   }
