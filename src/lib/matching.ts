@@ -1,9 +1,9 @@
 import { ing } from "@/data/ingredients";
 import type { AppState } from "./store";
 import { allRecipes, daysSinceCooked, effectiveStats } from "./store";
-import type { MatchResult, MealType, Mood, Recipe, Unit } from "./types";
+import type { MatchResult, MealType, Mood, PantryItem, Recipe, Unit } from "./types";
 import { formatSummed, quantityOf, sumQuantities, type SummedQuantity } from "./units";
-import { avgRating, currentMeal } from "./utils";
+import { avgRating, currentMeal, expiryInfo } from "./utils";
 
 /* ── Фільтри ──────────────────────────────────────────────────────────── */
 
@@ -139,6 +139,59 @@ export function fridgeMatches(
       return realHit && m.pct >= minPct;
     })
     .sort((a, b) => b.pct - a.pct || a.missing.length - b.missing.length);
+}
+
+/* ── Врятувати те, що псується ────────────────────────────────────────── */
+
+/** Страва, яку варто приготувати саме сьогодні — бо завтра вже нема з чого. */
+export interface RescueMatch extends MatchResult {
+  /** Продукти зі спливаючим строком, які піде в цю страву. */
+  saves: Array<{ key: string; days: number }>;
+  /** Наскільки терміново. Чим більше, тим ближче строк і тим більше продуктів. */
+  urgency: number;
+}
+
+/**
+ * Підбирає страви за строками придатності, а не за відсотком збігу.
+ *
+ * Холодильник відповідає на питання «що я можу приготувати», а це — на
+ * питання «що я маю приготувати, поки воно не пропало». Різниця в порядку:
+ * тут наперед виходить не найзручніша страва, а та, що рятує найбільше.
+ *
+ * Прострочене свідомо не рахуємо. Його вже не рятувати, і пропонувати
+ * приготувати з нього вечерю — порада, за яку буває соромно.
+ */
+export function rescueMatches(
+  recipes: Recipe[],
+  pantry: PantryItem[],
+  { withinDays = 3, now = new Date() }: { withinDays?: number; now?: Date } = {},
+): RescueMatch[] {
+  const have = new Set(pantry.map((p) => p.key));
+  const urgent = new Map<string, number>();
+
+  for (const item of pantry) {
+    const exp = expiryInfo(item.expiresAt, now);
+    if (!exp || exp.days < 0 || exp.days > withinDays) continue;
+    urgent.set(item.key, exp.days);
+  }
+  if (urgent.size === 0) return [];
+
+  const out: RescueMatch[] = [];
+  for (const recipe of recipes) {
+    const saves = recipe.ingredients
+      .filter((i) => !i.optional && urgent.has(i.key))
+      .map((i) => ({ key: i.key, days: urgent.get(i.key) as number }));
+    if (saves.length === 0) continue;
+
+    // Чим ближче строк, тим важчий продукт: кефір, у якого сьогодні останній
+    // день, важливіший за сир, у якого ще три.
+    const urgency = saves.reduce((sum, s) => sum + (withinDays + 1 - s.days), 0);
+    out.push({ ...matchRecipe(recipe, have), saves, urgency });
+  }
+
+  return out.sort(
+    (a, b) => b.urgency - a.urgency || a.missing.length - b.missing.length || b.pct - a.pct,
+  );
 }
 
 /**

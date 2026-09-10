@@ -88,6 +88,13 @@ const METHODS: Method[] = [
     accent: "#60a5fa",
   },
   {
+    href: "/decide/rescue",
+    emoji: "🆘",
+    title: "Врятувати продукт",
+    note: "Страви для того, що псується завтра",
+    accent: "#34d399",
+  },
+  {
     href: "/plan",
     emoji: "📅",
     title: "План на тиждень",
@@ -113,7 +120,7 @@ export default function DecidePage() {
 
   return (
     <div className="pb-8">
-      <TopBar back={false} title="Вирішити за мене" subtitle="10 способів обрати страву" />
+      <TopBar back={false} title="Вирішити за мене" subtitle="11 способів обрати страву" />
 
       {/* Найшвидший варіант */}
       <section className="px-4 pt-4">
