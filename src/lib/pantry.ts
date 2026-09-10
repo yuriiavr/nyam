@@ -1,7 +1,7 @@
 import { ing } from "@/data/ingredients";
 import { ingredientGrams } from "./nutrition";
 import type { PantryItem, Recipe, Unit } from "./types";
-import { formatQuantity, unitDef } from "./units";
+import { formatQuantity, sumQuantities, unitDef } from "./units";
 
 /**
  * Списання продуктів із комори після приготування.
@@ -108,4 +108,49 @@ export function consumeForRecipe(
   }
 
   return { pantry: next, consumed };
+}
+
+/* ── Поповнення комори ────────────────────────────────────────────────── */
+
+/**
+ * Зливає щойно принесений продукт із тим, що вже лежить у коморі.
+ *
+ * Просто покласти новий запис поверх старого не можна: у базі на пару
+ * «користувач + продукт» є рівно один рядок, тож друга пачка молока з того
+ * самого чека не додалась би, а витерла першу. Разом із нею зникли б і
+ * строк придатності, і кількість, які людина вводила руками.
+ *
+ * Кількості складаємо через ту саму арифметику, що й список покупок: 900 г
+ * і 900 г дають 1,8 кг. Коли міри не зводяться (штуки й грами), лишаємо те,
+ * що було: чесної суми тут не існує, а вигадана гірша за стару правду.
+ */
+export function mergePantryItem(existing: PantryItem, incoming: PantryItem): PantryItem {
+  const summable =
+    existing.amount != null && existing.unit && incoming.amount != null && incoming.unit
+      ? sumQuantities([
+          { amount: existing.amount, unit: existing.unit },
+          { amount: incoming.amount, unit: incoming.unit },
+        ])
+      : [];
+
+  const total = summable.length === 1 && summable[0].amount != null ? summable[0] : null;
+  const quantity =
+    total ??
+    (existing.amount == null
+      ? { amount: incoming.amount, unit: incoming.unit ?? existing.unit }
+      : { amount: existing.amount, unit: existing.unit });
+
+  return {
+    ...existing,
+    amount:
+      quantity.amount != null && quantity.unit
+        ? Number(quantity.amount.toFixed(unitDef(quantity.unit).decimals))
+        : quantity.amount,
+    unit: quantity.unit,
+    // Назва й штрихкод — те, що людина вже бачить у коморі; чек їх не уточнює.
+    label: existing.label ?? incoming.label,
+    barcode: existing.barcode ?? incoming.barcode,
+    // Строк придатності чек не містить взагалі, тож затирати ним нічого.
+    expiresAt: existing.expiresAt ?? incoming.expiresAt,
+  };
 }

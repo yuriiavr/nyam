@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { SEED_PROFILES, SEED_RECIPES } from "@/data/seed";
-import { consumeForRecipe, type Consumed } from "./pantry";
+import { consumeForRecipe, mergePantryItem, type Consumed } from "./pantry";
 import * as sync from "./sync";
 import type {
   AppNotification,
@@ -115,6 +115,8 @@ export interface AppState {
   restorePantry: (items: PantryItem[]) => void;
 
   addPantry: (item: PantryItem) => void;
+  /** Поповнення цілим списком: чек, а не один продукт. */
+  importPantry: (items: PantryItem[]) => void;
   removePantry: (key: string) => void;
   clearPantry: () => void;
 
@@ -338,6 +340,37 @@ export const useApp = create<AppState>()(
         const rest = get().pantry.filter((p) => p.key !== item.key);
         set({ pantry: [item, ...rest] });
         sync.pushPantryAdd(item);
+      },
+
+      /*
+       * Поповнення комори цілим списком — те, що приносить чек.
+       *
+       * Окремо від addPantry, бо той заміняє продукт, а тут треба саме
+       * додати: у чеку буває дві пачки молока, а вдома до них ще й початий
+       * пакет. Тому кількості зливаємо, а не перезаписуємо, і в базу йдемо
+       * один раз на весь чек, а не двадцять разів поспіль.
+       */
+      importPantry: (items) => {
+        const next = [...get().pantry];
+        /*
+         * Саме Map, а не масив: у чеку буває дві пачки молока, і після
+         * злиття це один продукт. Двічі той самий ключ база не прийме —
+         * у pantry_items первинний ключ це пара «користувач + продукт»,
+         * і upsert з двома однаковими рядками падає цілком.
+         */
+        const written = new Map<string, PantryItem>();
+
+        for (const incoming of items) {
+          const at = next.findIndex((p) => p.key === incoming.key);
+          const merged = at >= 0 ? mergePantryItem(next[at], incoming) : incoming;
+          if (at >= 0) next[at] = merged;
+          else next.unshift(merged);
+          written.set(merged.key, merged);
+        }
+
+        if (written.size === 0) return;
+        set({ pantry: next });
+        sync.pushPantryBulk([...written.values()]);
       },
 
       removePantry: (key) => {

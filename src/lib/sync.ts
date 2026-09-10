@@ -139,6 +139,40 @@ export const pushPantryAdd = (item: PantryItem) =>
     api.upsertPantryItem(uid, item),
   );
 
+/**
+ * Скільки продукт із чека вважається «щойно записаним».
+ *
+ * Свідомо більше за 800 мс, з якими realtime відкладає перезавантаження
+ * стану: інакше знімок, замовлений чужою подією, встигав прийти без наших
+ * позицій і зітерти щойно внесений чек.
+ */
+const BULK_GUARD_MS = 3000;
+
+/**
+ * Запис цілого чека одним запитом.
+ *
+ * Позначку «запис у польоті» ставимо на кожен продукт до відправлення, а не
+ * після: саме за нею mergePantry впізнає те, чого в базі ще немає, і не дає
+ * відповіді бази затерти свіжий імпорт.
+ */
+export const pushPantryBulk = (items: PantryItem[]) => {
+  if (items.length === 0) return;
+
+  for (const item of items) {
+    const key = `pantry:${item.key}`;
+    const existing = pending.get(key);
+    if (existing) clearTimeout(existing);
+    // Таймер-вартовий нічого не пише — він лише тримає ознаку запису.
+    pending.set(key, setTimeout(() => pending.delete(key), BULK_GUARD_MS));
+  }
+
+  fire("комора", (uid) =>
+    // Продукт, який устигли прибрати з комори, поки чек летів, у пакет не
+    // потрапляє: pushPantryRemove знімає його позначку, і це наш сигнал.
+    api.upsertPantryItems(uid, items.filter((item) => pending.has(`pantry:${item.key}`))),
+  );
+};
+
 export const pushPantryRemove = (key: string) => {
   // Знімаємо відкладений запис: інакше він відтворив би щойно видалений рядок.
   const timer = pending.get(`pantry:${key}`);

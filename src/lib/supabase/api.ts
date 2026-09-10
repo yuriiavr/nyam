@@ -407,6 +407,31 @@ export async function upsertPantryItem(userId: string, item: PantryItem) {
   if (error) throw error;
 }
 
+/**
+ * Записує одразу кілька продуктів — так у комору лягає цілий чек.
+ *
+ * Окремо від upsertPantryItem, бо двадцять позицій двадцятьма запитами — це
+ * і двадцять кругів до бази, і двадцять подій realtime у кожного в сімʼї.
+ */
+export async function upsertPantryItems(userId: string, items: PantryItem[]) {
+  const sb = getSupabase();
+  if (!sb || items.length === 0) return;
+  const { error } = await sb.from("pantry_items").upsert(
+    items.map((item) => ({
+      user_id: userId,
+      ingredient_key: item.key,
+      label: item.label ?? null,
+      amount: item.amount ?? null,
+      unit: item.unit ?? null,
+      qty: item.qty ?? null,
+      barcode: item.barcode ?? null,
+      added_at: item.addedAt,
+      expires_at: item.expiresAt ?? null,
+    })),
+  );
+  if (error) throw error;
+}
+
 /** Прибирає продукт з комори — і з тієї частини, яку додав хтось із сімʼї. */
 export async function deletePantryItem(
   userId: string,
