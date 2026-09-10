@@ -8,7 +8,7 @@ import { TopBar } from "@/components/TopBar";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { Button, Card, Sheet, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
-import { applyFilters, emptyFilters, generateWeekPlan, shoppingListFor } from "@/lib/matching";
+import { applyFilters, byAisle, emptyFilters, generateWeekPlan, shoppingListFor } from "@/lib/matching";
 import { allRecipes, recipeById, useApp } from "@/lib/store";
 import type { MealType, PlanSlot } from "@/lib/types";
 import { dateKey, haptic, MEAL_LABEL, pick, startOfWeek, WEEKDAYS } from "@/lib/utils";
@@ -52,6 +52,9 @@ export default function PlanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hydrated, plannedRecipes, state.pantry],
   );
+
+  // Той самий список, розкладений по відділах у порядку обходу магазину.
+  const shoppingAisles = useMemo(() => byAisle(shoppingList), [shoppingList]);
 
   const filledCount = days.reduce(
     (n, d) => n + SLOTS.filter((s) => state.plan[d.key]?.[s]).length,
@@ -320,53 +323,63 @@ export default function PlanPage() {
         }
       >
         <p className="pb-3 text-[12.5px] leading-snug text-muted">
-          Зібрано з {plannedRecipes.length} страв у плані. Те, що вже є в коморі, не показуємо.
+          Зібрано з {plannedRecipes.length} страв у плані, у порядку обходу магазину. Те, що вже
+          є в коморі, не показуємо.
         </p>
-        <div className="flex flex-col gap-2 pb-4">
-          {shoppingList.map(({ key, label: qtyLabel, count }) => {
-            const def = ing(key);
-            const checked = bought.has(key);
-            return (
-              <motion.button
-                key={key}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  haptic(8);
-                  setBought((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(key)) next.delete(key);
-                    else next.add(key);
-                    return next;
-                  });
-                }}
-                className={`flex items-center gap-3 rounded-2xl border p-3 text-left ${
-                  checked ? "border-mint/40 bg-mint/8" : "border-line bg-surface"
-                }`}
-              >
-                <span
-                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 ${
-                    checked ? "border-mint bg-mint text-bg" : "border-line"
-                  }`}
-                >
-                  {checked && <Check size={13} strokeWidth={3} />}
-                </span>
-                <span className="text-lg">{def.emoji}</span>
-                <span
-                  className={`min-w-0 flex-1 text-[14px] font-semibold ${checked ? "line-through opacity-60" : ""}`}
-                >
-                  {def.label}
-                  {count > 1 && (
-                    <span className="ml-1.5 text-[11px] font-normal text-muted">
-                      для {count} страв
+        <div className="flex flex-col gap-5 pb-4">
+          {shoppingAisles.map(({ cat, label: aisle, items }) => (
+            <div key={cat}>
+              <h3 className="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">
+                {aisle}
+              </h3>
+              <div className="flex flex-col gap-2">
+              {items.map(({ key, label: qtyLabel, count }) => {
+                const def = ing(key);
+                const checked = bought.has(key);
+                return (
+                  <motion.button
+                    key={key}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      haptic(8);
+                      setBought((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(key)) next.delete(key);
+                        else next.add(key);
+                        return next;
+                      });
+                    }}
+                    className={`flex items-center gap-3 rounded-2xl border p-3 text-left ${
+                      checked ? "border-mint/40 bg-mint/8" : "border-line bg-surface"
+                    }`}
+                  >
+                    <span
+                      className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 ${
+                        checked ? "border-mint bg-mint text-bg" : "border-line"
+                      }`}
+                    >
+                      {checked && <Check size={13} strokeWidth={3} />}
                     </span>
-                  )}
-                </span>
-                {qtyLabel && (
-                  <span className="shrink-0 text-[12px] font-semibold text-muted">{qtyLabel}</span>
-                )}
-              </motion.button>
-            );
-          })}
+                    <span className="text-lg">{def.emoji}</span>
+                    <span
+                      className={`min-w-0 flex-1 text-[14px] font-semibold ${checked ? "line-through opacity-60" : ""}`}
+                    >
+                      {def.label}
+                      {count > 1 && (
+                        <span className="ml-1.5 text-[11px] font-normal text-muted">
+                          для {count} страв
+                        </span>
+                      )}
+                    </span>
+                    {qtyLabel && (
+                      <span className="shrink-0 text-[12px] font-semibold text-muted">{qtyLabel}</span>
+                    )}
+                  </motion.button>
+                );
+              })}
+              </div>
+            </div>
+          ))}
         </div>
       </Sheet>
     </div>

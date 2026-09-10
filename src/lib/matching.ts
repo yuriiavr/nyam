@@ -1,7 +1,7 @@
-import { ing } from "@/data/ingredients";
+import { CAT_LABEL, ing } from "@/data/ingredients";
 import type { AppState } from "./store";
 import { allRecipes, daysSinceCooked, effectiveStats } from "./store";
-import type { MatchResult, MealType, Mood, PantryItem, Recipe, Unit } from "./types";
+import type { IngredientCat, MatchResult, MealType, Mood, PantryItem, Recipe, Unit } from "./types";
 import { formatSummed, quantityOf, sumQuantities, type SummedQuantity } from "./units";
 import { avgRating, currentMeal, expiryInfo } from "./utils";
 
@@ -500,4 +500,33 @@ export function shoppingListFor(
       return { key, quantities, label, count: v.count };
     })
     .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Порядок обходу магазину.
+ *
+ * Свідомо не той, що CAT_ORDER: у коморі категорії стоять за важливістю для
+ * готування, а в магазині — за тим, як людина йде рядами. Вхід — овочі та
+ * фрукти, далі хліб і молочне, м'ясний прилавок біля дальньої стіни, потім
+ * бакалія по рядах, напої й каса. Список, зібраний у цьому порядку, не
+ * змушує вертатись через півмагазину по забуту сметану.
+ */
+const AISLE_ORDER: IngredientCat[] = [
+  "veg", "fruit", "bakery", "dairy", "meat", "fish", "grain", "sauce", "spice", "drink", "other",
+];
+
+/** Список покупок, розкладений по відділах у порядку обходу. */
+export function byAisle<T extends { key: string }>(
+  items: T[],
+): Array<{ cat: IngredientCat; label: string; items: T[] }> {
+  const map = new Map<IngredientCat, T[]>();
+  for (const item of items) {
+    const cat = ing(item.key).cat;
+    map.set(cat, [...(map.get(cat) ?? []), item]);
+  }
+  return AISLE_ORDER.filter((cat) => map.has(cat)).map((cat) => ({
+    cat,
+    label: CAT_LABEL[cat],
+    items: map.get(cat) as T[],
+  }));
 }
