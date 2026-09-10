@@ -2,8 +2,10 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Check,
   ChefHat,
   Plus,
+  ReceiptText,
   ScanBarcode,
   Search,
   Sparkles,
@@ -26,11 +28,20 @@ import {
   useToast,
 } from "@/components/ui";
 import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
-import { lookupBarcode, teachBarcode, type ProductInfo } from "@/lib/barcode";
+import { RECEIPT_FORMATS, lookupBarcode, teachBarcode, type ProductInfo } from "@/lib/barcode";
 import { fridgeMatches, shoppingSuggestions } from "@/lib/matching";
+import {
+  fetchReceipt,
+  lineQuantity,
+  lookupableBarcode,
+  parseReceiptQr,
+  receiptDrafts,
+  type ReceiptDraft,
+  type ReceiptFailure,
+} from "@/lib/receipt";
 import { allRecipes, useApp } from "@/lib/store";
 import type { IngredientCat, IngredientDef, PantryItem, Unit } from "@/lib/types";
-import { ingredientQtyLabel } from "@/lib/units";
+import { formatNumber, ingredientQtyLabel } from "@/lib/units";
 import { expiryInfo, haptic, plural } from "@/lib/utils";
 
 const POPULAR = [
@@ -61,6 +72,15 @@ export default function PantryPage() {
   const [pickFor, setPickFor] = useState<ProductInfo | null>(null);
   /** Ключ продукту, картку якого зараз відкрито: кількість і строк придатності. */
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
+
+  /* Чек: сканер QR → очікування відповіді податкової → список позицій. */
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receipt, setReceipt] = useState<{ store?: string; drafts: ReceiptDraft[] } | null>(null);
+  /** Позиції, які підуть у комору. Решту людина зняла галочкою. */
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  /** Рядок чека, для якого зараз обирають продукт вручну. */
+  const [pickForLine, setPickForLine] = useState<string | null>(null);
 
   const pantryKeys = state.pantry.map((p) => p.key);
 
@@ -153,6 +173,83 @@ export default function PantryPage() {
     }
   };
 
+  /**
+   * QR з чека → позиції з податкової → список на підтвердження.
+   *
+   * У комору мовчки не кладемо нічого: касова назва зіставляється з каталогом
+   * приблизно, і останнє слово має лишитись за людиною, яка цей чек тримає.
+   */
+  const handleReceipt = async (raw: string) => {
+    setReceiptOpen(false);
+
+    const query = parseReceiptQr(raw);
+    if (!query) {
+      toast("Це не схоже на фіскальний чек", "🤔");
+      return;
+    }
+
+    setReceiptBusy(true);
+    const result = await fetchReceipt(query);
+    if (!result.ok) {
+      setReceiptBusy(false);
+      toast(RECEIPT_FAILURE[result.reason], "😕");
+      return;
+    }
+
+    const drafts = await enrichByBarcode(receiptDrafts(result.receipt.lines));
+    setReceiptBusy(false);
+    setReceipt({ store: result.receipt.store, drafts });
+    // Наперед позначаємо лише впізнане: решту людина або підкаже, або пропустить.
+    setChosen(new Set(drafts.filter((d) => d.ingredient).map((d) => d.id)));
+    haptic(14);
+  };
+
+  const patchDraft = (id: string, patch: Partial<ReceiptDraft>) =>
+    setReceipt((prev) =>
+      prev
+        ? { ...prev, drafts: prev.drafts.map((d) => (d.id === id ? { ...d, ...patch } : d)) }
+        : prev,
+    );
+
+  const toggleDraft = (id: string) => {
+    haptic(8);
+    setChosen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /** Кладе підтверджені позиції в комору — одним записом на весь чек. */
+  const importReceipt = () => {
+    if (!receipt) return;
+    const addedAt = new Date().toISOString();
+    const items: PantryItem[] = receipt.drafts
+      .filter((d) => chosen.has(d.id) && d.ingredient)
+      .map((d) => ({
+        key: d.ingredient!.key,
+        label: d.line.name,
+        amount: d.amount,
+        unit: d.unit,
+        addedAt,
+      }));
+
+    if (items.length === 0) {
+      setReceipt(null);
+      return;
+    }
+
+    haptic([12, 30, 12]);
+    state.importPantry(items);
+    setReceipt(null);
+    toast(`Додано ${items.length} ${plural(items.length, "позицію", "позиції", "позицій")}`, "🧾");
+  };
+
+  const pickedCount = receipt
+    ? receipt.drafts.filter((d) => chosen.has(d.id) && d.ingredient).length
+    : 0;
+
   const searchResults = query.trim() ? searchIngredients(query) : [];
 
   return (
@@ -217,6 +314,32 @@ export default function PantryPage() {
           </span>
           <span className="text-[14px] font-bold">Додати вручну</span>
           <span className="text-[11.5px] leading-snug text-muted">Пошук по каталогу продуктів</span>
+        </button>
+
+        {/*
+          Чек окремою широкою кнопкою: це найшвидший спосіб наповнити комору
+          після магазину — один QR замість двадцяти штрихкодів.
+        */}
+        <button
+          onClick={() => {
+            haptic(14);
+            setReceiptOpen(true);
+          }}
+          className="col-span-2 flex items-center gap-3 rounded-xl3 border border-line bg-surface p-4 text-left active:bg-surface-2"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--mint) 16%, transparent), transparent 62%)",
+          }}
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/15 text-mint">
+            <ReceiptText size={20} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[14px] font-bold">Сканувати чек</span>
+            <span className="block text-[11.5px] leading-snug text-muted">
+              QR на касовому чеку — і всі покупки одразу в коморі
+            </span>
+          </span>
         </button>
       </div>
 
@@ -388,6 +511,89 @@ export default function PantryPage() {
 
       <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onDetect={handleDetect} />
 
+      {/* Сканер QR з чека */}
+      <BarcodeScanner
+        open={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        onDetect={handleReceipt}
+        formats={RECEIPT_FORMATS}
+        hint="Наведи на QR-код унизу чека"
+        manualEntry={false}
+      />
+
+      {/* Очікування відповіді податкової */}
+      <Sheet open={receiptBusy} onClose={() => {}} title="Читаю чек">
+        <div className="flex items-center gap-3 py-6">
+          <Spinner />
+          <p className="text-[14px] text-muted">
+            Питаю податкову, що саме було в цьому чеку…
+          </p>
+        </div>
+      </Sheet>
+
+      {/* Позиції чека */}
+      <Sheet
+        open={!!receipt}
+        onClose={() => setReceipt(null)}
+        title="Що було в чеку"
+        footer={
+          receipt ? (
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setReceipt(null)}>
+                Скасувати
+              </Button>
+              <Button className="flex-1" onClick={importReceipt} disabled={pickedCount === 0}>
+                {pickedCount > 0
+                  ? `Додати ${pickedCount} ${plural(pickedCount, "позицію", "позиції", "позицій")}`
+                  : "Нічого не обрано"}
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
+        {receipt && (
+          <div className="pb-2">
+            <p className="mb-3 text-[12px] text-muted">
+              {receipt.store ? `${receipt.store} · ` : ""}
+              {receipt.drafts.length} {plural(receipt.drafts.length, "рядок", "рядки", "рядків")}.
+              Познач, що несемо в комору.
+            </p>
+
+            <div className="flex flex-col gap-2">
+              {receipt.drafts.map((draft) => (
+                <ReceiptRow
+                  key={draft.id}
+                  draft={draft}
+                  checked={chosen.has(draft.id)}
+                  onToggle={() => toggleDraft(draft.id)}
+                  onPick={() => setPickForLine(draft.id)}
+                  onQuantity={(next) => patchDraft(draft.id, next)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </Sheet>
+
+      {/* Ручний вибір продукту для рядка чека */}
+      <IngredientPicker
+        open={!!pickForLine}
+        onClose={() => setPickForLine(null)}
+        title="Що це за продукт?"
+        onPick={(def) => {
+          const draft = receipt?.drafts.find((d) => d.id === pickForLine);
+          if (!draft) return;
+          const quantity = lineQuantity(draft.line);
+          patchDraft(draft.id, {
+            ingredient: def,
+            nonFood: false,
+            amount: quantity?.amount,
+            unit: quantity?.unit,
+          });
+          setChosen((prev) => new Set(prev).add(draft.id));
+        }}
+      />
+
       {/* Індикатор пошуку товару */}
       <Sheet open={scanLoading} onClose={() => {}} title="Шукаю товар">
         <div className="flex items-center gap-3 py-6">
@@ -537,6 +743,140 @@ export default function PantryPage() {
           setDetailsFor(def.key);
         }}
       />
+    </div>
+  );
+}
+
+/* ── Чек ──────────────────────────────────────────────────────────────── */
+
+const RECEIPT_FAILURE: Record<ReceiptFailure, string> = {
+  notfound: "Податкова не знайшла такого чека",
+  noitems: "У цьому чеку немає списку товарів",
+  upstream: "Податкова не відповідає — спробуй пізніше",
+  offline: "Немає звʼязку — чек читається тільки онлайн",
+  throttled: "Забагато спроб поспіль. Спробуй за хвилину",
+};
+
+/**
+ * Другий заход для нерозпізнаних назв — за кодом товару з чека.
+ *
+ * Частина мереж кладе в чек справжній EAN, а отже нерозпізнану касову назву
+ * можна довизначити тим самим пошуком, що й сканер штрихкодів: спершу
+ * довідник спільноти, далі Open Food Facts. Беремо не більше восьми рядків
+ * за раз — решта чекає на людину, і це чесніший обмін, ніж хвилина очікування.
+ */
+async function enrichByBarcode(drafts: ReceiptDraft[]): Promise<ReceiptDraft[]> {
+  const targets = drafts
+    .filter((d) => !d.ingredient && !d.nonFood && lookupableBarcode(d.line.code))
+    .slice(0, 8);
+  if (targets.length === 0) return drafts;
+
+  const found = new Map<string, ProductInfo>();
+  await Promise.all(
+    targets.map(async (draft) => {
+      const code = lookupableBarcode(draft.line.code);
+      if (!code) return;
+      const info = await lookupBarcode(code).catch(() => null);
+      if (info?.ingredient) found.set(draft.id, info);
+    }),
+  );
+
+  return drafts.map((draft) => {
+    const info = found.get(draft.id);
+    if (!info?.ingredient) return draft;
+
+    /*
+     * Кількість беремо з чека, але коли він рахує штуками, вагу однієї
+     * пачки знає етикетка: «2 шт» плюс «900 мл» з бази — це 1,8 л.
+     */
+    const fromLine = lineQuantity(draft.line);
+    const fromLabel =
+      info.amount != null && info.unit
+        ? { amount: info.amount * draft.line.qty, unit: info.unit }
+        : null;
+    const quantity = fromLine?.unit === "pcs" && fromLabel ? fromLabel : fromLine ?? fromLabel;
+
+    return { ...draft, ingredient: info.ingredient, ...quantity };
+  });
+}
+
+/**
+ * Рядок чека перед тим, як стати продуктом у коморі.
+ *
+ * Касову назву показуємо завжди, навіть коли продукт впізнано: саме за нею
+ * людина звіряє рядок із папірцем у руці, а «Молоко» без уточнення в чеку на
+ * двадцять позицій ні про що не каже.
+ */
+function ReceiptRow({
+  draft,
+  checked,
+  onToggle,
+  onPick,
+  onQuantity,
+}: {
+  draft: ReceiptDraft;
+  checked: boolean;
+  onToggle: () => void;
+  onPick: () => void;
+  onQuantity: (next: { amount?: number; unit: Unit }) => void;
+}) {
+  const def = draft.ingredient;
+
+  return (
+    <div
+      className={`rounded-2xl border p-3 ${
+        checked ? "border-line bg-surface" : "border-line/50 bg-surface/40"
+      }`}
+    >
+      <div className="flex items-start gap-2.5">
+        <button
+          onClick={onToggle}
+          disabled={!def}
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={`Додати ${def?.label ?? draft.line.name}`}
+          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${
+            checked ? "border-brand bg-brand text-brand-ink" : "border-line"
+          } ${def ? "" : "opacity-40"}`}
+        >
+          {checked && <Check size={13} strokeWidth={3} />}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <p className={`truncate text-[13.5px] font-bold ${checked ? "" : "text-muted"}`}>
+            {def?.label ?? draft.line.name}
+          </p>
+          <p className="truncate text-[11px] text-faint">
+            {draft.line.name}
+            {draft.line.sum != null && ` · ${formatNumber(draft.line.sum)} ₴`}
+          </p>
+        </div>
+
+        <span className="shrink-0 text-lg">{def?.emoji ?? "📦"}</span>
+      </div>
+
+      {def ? (
+        <div className="mt-2 flex items-center gap-2 pl-[30px]">
+          <span className="text-[12px] font-semibold text-muted">Скільки:</span>
+          <QuantityInput
+            amount={draft.amount}
+            unit={draft.unit}
+            defaultUnit={def.defaultUnit}
+            allowTaste={false}
+            label={def.label}
+            onChange={onQuantity}
+          />
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center justify-between gap-2 pl-[30px]">
+          <p className="text-[11.5px] text-muted">
+            {draft.nonFood ? "Не для комори" : "Немає в каталозі"}
+          </p>
+          <Button size="sm" variant="secondary" onClick={onPick}>
+            Обрати продукт
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

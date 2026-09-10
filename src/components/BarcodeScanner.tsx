@@ -22,16 +22,32 @@ export function BarcodeScanner({
   open,
   onClose,
   onDetect,
+  formats = BARCODE_FORMATS,
+  hint = "Наведи на штрихкод продукту",
+  manualEntry = true,
 }: {
   open: boolean;
   onClose: () => void;
   onDetect: (code: string) => void;
+  /** Що саме шукаємо в кадрі: товарні коди чи QR чека. */
+  formats?: readonly string[];
+  hint?: string;
+  /** Ручне введення має сенс для цифр під штрихкодом, але не для QR. */
+  manualEntry?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const zxingRef = useRef<{ reset: () => void } | null>(null);
   const doneRef = useRef(false);
+
+  /*
+   * Перелік форматів тримаємо в ref, а не в залежностях ефекту: інакше
+   * викликач, який передав літерал масиву, перезапускав би камеру на кожен
+   * рендер — а це чорний кадр і згаслий ліхтарик.
+   */
+  const formatsRef = useRef(formats);
+  formatsRef.current = formats;
 
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
@@ -122,7 +138,7 @@ export function BarcodeScanner({
 
     const runNative = (video: HTMLVideoElement) => {
       const Ctor = (window as unknown as { BarcodeDetector: BarcodeDetectorCtor }).BarcodeDetector;
-      const detector = new Ctor({ formats: [...BARCODE_FORMATS] });
+      const detector = new Ctor({ formats: [...formatsRef.current] });
       let busy = false;
 
       const tick = async () => {
@@ -148,9 +164,27 @@ export function BarcodeScanner({
     };
 
     const runZxing = async (video: HTMLVideoElement) => {
-      const { BrowserMultiFormatReader } = await import("@zxing/browser");
+      const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
+        import("@zxing/browser"),
+        import("@zxing/library"),
+      ]);
       if (doneRef.current || cancelled) return;
-      const reader = new BrowserMultiFormatReader();
+
+      /*
+       * Перелік форматів ZXing треба передати явно: без підказок він читає
+       * усе підряд, і сканер продукту ловив би QR з акційної наліпки, а
+       * сканер чека — штрихкод із пачки. Назви форматів у W3C і в ZXing
+       * збігаються з точністю до регістру, тож перекладаємо їх напряму.
+       */
+      const hints = new Map<number, unknown>();
+      hints.set(
+        DecodeHintType.POSSIBLE_FORMATS,
+        formatsRef.current
+          .map((format) => BarcodeFormat[format.toUpperCase() as keyof typeof BarcodeFormat])
+          .filter((format) => format !== undefined),
+      );
+
+      const reader = new BrowserMultiFormatReader(hints);
       const controls = await reader.decodeFromVideoElement(video, (result) => {
         const text = result?.getText?.();
         if (text) handleHit(text.trim());
@@ -240,19 +274,21 @@ export function BarcodeScanner({
                   <Flashlight size={19} />
                 </button>
               )}
-              <button
-                onClick={() => setManual((v) => !v)}
-                aria-label="Ввести код вручну"
-                className="grid h-11 w-11 place-items-center rounded-2xl bg-black/50 text-white backdrop-blur"
-              >
-                <Keyboard size={19} />
-              </button>
+              {manualEntry && (
+                <button
+                  onClick={() => setManual((v) => !v)}
+                  aria-label="Ввести код вручну"
+                  className="grid h-11 w-11 place-items-center rounded-2xl bg-black/50 text-white backdrop-blur"
+                >
+                  <Keyboard size={19} />
+                </button>
+              )}
             </div>
           </div>
 
           {/* Підказка / помилка / ручний ввід */}
           <div className="pad-safe-b absolute inset-x-0 bottom-0 p-5">
-            {manual || status === "denied" || status === "error" ? (
+            {(manualEntry && manual) || (manualEntry && (status === "denied" || status === "error")) ? (
               <div className="rounded-xl3 border border-white/15 bg-black/70 p-4 backdrop-blur">
                 {message && <p className="mb-3 text-[13px] leading-snug text-white/80">{message}</p>}
                 <label className="mb-2 block text-[12px] font-bold text-white/70">
@@ -278,7 +314,7 @@ export function BarcodeScanner({
               <div className="flex items-center justify-center gap-2 rounded-full bg-black/60 px-4 py-3 backdrop-blur">
                 <ScanBarcode size={17} className="text-[var(--brand)]" />
                 <p className="text-[13px] font-semibold text-white">
-                  {status === "starting" ? "Вмикаю камеру…" : "Наведи на штрихкод продукту"}
+                  {status === "starting" ? "Вмикаю камеру…" : message || hint}
                 </p>
               </div>
             )}
