@@ -163,6 +163,8 @@ src/
 ```bash
 npm run db:check      # чи валідні ключі, чи накатана схема, скільки рецептів
 npm run db:seed-sql   # перегенерувати supabase/seed.sql з src/data/seed.ts
+npm run check:nutrition  # арифметика одиниць і калорій
+npm run check:matching   # зіставлення товару зі штрихкоду з довідником
 ```
 
 Для Vercel ті самі дві змінні додай у **Project Settings → Environment Variables**.

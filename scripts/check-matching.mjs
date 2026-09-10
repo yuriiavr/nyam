@@ -1,0 +1,93 @@
+#!/usr/bin/env node
+import { createJiti } from "jiti";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+/**
+ * Перевірка зіставлення товару з довідником інгредієнтів.
+ *
+ * Запуск: npm run check:matching
+ *
+ * Мережі не потребує: перевіряємо саме логіку, а не доступність
+ * Open Food Facts. Назви й категорії взяті з реальних відповідей API.
+ */
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const jiti = createJiti(import.meta.url, {
+  alias: { "@": path.join(root, "src") },
+  interopDefault: true,
+});
+const { findIngredient, findIngredientByCategory } = await jiti.import(
+  path.join(root, "src/data/ingredients.ts"),
+);
+
+let pass = 0;
+let fail = 0;
+const check = (input, actual, expected) => {
+  if (actual === expected) {
+    pass++;
+    return;
+  }
+  fail++;
+  console.log(`  ✗ «${input}»\n      отримано: ${actual ?? "нічого"}\n      очікувано: ${expected ?? "нічого"}`);
+};
+
+const byName = (text, expected) => check(text, findIngredient(text)?.key ?? null, expected);
+const byCat = (tags, expected) =>
+  check(tags.join(" "), findIngredientByCategory(tags)?.key ?? null, expected);
+
+console.log("── Назва товару ──");
+
+// Звичайні назви з полиці
+byName("Сметана 20%", "smetana");
+byName("Молоко пастеризоване 2,5%", "moloko");
+byName("Хліб Київський нарізний", "khlib");
+byName("Цукор білий кристалічний", "tsukor");
+byName("Яйця курячі С0", "yajtsya");
+
+// Порядок слів. Синонім записано як «томатний сік», на етикетці — навпаки.
+byName("Сік томатний", "tomatnyi_sik");
+byName("Сир кисломолочний 9% Яготинське", "tvorog");
+
+// Синонім із двох слів має перемагати односкладовий: інакше «Томати
+// консервовані» стають свіжими помідорами.
+byName("Томати консервовані в соку", "pomidory_konserv");
+byName("Peanut Butter Smooth", "arahisova_pasta");
+byName("Coconut Milk", "kokos_moloko");
+
+// Відмінювання: «молока» і «молоко» мають зводитись до спільної основи
+byName("Пляшка молока", "moloko");
+byName("Банка сметани", "smetana");
+
+// Різні основи — беруться зі списку синонімів, не з відкидання закінчень
+byName("Крупа гречана ядриця", "grechka");
+byName("Масло солодковершкове 82%", "maslo");
+
+// Регресія: пошук ішов підрядком і по латинських ключах, тож ключ «nut»
+// знаходився всередині «Nutella», «Peanut», «Coconut».
+byName("Nutella", null);
+byName("Nutella Biscuits", "pechyvo");
+byName("Coca-Cola", null);
+
+console.log("── Категорії Open Food Facts ──");
+
+// Тег і є назвою продукту
+byCat(["en:dairies", "en:milks"], "moloko");
+byCat(["en:cheeses"], "syr");
+byCat(["en:sauces", "en:pestos"], "pesto");
+byCat(["en:tomatoes"], "pomidor");
+byCat(["en:potatoes"], "kartoplya");
+byCat(["en:olive-oils"], "olyvkova");
+
+// Регресія: у ланцюжку категорій Fanta є "orange-soft-drinks", і слово
+// «orange» саме по собі робило з газованки апельсин.
+byCat(
+  ["en:beverages", "en:carbonated-drinks", "en:sodas", "en:orange-soft-drinks"],
+  null,
+);
+byCat(["en:beverages", "en:waters", "en:sparkling-waters"], "voda");
+
+// Конкретніший тег важить більше за загальний
+byCat(["en:groceries", "en:canned-foods", "en:canned-tomatoes"], "pomidory_konserv");
+
+console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
+process.exit(fail ? 1 : 0);

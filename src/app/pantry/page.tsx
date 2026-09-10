@@ -26,10 +26,10 @@ import {
   useToast,
 } from "@/components/ui";
 import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
-import { lookupBarcode, type ProductInfo } from "@/lib/barcode";
+import { lookupBarcode, teachBarcode, type ProductInfo } from "@/lib/barcode";
 import { fridgeMatches, shoppingSuggestions } from "@/lib/matching";
 import { allRecipes, useApp } from "@/lib/store";
-import type { IngredientCat, IngredientDef, PantryItem } from "@/lib/types";
+import type { IngredientCat, IngredientDef, PantryItem, Unit } from "@/lib/types";
 import { ingredientQtyLabel } from "@/lib/units";
 import { expiryInfo, haptic, plural } from "@/lib/utils";
 
@@ -127,7 +127,10 @@ export default function PantryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, state.pantry, state.myRecipes]);
 
-  const add = (key: string, extra?: { label?: string; barcode?: string }) => {
+  const add = (
+    key: string,
+    extra?: { label?: string; barcode?: string; amount?: number; unit?: Unit },
+  ) => {
     haptic(12);
     state.addPantry({ key, addedAt: new Date().toISOString(), ...extra });
   };
@@ -139,7 +142,14 @@ export default function PantryPage() {
     setScanLoading(false);
     setScanned(info);
     if (info.ingredient) {
-      add(info.ingredient.key, { label: info.name, barcode: info.barcode });
+      // Вагу упаковки беремо з етикетки: «500 г» на пачці вводити руками
+      // безглуздо, коли база вже це знає.
+      add(info.ingredient.key, {
+        label: info.name,
+        barcode: info.barcode,
+        amount: info.amount,
+        unit: info.unit,
+      });
     }
   };
 
@@ -415,6 +425,11 @@ export default function PantryPage() {
                 <p className="text-[13px] font-bold text-mint">
                   ✓ Додано в комору як «{scanned.ingredient.label}»
                 </p>
+                {scanned.source === "community" && (
+                  <p className="mt-1 text-[11.5px] text-muted">
+                    Цей штрихкод розпізнав хтось із користувачів
+                  </p>
+                )}
 
                 {/* Скільки саме принесли — етикетка цього не знає. */}
                 <div className="mt-3 flex items-center gap-2.5">
@@ -440,9 +455,15 @@ export default function PantryPage() {
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-line bg-surface-2 p-3.5">
-                <p className="text-[13px] font-bold">Не вдалося визначити продукт</p>
+                <p className="text-[13px] font-bold">
+                  {scanned.source === "unknown"
+                    ? "Такого штрихкоду немає в базі"
+                    : "Не вдалося визначити продукт"}
+                </p>
                 <p className="mt-1 text-[12px] text-muted">
-                  Обери зі списку, чим це є — наступного разу впізнаємо швидше.
+                  {scanned.source === "unknown"
+                    ? "Open Food Facts мало знає про українські товари. Обери зі списку, чим це є — і наступний, хто відсканує цей код, побачить готову відповідь."
+                    : "Обери зі списку, чим це є — і наступний, хто відсканує цей код, побачить готову відповідь."}
                 </p>
                 <Button
                   size="sm"
@@ -483,7 +504,14 @@ export default function PantryPage() {
         title="Що це за продукт?"
         exclude={pantryKeys}
         onPick={(def) => {
-          add(def.key, { label: pickFor?.name, barcode: pickFor?.barcode });
+          add(def.key, {
+            label: pickFor?.name,
+            barcode: pickFor?.barcode,
+            amount: pickFor?.amount,
+            unit: pickFor?.unit,
+          });
+          // Наступному, хто відсканує цей код, вгадувати вже не доведеться.
+          if (pickFor) void teachBarcode(pickFor, def.key);
           setPickFor(null);
           setDetailsFor(def.key);
         }}

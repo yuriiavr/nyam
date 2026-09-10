@@ -740,3 +740,70 @@ export async function fetchProfilesByIds(ids: string[]): Promise<Profile[]> {
   if (error) throw error;
   return (data as unknown as ProfileRow[]).map(rowToProfile);
 }
+
+/* ── Спільний довідник штрихкодів ─────────────────────────────────────── */
+
+export interface CachedBarcode {
+  barcode: string;
+  name: string;
+  brand?: string;
+  image?: string;
+  ingredientKey: string;
+}
+
+/**
+ * Що спільнота вже знає про цей штрихкод.
+ *
+ * Open Food Facts майже не покриває український ринок: більшість кодів 482…
+ * не мають там жодного запису. Тому те, що один раз вказав руками хтось із
+ * користувачів, зберігається тут і працює для всіх наступних.
+ */
+export async function fetchCachedBarcode(barcode: string): Promise<CachedBarcode | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+
+  const { data, error } = await sb
+    .from("barcode_cache")
+    .select("barcode,name,brand,image_url,ingredient_key")
+    .eq("barcode", barcode)
+    .not("ingredient_key", "is", null)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const row = data as {
+    barcode: string;
+    name: string;
+    brand: string | null;
+    image_url: string | null;
+    ingredient_key: string;
+  };
+  return {
+    barcode: row.barcode,
+    name: row.name,
+    brand: row.brand ?? undefined,
+    image: row.image_url ?? undefined,
+    ingredientKey: row.ingredient_key,
+  };
+}
+
+/**
+ * Запамʼятовує, чим виявився товар.
+ *
+ * Політика таблиці дозволяє лише insert, не update: так один користувач не
+ * може переписати чужу відповідь. Через це повторний запис того самого коду
+ * очікувано конфліктує — і це не помилка, просто хтось нас випередив.
+ */
+export async function cacheBarcode(item: CachedBarcode): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+
+  const { error } = await sb.from("barcode_cache").insert({
+    barcode: item.barcode,
+    name: item.name,
+    brand: item.brand ?? null,
+    image_url: item.image ?? null,
+    ingredient_key: item.ingredientKey,
+  });
+
+  if (error && error.code !== "23505") throw error;
+}

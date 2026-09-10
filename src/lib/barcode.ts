@@ -1,5 +1,7 @@
-import { findIngredient } from "@/data/ingredients";
-import type { IngredientDef, Nutrition } from "./types";
+import { findIngredient, findIngredientByCategory, ING_BY_KEY } from "@/data/ingredients";
+import { cacheBarcode, fetchCachedBarcode } from "./supabase/api";
+import { parseQty } from "./units";
+import type { IngredientDef, Nutrition, Unit } from "./types";
 
 export interface ProductInfo {
   barcode: string;
@@ -10,14 +12,63 @@ export interface ProductInfo {
   ingredient: IngredientDef | null;
   /** Харчова цінність на 100 г з етикетки, якщо виробник її вказав. */
   nutrition?: Nutrition;
-  source: "openfoodfacts" | "unknown";
+  /** Вага або обʼєм упаковки з етикетки — щоб не вводити «500 г» руками. */
+  amount?: number;
+  unit?: Unit;
+  source: "openfoodfacts" | "community" | "unknown";
 }
 
 /**
- * Пошук товару за штрихкодом в Open Food Facts — безкоштовний відкритий API
- * без ключа, з підтримкою CORS.
+ * Пошук товару за штрихкодом.
+ *
+ * Спершу питаємо спільний довідник: якщо цей код хтось уже розпізнав, це
+ * і швидше, і точніше за будь-яку евристику. Далі — Open Food Facts.
+ *
+ * Порядок саме такий, бо український ринок OFF майже не покриває: коди 482…
+ * там здебільшого просто відсутні. Відповідь спільноти для них єдина.
  */
 export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
+  const known = await fetchCachedBarcode(barcode).catch(() => null);
+  const ingredient = known ? ING_BY_KEY.get(known.ingredientKey) ?? null : null;
+  if (known && ingredient) {
+    return {
+      barcode,
+      name: known.name,
+      brand: known.brand,
+      image: known.image,
+      ingredient,
+      source: "community",
+    };
+  }
+
+  return lookupInOpenFoodFacts(barcode);
+}
+
+/**
+ * Запамʼятовує вибір користувача для штрихкода, якого не впізнали.
+ *
+ * Мовчки: підказка спільноті — побічний ефект додавання продукту, і якщо
+ * запис не пройшов, користувачу нема на що реагувати.
+ */
+export async function teachBarcode(
+  product: ProductInfo,
+  ingredientKey: string,
+): Promise<void> {
+  if (product.source === "community") return;
+  try {
+    await cacheBarcode({
+      barcode: product.barcode,
+      name: product.name,
+      brand: product.brand,
+      image: product.image,
+      ingredientKey,
+    });
+  } catch {
+    /* довідник спільноти — приємний бонус, а не умова роботи */
+  }
+}
+
+async function lookupInOpenFoodFacts(barcode: string): Promise<ProductInfo> {
   const fallback: ProductInfo = {
     barcode,
     name: `Товар ${barcode}`,
@@ -28,8 +79,9 @@ export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
   try {
     const url =
       `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json` +
-      `?fields=product_name,product_name_uk,product_name_ru,brands,image_small_url,` +
-      `categories_tags,nutriments`;
+      `?fields=product_name,product_name_uk,product_name_ru,generic_name,generic_name_uk,` +
+      `brands,image_small_url,categories_tags,quantity,product_quantity,` +
+      `product_quantity_unit,nutriments`;
 
     const res = await fetch(url, {
       headers: { Accept: "application/json" },
@@ -43,9 +95,14 @@ export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
         product_name?: string;
         product_name_uk?: string;
         product_name_ru?: string;
+        generic_name?: string;
+        generic_name_uk?: string;
         brands?: string;
         image_small_url?: string;
         categories_tags?: string[];
+        quantity?: string;
+        product_quantity?: number | string;
+        product_quantity_unit?: string;
         nutriments?: Record<string, unknown>;
       };
     };
@@ -59,12 +116,18 @@ export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
       p.product_name_ru?.trim() ||
       fallback.name;
 
-    // Пробуємо зіставити з каталогом: спершу назва, далі категорії
-    const categoryText = (p.categories_tags ?? [])
-      .map((t) => t.replace(/^[a-z]{2}:/, "").replace(/-/g, " "))
-      .join(" ");
-
-    const ingredient = findIngredient(name) ?? findIngredient(categoryText);
+    /*
+     * Зіставляємо в три заходи. Назва на етикетці — маркетинговий текст
+     * («Молочна ріка Особлива»), тож коли вона нічого не дала, пробуємо
+     * generic_name — це рядок, де виробник пише, що це насправді
+     * («сир кисломолочний»). Категорії останні: вони структуровані й тому
+     * найнадійніші, але надто загальні, щоб починати з них.
+     */
+    const generic = p.generic_name_uk?.trim() || p.generic_name?.trim();
+    const ingredient =
+      findIngredient(name) ??
+      (generic ? findIngredient(generic) : null) ??
+      findIngredientByCategory(p.categories_tags ?? []);
 
     return {
       barcode,
@@ -73,11 +136,42 @@ export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
       image: p.image_small_url,
       ingredient,
       nutrition: parseNutriments(p.nutriments),
+      ...parsePackSize(p.quantity, p.product_quantity, p.product_quantity_unit),
       source: "openfoodfacts",
     };
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Розмір упаковки з етикетки: «500 г», «1 л».
+ *
+ * Спершу беремо машинні поля product_quantity + product_quantity_unit, бо
+ * вони вже нормалізовані. Якщо їх немає — розбираємо людський рядок quantity
+ * тим самим парсером, що й кількості в рецептах.
+ *
+ * Абсурдні значення відкидаємо: у базі трапляється вага в 0 або 50 кг, і
+ * підставити таке в комору гірше, ніж не підставити нічого.
+ */
+function parsePackSize(
+  quantity: string | undefined,
+  productQuantity: number | string | undefined,
+  productQuantityUnit: string | undefined,
+): { amount?: number; unit?: Unit } {
+  const sane = (amount: number, unit: Unit) =>
+    amount > 0 && amount <= 10_000 ? { amount: Math.round(amount * 100) / 100, unit } : {};
+
+  const machine = Number(productQuantity);
+  if (Number.isFinite(machine) && machine > 0) {
+    const raw = (productQuantityUnit ?? "g").toLowerCase();
+    const unit: Unit | null = raw === "g" ? "g" : raw === "ml" ? "ml" : null;
+    if (unit) return sane(machine, unit);
+  }
+
+  const parsed = parseQty(quantity);
+  if (parsed?.amount != null && parsed.unit !== "taste") return sane(parsed.amount, parsed.unit);
+  return {};
 }
 
 /**
