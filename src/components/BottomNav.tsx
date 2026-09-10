@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Compass, House, Refrigerator, Sparkles, User } from "lucide-react";
+import { useApp } from "@/lib/store";
 import { cn, haptic } from "@/lib/utils";
 
 interface Tab {
@@ -33,7 +34,10 @@ export function useNavHidden(pathname: string): boolean {
 
 export function BottomNav() {
   const pathname = usePathname() || "/";
-  if (useNavHidden(pathname)) return null;
+  // Поки користувач не увійшов, замість застосунку показується екран входу —
+  // навігація по вкладках там нікуди не веде.
+  const account = useApp((s) => s.account);
+  if (useNavHidden(pathname) || !account) return null;
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);

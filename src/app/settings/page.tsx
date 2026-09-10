@@ -7,7 +7,6 @@ import {
   Eye,
   Github,
   Info,
-  LogIn,
   LogOut,
   Moon,
   RefreshCw,
@@ -264,7 +263,7 @@ export default function SettingsPage() {
   );
 }
 
-/** Стан підключення до бекенду: гість, авторизований або локальний режим. */
+/** Стан підключення до бекенду і кнопка виходу. */
 function AccountCard() {
   const account = useApp((s) => s.account);
   const status = useApp((s) => s.syncStatus);
@@ -295,25 +294,9 @@ function AccountCard() {
     toast("Дані оновлено", "🔄");
   };
 
-  if (!account) {
-    return (
-      <Card className="p-4">
-        <div className="flex items-center gap-2">
-          <LogIn size={17} className="text-brand" />
-          <h2 className="font-display text-[16px] font-bold">Ти без акаунта</h2>
-        </div>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted">
-          Рецепти спільноти вже видно, але твої власні живуть лише на цьому пристрої. Увійди —
-          і вони синхронізуються, а інші кухарі побачать їх у стрічці.
-        </p>
-        <Link href="/auth">
-          <Button full className="mt-3">
-            Увійти або створити акаунт
-          </Button>
-        </Link>
-      </Card>
-    );
-  }
+  // Гілки «без акаунта» тут немає: без входу застосунок не показує нічого,
+  // крім екрана входу, тож до налаштувань неавторизований не дійде.
+  if (!account) return null;
 
   return (
     <Card className="p-4">

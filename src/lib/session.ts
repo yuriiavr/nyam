@@ -11,9 +11,9 @@ import { newId } from "./utils";
 /**
  * Звʼязує авторизацію Supabase зі сховищем стану.
  *
- * Логіка входу:
- *   гість  → публічні рецепти з бази (RLS дозволяє читати), особисте локально;
- *   увійшов → усе особисте береться з бази, локальні рецепти переїжджають туди.
+ * Без акаунта застосунком користуватись не можна — гостьового режиму немає,
+ * і єдиний спосіб увійти це Google (див. AuthScreen). Тому поки сесії немає,
+ * дані з бази не тягнемо взагалі: показувати їх все одно нема кому.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -184,7 +184,9 @@ let initialised = false;
 /** Викликається один раз при старті застосунку. */
 export async function initSession(): Promise<() => void> {
   if (!isSupabaseConfigured) {
+    // Без бекенду входу не існує — воротар покаже, чого бракує.
     useApp.getState().setSyncStatus("offline");
+    useApp.getState().setAuthChecked(true);
     return () => {};
   }
   if (initialised) return () => {};
@@ -199,9 +201,12 @@ export async function initSession(): Promise<() => void> {
   if (session?.user) {
     await loadUserData(session.user.id, session.user.email ?? "");
   } else {
-    await loadCommunity(null);
     useApp.getState().setSyncStatus("ready");
   }
+  // З цієї миті відомо напевно, увійшов користувач чи ні. До неї воротар
+  // тримає заставку: інакше на секунду блимав би екран входу тому, хто
+  // насправді має живу сесію.
+  useApp.getState().setAuthChecked(true);
 
   const { data: listener } = sb.auth.onAuthStateChange((event, next) => {
     if (event === "SIGNED_IN" && next?.user) {
@@ -214,7 +219,8 @@ export async function initSession(): Promise<() => void> {
       setSyncFamily([]);
       unsubscribeRealtime();
       useApp.getState().resetToLocal();
-      void loadCommunity(null).then(() => useApp.getState().setSyncStatus("ready"));
+      useApp.getState().setAuthChecked(true);
+      useApp.getState().setSyncStatus("ready");
     }
   });
 
@@ -228,7 +234,6 @@ export async function initSession(): Promise<() => void> {
 export async function refreshFromServer() {
   const account = useApp.getState().account;
   if (account) await loadUserData(account.id, account.email);
-  else await loadCommunity(null);
 }
 
 /* ── Дії авторизації ──────────────────────────────────────────────────── */
@@ -236,38 +241,6 @@ export async function refreshFromServer() {
 export interface AuthResult {
   ok: boolean;
   message?: string;
-  /** true — акаунт створено, але треба підтвердити пошту */
-  needsConfirmation?: boolean;
-}
-
-export async function signUp(email: string, password: string, name: string): Promise<AuthResult> {
-  const sb = getSupabase();
-  if (!sb) return { ok: false, message: "Бекенд не налаштовано." };
-
-  const { data, error } = await sb.auth.signUp({
-    email: email.trim(),
-    password,
-    options: { data: { name: name.trim() || undefined } },
-  });
-
-  if (error) return { ok: false, message: friendlyError(error) };
-  if (data.user && !data.session) {
-    return {
-      ok: true,
-      needsConfirmation: true,
-      message: "Акаунт створено. Підтверди пошту за посиланням у листі.",
-    };
-  }
-  return { ok: true };
-}
-
-export async function signIn(email: string, password: string): Promise<AuthResult> {
-  const sb = getSupabase();
-  if (!sb) return { ok: false, message: "Бекенд не налаштовано." };
-
-  const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
-  if (error) return { ok: false, message: friendlyError(error) };
-  return { ok: true };
 }
 
 export async function signOut(): Promise<void> {
@@ -276,40 +249,7 @@ export async function signOut(): Promise<void> {
   await sb.auth.signOut();
 }
 
-export async function resetPassword(email: string): Promise<AuthResult> {
-  const sb = getSupabase();
-  if (!sb) return { ok: false, message: "Бекенд не налаштовано." };
-
-  const { error } = await sb.auth.resetPasswordForEmail(email.trim(), {
-    redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth` : undefined,
-  });
-  if (error) return { ok: false, message: friendlyError(error) };
-  return { ok: true, message: "Лист для відновлення надіслано." };
-}
-
 /* ── Вхід через Google ────────────────────────────────────────────────── */
-
-/**
- * Які провайдери реально ввімкнені в проєкті.
- * Питаємо сам Supabase, щоб не показувати кнопку, яка гарантовано впаде.
- */
-export async function fetchEnabledProviders(): Promise<Record<string, boolean> | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  try {
-    const res = await fetch(`${url}/auth/v1/settings`, {
-      headers: { apikey: key },
-      signal: AbortSignal.timeout(6000),
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { external?: Record<string, boolean> };
-    return json.external ?? {};
-  } catch {
-    // null = не дізнались. Викликач сам вирішує, що показувати.
-    return null;
-  }
-}
 
 export async function signInWithGoogle(): Promise<AuthResult> {
   const sb = getSupabase();

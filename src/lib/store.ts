@@ -63,8 +63,14 @@ export interface AppState {
   onboarded: boolean;
 
   /* ── Бекенд ─────────────────────────────────────────────────────────── */
-  /** Авторизований користувач; null — гість або локальний режим. */
+  /** Авторизований користувач; null — не увійшов. */
   account: { id: string; email: string } | null;
+  /**
+   * Чи вже відомо, є сесія чи ні. Поки false, воротар показує заставку:
+   * без цього прапорця той, у кого сесія є, встигав побачити екран входу.
+   * Навмисно не зберігається — на кожен запуск перевіряємо заново.
+   */
+  authChecked: boolean;
   /** Рецепти спільноти з бази (кеш для офлайну). */
   remoteRecipes: Recipe[];
   remoteProfiles: Profile[];
@@ -84,6 +90,7 @@ export interface AppState {
   updateProfile: (patch: Partial<Profile>) => void;
 
   setAccount: (account: { id: string; email: string } | null) => void;
+  setAuthChecked: (v: boolean) => void;
   setCommunity: (data: { recipes: Recipe[]; profiles: Profile[] }) => void;
   setSyncStatus: (status: SyncStatus, error?: string | null) => void;
   applyRemoteUserState: (data: RemoteUserState, myRecipes: Recipe[]) => void;
@@ -145,6 +152,7 @@ export const useApp = create<AppState>()(
       onboarded: false,
 
       account: null,
+      authChecked: false,
       remoteRecipes: [],
       remoteProfiles: [],
       remoteReady: false,
@@ -164,6 +172,7 @@ export const useApp = create<AppState>()(
       },
 
       setAccount: (account) => set({ account }),
+      setAuthChecked: (authChecked) => set({ authChecked }),
 
       setCommunity: ({ recipes, profiles }) =>
         set({ remoteRecipes: recipes, remoteProfiles: profiles, remoteReady: true }),
@@ -382,6 +391,7 @@ export const useApp = create<AppState>()(
       partialize: ({
         hydrated: _hydrated,
         account: _account,
+        authChecked: _authChecked,
         syncStatus: _syncStatus,
         syncError: _syncError,
         family: _family,
