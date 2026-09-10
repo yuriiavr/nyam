@@ -39,8 +39,10 @@ interface UpstreamCheck {
   check?: string | null;
   /** Той самий чек структурою, base64 у windows-1251. */
   checkXml?: string | null;
-  /** Продавець окремим полем — надійніше, ніж вгадувати його з шапки. */
+  /** Продавець окремим полем; у частини чеків приходить порожнім. */
   name?: string | null;
+  /** «Інформація відсутня не вірна сума» — коли чек не зійшовся. */
+  error_description?: string | null;
 }
 
 /**
@@ -106,16 +108,22 @@ export async function GET(request: Request): Promise<Response> {
       signal: AbortSignal.timeout(20_000),
       cache: "no-store",
     });
-    if (!res.ok) return json({ ok: false, reason: "upstream" }, 502);
-    payload = (await res.json()) as UpstreamCheck;
+
+    /*
+     * Чек, що не зійшовся, податкова віддає як 400 з поясненням
+     * («Інформація відсутня не вірна сума»), а не як порожню відповідь.
+     * Це найчастіший реальний випадок — QR зчитався з похибкою, — і
+     * називати його поламаною податковою було б неправдою. Тому 4xx це
+     * «не знайшли», і лише 5xx та обрив звʼязку — «сервіс мовчить».
+     */
+    if (res.status >= 500) return json({ ok: false, reason: "upstream" }, 502);
+    payload = (await res.json().catch(() => ({}))) as UpstreamCheck;
+    if (!res.ok) return json({ ok: false, reason: "notfound" }, 404);
   } catch {
     return json({ ok: false, reason: "upstream" }, 504);
   }
 
-  /*
-   * Ненайдений чек податкова віддає як HTTP 200 з порожнім полем check —
-   * не 404. Тому дивимось саме на поле, а не на статус відповіді.
-   */
+  // Порожня відповідь із кодом 200 теж трапляється — тоді чека просто немає.
   if (!payload.check) return json({ ok: false, reason: "notfound" }, 404);
 
   const receipt: Receipt = {
