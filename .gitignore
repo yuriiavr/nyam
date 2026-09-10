@@ -8,3 +8,6 @@ next-env.d.ts
 .vercel
 .env
 .claude/settings.local.json
+
+# Тимчасові скрипти для разових перевірок — у репозиторії їм не місце.
+scripts/_tmp_*
