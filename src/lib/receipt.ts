@@ -425,7 +425,13 @@ const MEASURE_UNIT: Record<string, Unit> = {
   кг: "kg", г: "g", гр: "g", грам: "g", л: "l", мл: "ml", шт: "pcs", уп: "pcs", пач: "pcs",
 };
 
+/** «4х115 г», «6 x 0,33 л» — упаковка з кількох однакових одиниць. */
+const PACK_MULTI = /(\d+)\s*[xх×]\s*(\d+(?:[.,]\d+)?)\s*(кг|гр|г|мл|л)(?![\p{L}])/iu;
+
 const PACK_SIZE = /(\d+(?:[.,]\d+)?)\s*(кг|гр|г|мл|л)(?![\p{L}])/iu;
+
+/** «10 шт» у назві — це вміст упаковки, а не кількість покупок. */
+const PACK_COUNT = /(\d+)\s*шт(?![\p{L}])/iu;
 
 /**
  * Вага або обʼєм пакування з назви: «Молоко 900г» → 900 г.
@@ -435,13 +441,30 @@ const PACK_SIZE = /(\d+(?:[.,]\d+)?)\s*(кг|гр|г|мл|л)(?![\p{L}])/iu;
  */
 export function packSize(name: string): { amount: number; unit: Unit } | null {
   const cleaned = name.replace(/\d+(?:[.,]\d+)?\s*%/gu, " ");
-  const found = PACK_SIZE.exec(cleaned);
-  if (!found) return null;
 
-  const amount = Number(found[1].replace(",", "."));
-  const unit = MEASURE_UNIT[found[2].toLowerCase()];
-  if (!Number.isFinite(amount) || amount <= 0 || !unit) return null;
-  return tidy(amount, unit);
+  // «4х115 г» — спершу, бо всередині є і звичайний розмір, і він менший.
+  const multi = PACK_MULTI.exec(cleaned);
+  if (multi) {
+    const count = Number(multi[1]);
+    const each = Number(multi[2].replace(",", "."));
+    const unit = MEASURE_UNIT[multi[3].toLowerCase()];
+    if (unit && count > 0 && each > 0) return tidy(count * each, unit);
+  }
+
+  const size = PACK_SIZE.exec(cleaned);
+  const count = Number(PACK_COUNT.exec(cleaned)?.[1] ?? 0);
+
+  if (size) {
+    const amount = Number(size[1].replace(",", "."));
+    const unit = MEASURE_UNIT[size[2].toLowerCase()];
+    // «1,5 л 6 шт» — це шість пляшок, а не одна: інакше вода виходить
+    // ушестеро дорожчою за кілограм, ніж коштувала.
+    if (unit && amount > 0) return tidy(amount * (count > 1 ? count : 1), unit);
+  }
+
+  // Сам лічильник: «Яйця 10 шт» — це десяток, а не одна штука.
+  if (count > 0) return { amount: count, unit: "pcs" };
+  return null;
 }
 
 /**
