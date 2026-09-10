@@ -1,6 +1,7 @@
 import { ing } from "@/data/ingredients";
 import type { CookEvent, Nutrition, Recipe, RecipeIngredient, Unit } from "./types";
 import { quantityOf, unitDef } from "./units";
+import { dateKey } from "./utils";
 
 /**
  * Підрахунок калорій і БЖВ.
@@ -159,17 +160,22 @@ export interface DayTotals extends Nutrition {
 /**
  * Підсумок за день з історії готувань. Одне приготування = одна порція:
  * страву зазвичай готують на всіх, а зʼїдають свою частку.
+ *
+ * День рахуємо за місцевою датою, а не за UTC. Мітка готування — це момент
+ * часу, і в Києві вечеря о першій ночі має мітку вчорашнього UTC-дня: за
+ * UTC вона потрапляла у вчора, хоча людина вечеряла сьогодні. Решта
+ * застосунку (план на тиждень) і так живе за місцевою датою.
  */
 export function dayTotals(
   cooked: CookEvent[],
   recipeOf: (id: string) => Recipe | undefined,
   day: Date = new Date(),
 ): DayTotals {
-  const key = day.toISOString().slice(0, 10);
+  const key = dateKey(day);
   const totals: DayTotals = { ...ZERO, meals: 0, unknown: 0 };
 
   for (const event of cooked) {
-    if (event.at.slice(0, 10) !== key) continue;
+    if (dateKey(new Date(event.at)) !== key) continue;
     totals.meals += 1;
 
     const recipe = recipeOf(event.recipeId);

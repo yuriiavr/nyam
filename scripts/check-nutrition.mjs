@@ -228,6 +228,18 @@ const onlyToday = nutrition.dayTotals(
 );
 check("вчорашнє не рахується", onlyToday.kcal, 0);
 
+/*
+ * День — місцевий, а не UTC. У Києві страва, приготована о 00:30, має мітку
+ * вчорашнього UTC-дня, і за UTC вона зникала б із сьогоднішнього підсумку.
+ */
+const now = new Date();
+const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 30).toISOString();
+const afterMidnight = nutrition.dayTotals(
+  [{ recipeId: "t", at: localMidnight }],
+  (id) => (id === "t" ? recipe : undefined),
+);
+check("страва по опівночі — сьогоднішня", afterMidnight.meals, 1);
+
 console.log("── Списання з комори ──");
 
 const dish = (ingredients) => ({ ...recipe, ingredients });
