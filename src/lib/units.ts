@@ -30,6 +30,7 @@ export const UNITS: UnitDef[] = [
   { key: "tsp", label: "ч. л.", base: "tsp", factor: 1, decimals: 1 },
   { key: "cup", label: "скл.", base: "cup", factor: 1, decimals: 2 },
   { key: "bunch", label: "пучок", base: "bunch", factor: 1, decimals: 1 },
+  { key: "handful", label: "жменя", base: "handful", factor: 1, decimals: 1 },
   { key: "pinch", label: "дрібка", base: "pinch", factor: 1, decimals: 1 },
   // «За смаком» свідомо без бази: складати такі не можна й не треба.
   { key: "taste", label: "за смаком", base: null, factor: 1, decimals: 0 },
@@ -44,7 +45,7 @@ export const unitLabel = (unit: Unit): string => unitDef(unit).label;
 export const UNIT_GROUPS: Array<{ title: string; units: Unit[] }> = [
   { title: "Вага", units: ["g", "kg"] },
   { title: "Обʼєм", units: ["ml", "l", "cup"] },
-  { title: "Штуки", units: ["pcs", "bunch"] },
+  { title: "Штуки", units: ["pcs", "bunch", "handful"] },
   { title: "Ложки", units: ["tbsp", "tsp", "pinch"] },
   { title: "Без міри", units: ["taste"] },
 ];
@@ -122,19 +123,89 @@ export function scaleAmount(amount: number, unit: Unit, factor: number): number 
 
 /* ── Розбір старих рядків ─────────────────────────────────────────────── */
 
+/**
+ * Слова, які означають одиницю виміру.
+ *
+ * Класи символів — через \p{L}, а не \w: \w це тільки латиниця й цифри,
+ * тож «щіпка», «жменя», «склянка» повз такий шаблон просто пролітали. Порядок має значення лише всередині
+ * однакової довжини — довші варіанти («ст. л.») перевіряємо раніше за коротші.
+ *
+ * Побутові міри — «зубчик», «скибка», «стейк» — зводимо до штук: скільки
+ * важить одна, знає довідник інгредієнтів (gramsPerPiece). Так «2 зубчики
+ * часнику» стають 6 г, а не зникають з підрахунку.
+ */
 const ALIASES: Array<[RegExp, Unit]> = [
-  [/^(кг|kg|кілограм\w*)$/iu, "kg"],
-  [/^(г|гр|g|грам\w*)$/iu, "g"],
-  [/^(мл|ml|мілілітр\w*)$/iu, "ml"],
-  [/^(л|l|літр\w*)$/iu, "l"],
-  [/^(шт|шт\.|штук\w*|pcs)$/iu, "pcs"],
-  [/^(ст\.?\s*л\.?|столов\w*\s*ложк\w*|tbsp)$/iu, "tbsp"],
-  [/^(ч\.?\s*л\.?|чайн\w*\s*ложк\w*|tsp)$/iu, "tsp"],
-  [/^(скл\.?|склянк\w*|cup)$/iu, "cup"],
-  [/^(пучок|пучк\w*|bunch)$/iu, "bunch"],
-  [/^(дрібк\w*|щіпк\w*|pinch)$/iu, "pinch"],
-  [/^(за\s+смаком|до\s+смаку|taste)$/iu, "taste"],
+  [/^(кг|kg|кілограм\p{L}*)$/iu, "kg"],
+  [/^(г|гр|g|грам\p{L}*)$/iu, "g"],
+  [/^(мл|ml|мілілітр\p{L}*)$/iu, "ml"],
+  [/^(л|l|літр\p{L}*)$/iu, "l"],
+  [/^(шт|шт\.|штук\p{L}*|pcs)$/iu, "pcs"],
+  [/^(зубчик|зубчик\p{L}*|зубок|зубк\p{L}*|clove)$/iu, "pcs"],
+  [/^(скиб\p{L}*|шматок|шматк\p{L}*|шматочок|шматочк\p{L}*|slice)$/iu, "pcs"],
+  [/^(стейк|стейк\p{L}*|філе|steak|fillet)$/iu, "pcs"],
+  [/^(головк\p{L}*|качан\p{L}*|head)$/iu, "pcs"],
+  [/^(листок|листк\p{L}*|листочок|листочк\p{L}*|leaf|leaves)$/iu, "pcs"],
+  [/^(ст\.?\s*л\.?|столов\p{L}*\s*ложк\p{L}*|tbsp)$/iu, "tbsp"],
+  [/^(ч\.?\s*л\.?|чайн\p{L}*\s*ложк\p{L}*|tsp)$/iu, "tsp"],
+  [/^(скл\.?|склянк\p{L}*|стакан\p{L}*|cup)$/iu, "cup"],
+  [/^(пучок|пучк\p{L}*|bunch)$/iu, "bunch"],
+  [/^(жмен\p{L}*|горстк\p{L}*|handful)$/iu, "handful"],
+  [/^(дрібк\p{L}*|щіпк\p{L}*|pinch)$/iu, "pinch"],
+  [/^(за\s+смаком|до\s+смаку|на\s+смак|taste)$/iu, "taste"],
 ];
+
+/** Скільки слів максимум може займати назва одиниці («ст. л.» — два). */
+const MAX_UNIT_WORDS = 2;
+
+/**
+ * Шукає одиницю на початку рядка й повертає її разом із рештою тексту.
+ * Саме «на початку», а не «весь рядок»: у реальних рецептах після одиниці
+ * майже завжди йде уточнення — «400 г консервованого», «300 мл міцної».
+ * Стара версія вимагала точного збігу всього хвоста й через це викидала
+ * такі інгредієнти з підрахунку калорій цілком.
+ */
+function matchUnitPrefix(text: string): { unit: Unit; rest: string } | null {
+  const words = text.split(/\s+/).filter(Boolean);
+  for (let n = Math.min(MAX_UNIT_WORDS, words.length); n >= 1; n--) {
+    const candidate = words.slice(0, n).join(" ");
+    for (const [re, unit] of ALIASES) {
+      if (re.test(candidate)) return { unit, rest: words.slice(n).join(" ") };
+    }
+  }
+  return null;
+}
+
+/**
+ * Зчитує число на початку рядка. Розуміє дроби («1/2»), змішані числа
+ * («1 1/2») і діапазони («2-3») — від діапазону беремо середину, бо це
+ * оцінка, а не рецептура з ваговою точністю.
+ */
+function matchAmountPrefix(text: string): { amount: number; rest: string } | null {
+  const re = /^(\d+(?:[.,]\d+)?)(?:\s+(\d+)\s*\/\s*(\d+)|\s*\/\s*(\d+))?(?:\s*[-–—]\s*(\d+(?:[.,]\d+)?)(?:\s*\/\s*(\d+))?)?/u;
+  const m = text.match(re);
+  if (!m) return null;
+
+  const n = (v: string | undefined) => (v == null ? null : Number(v.replace(",", ".")));
+  const first = n(m[1]);
+  if (first == null || !isFinite(first)) return null;
+
+  let amount = first;
+  const mixedNum = n(m[2]);
+  const mixedDen = n(m[3]);
+  const den = n(m[4]);
+  if (mixedNum != null && mixedDen) amount = first + mixedNum / mixedDen;
+  else if (den) amount = first / den;
+
+  const hiNum = n(m[5]);
+  const hiDen = n(m[6]);
+  if (hiNum != null) {
+    const hi = hiDen ? hiNum / hiDen : hiNum;
+    if (hi > amount) amount = (amount + hi) / 2;
+  }
+
+  if (!isFinite(amount)) return null;
+  return { amount, rest: text.slice(m[0].length).trim() };
+}
 
 /**
  * Витягує число й одиницю зі старого рядка: «200 г» → { amount: 200, unit: 'g' }.
@@ -142,26 +213,34 @@ const ALIASES: Array<[RegExp, Unit]> = [
  */
 export function parseQty(raw: string | undefined): { amount?: number; unit: Unit } | null {
   if (!raw) return null;
-  const text = raw.trim().toLowerCase();
+  const text = raw.trim().toLowerCase().replace(/\s+/gu, " ");
   if (!text) return null;
 
-  for (const [re, unit] of ALIASES) {
-    if (re.test(text)) return { unit };
+  const num = matchAmountPrefix(text);
+
+  // Без числа рядок має сенс, лише якщо він сам — назва міри: «пучок»,
+  // «щіпка», «за смаком». Одна міра без числа означає одну штуку міри.
+  if (!num) {
+    const bare = matchUnitPrefix(text);
+    if (!bare) return null;
+    if (bare.unit === "taste") return { unit: "taste" };
+    // «пучок петрушки» — так, «мл» окремим словом — ні: це залишок розбору.
+    if (unitDef(bare.unit).base === "g" || unitDef(bare.unit).base === "ml") return null;
+    return { amount: 1, unit: bare.unit };
   }
 
-  const match = text.match(/^([\d]+(?:[.,]\d+)?)\s*(.*)$/u);
-  if (!match) return null;
+  const { amount, rest } = num;
+  if (!rest) return { amount, unit: "pcs" };
 
-  const amount = Number(match[1].replace(",", "."));
-  if (!isFinite(amount)) return null;
-
-  const tail = match[2].trim();
-  if (!tail) return { amount, unit: "pcs" };
-
-  for (const [re, unit] of ALIASES) {
-    if (re.test(tail)) return { amount, unit };
+  const matched = matchUnitPrefix(rest);
+  if (matched) {
+    return matched.unit === "taste" ? { unit: "taste" } : { amount, unit: matched.unit };
   }
-  return null;
+
+  // «1/2 червоної», «2 жовтки» — число є, а слово після нього одиницею не є.
+  // Це майже завжди рахунок штук із уточненням, тож рахуємо як штуки:
+  // краще приблизна вага, ніж викинутий з калорій інгредієнт.
+  return { amount, unit: "pcs" };
 }
 
 /** Кількість інгредієнта у придатному для сумування вигляді. */

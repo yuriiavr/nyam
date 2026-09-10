@@ -12,13 +12,26 @@ import { quantityOf, unitDef } from "./units";
  * порахувати: якщо мало — число оманливе.
  */
 
-/** Скільки грамів у ложці, склянці тощо. Усереднено для сипкого й рідкого. */
+/**
+ * Скільки грамів у мірі обʼєму, якщо про продукт нічого не відомо.
+ * Числа для води: склянка — 240 мл, ложка — 15 мл. Для сипкого це
+ * завищення (склянка борошна важить 120 г), тому там, де довідник знає
+ * gramsPerCup, беремо його, а сюди падаємо лише як у запасний варіант.
+ */
 const GRAMS_PER_UNIT: Partial<Record<Unit, number>> = {
   tbsp: 15,
   tsp: 5,
   cup: 240,
   bunch: 30,
+  handful: 30,
   pinch: 0.5,
+};
+
+/** Ложки — частки склянки: 1 скл. = 16 ст. л. = 48 ч. л. */
+const CUP_FRACTION: Partial<Record<Unit, number>> = {
+  cup: 1,
+  tbsp: 1 / 16,
+  tsp: 1 / 48,
 };
 
 /** Переводить кількість інгредієнта у грами. null — перевести не вдалося. */
@@ -39,6 +52,11 @@ export function ingredientGrams(item: RecipeIngredient): number | null {
     const perPiece = ing(item.key).gramsPerPiece;
     return perPiece ? q.amount * perPiece : null;
   }
+
+  // Склянки й ложки — за щільністю конкретного продукту, якщо вона відома.
+  const fraction = CUP_FRACTION[q.unit];
+  const perCup = ing(item.key).gramsPerCup;
+  if (fraction != null && perCup) return q.amount * perCup * fraction;
 
   const grams = GRAMS_PER_UNIT[q.unit];
   return grams ? q.amount * grams : null;
@@ -61,18 +79,22 @@ export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
   const counted: Nutrition = { ...ZERO };
   const skipped: string[] = [];
   let usable = 0;
+  let considered = 0;
 
   for (const item of recipe.ingredients) {
     const def = ing(item.key);
     // Етикетка конкретного товару точніша за довідник по категорії.
     const nut = item.nutrition ?? def.nutrition;
     const grams = ingredientGrams(item);
+    const q = quantityOf(item);
+
+    // «За смаком» і продукти без калорій (сіль, вода) у покриття не входять:
+    // їх неможливо зважити й вони нічого не додають до числа.
+    const negligible = q?.unit === "taste" || (nut != null && nut.kcal === 0);
+    if (!negligible) considered += 1;
 
     if (!nut || grams == null) {
-      // «За смаком» — сіль і спеції — на калорійність не впливають,
-      // тож у пропущені їх не пишемо, щоб не псувати покриття даремно.
-      const q = quantityOf(item);
-      if (q?.unit !== "taste" && !def.staple) skipped.push(item.label ?? def.label);
+      if (!negligible) skipped.push(item.label ?? def.label);
       continue;
     }
 
@@ -81,15 +103,10 @@ export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
     counted.protein += nut.protein * k;
     counted.fat += nut.fat * k;
     counted.carbs += nut.carbs * k;
-    usable += 1;
+    if (!negligible) usable += 1;
   }
 
   if (usable === 0) return null;
-
-  const meaningful = recipe.ingredients.filter((i) => {
-    const q = quantityOf(i);
-    return q?.unit !== "taste" && !ing(i.key).staple;
-  }).length;
 
   const servings = Math.max(1, recipe.servings || 1);
   const total = round(counted);
@@ -102,7 +119,11 @@ export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
       fat: counted.fat / servings,
       carbs: counted.carbs / servings,
     }),
-    coverage: meaningful === 0 ? 1 : Math.min(1, usable / meaningful),
+    // Чисельник і знаменник рахуємо по одному й тому ж набору інгредієнтів.
+    // Раніше в чисельник потрапляли ще й базові продукти, яких у знаменнику
+    // не було, і покриття виходило 100% навіть тоді, коли пів рецепта
+    // не порахувалось — а на цю цифру спирається довіра до всього числа.
+    coverage: considered === 0 ? 1 : Math.min(1, usable / considered),
     skipped,
   };
 }

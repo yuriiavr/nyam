@@ -68,6 +68,37 @@ check("парсинг «1 ст. л.»", units.parseQty("1 ст. л."), { amount:
 check("парсинг «за смаком»", units.parseQty("за смаком"), { unit: "taste" });
 check("сміття не парситься", units.parseQty("трохи"), null);
 
+// Регресія: одиниця з уточненням після неї. Стара версія вимагала, щоб увесь
+// хвіст рядка був назвою одиниці, тож «400 г консервованого» не парсився
+// зовсім — і 400 г нуту просто зникали з калорій хумусу.
+check("уточнення після одиниці не ламає розбір", units.parseQty("400 г консервованого"), { amount: 400, unit: "g" });
+check("«500 г маскарпоне»", units.parseQty("500 г маскарпоне"), { amount: 500, unit: "g" });
+check("«300 мл міцної»", units.parseQty("300 мл міцної"), { amount: 300, unit: "ml" });
+check("«180 мл теплої»", units.parseQty("180 мл теплої"), { amount: 180, unit: "ml" });
+
+// Регресія: \w у регулярці не бачить кирилиці, тож усі відмінкові форми
+// («щіпка», «жменя», «склянки») повз аліаси пролітали.
+check("«щіпка» — це дрібка", units.parseQty("щіпка"), { amount: 1, unit: "pinch" });
+check("«жменя» — це жменя", units.parseQty("жменя"), { amount: 1, unit: "handful" });
+check("«2 склянки»", units.parseQty("2 склянки"), { amount: 2, unit: "cup" });
+check("«3 штуки»", units.parseQty("3 штуки"), { amount: 3, unit: "pcs" });
+check("«пучок» = один пучок", units.parseQty("пучок"), { amount: 1, unit: "bunch" });
+
+// Побутові міри зводяться до штук — вагу однієї знає довідник
+check("«2 зубчики»", units.parseQty("2 зубчики"), { amount: 2, unit: "pcs" });
+check("«2 стейки»", units.parseQty("2 стейки"), { amount: 2, unit: "pcs" });
+check("«2 скибки»", units.parseQty("2 скибки"), { amount: 2, unit: "pcs" });
+
+// Дроби й діапазони
+check("дріб «1/2»", units.parseQty("1/2 червоної"), { amount: 0.5, unit: "pcs" });
+check("змішане «1 1/2 ст. л.»", units.parseQty("1 1/2 ст. л."), { amount: 1.5, unit: "tbsp" });
+check("діапазон «2-3 шт» → середина", units.parseQty("2-3 шт"), { amount: 2.5, unit: "pcs" });
+
+// Далі — не кількості, і вигадувати числа не можна
+check("«для подачі» не кількість", units.parseQty("для подачі"), null);
+check("«багато» не кількість", units.parseQty("багато"), null);
+check("«кріп» не кількість", units.parseQty("кріп"), null);
+
 // Масштабування порцій
 check(
   "200 г ×2 = 400 г",
@@ -113,7 +144,16 @@ console.log("── Калорії ──");
 // Яйця: 60 г × 2 шт = 120 г, 155 ккал/100 г → 186 ккал
 check("2 яйця = 120 г", nutrition.ingredientGrams({ key: "yajtsya", amount: 2, unit: "pcs" }), 120);
 check("0,5 кг = 500 г", nutrition.ingredientGrams({ key: "kurka", amount: 0.5, unit: "kg" }), 500);
-check("1 ст. л. олії = 15 г", nutrition.ingredientGrams({ key: "oliya", amount: 1, unit: "tbsp" }), 15);
+// Ложки й склянки — за щільністю продукту, а не за плоскою таблицею:
+// склянка борошна це 120 г, а не 240, як у води.
+check("1 ст. л. олії = 13,6 г", nutrition.ingredientGrams({ key: "oliya", amount: 1, unit: "tbsp" }), 218 / 16);
+check("1 скл. борошна = 120 г", nutrition.ingredientGrams({ key: "boroshno", amount: 1, unit: "cup" }), 120);
+check("1 ст. л. борошна = 7,5 г", nutrition.ingredientGrams({ key: "boroshno", amount: 1, unit: "tbsp" }), 7.5);
+check("1 скл. цукру = 200 г", nutrition.ingredientGrams({ key: "tsukor", amount: 1, unit: "cup" }), 200);
+// Для продукту без відомої щільності лишається запасне значення по воді
+check("1 скл. невідомого = 240 г", nutrition.ingredientGrams({ key: "kapusta", amount: 1, unit: "cup" }), 240);
+check("2 зубчики часнику = 6 г", nutrition.ingredientGrams({ key: "chasnyk", qty: "2 зубчики" }), 6);
+check("24 савоярді = 288 г", nutrition.ingredientGrams({ key: "savoyardi", qty: "24 шт" }), 288);
 check("«за смаком» не важить", nutrition.ingredientGrams({ key: "sil", unit: "taste" }), null);
 check("150 мл молока без unit = 150 г", nutrition.ingredientGrams({ key: "moloko", amount: 150 }), 150);
 
@@ -151,6 +191,25 @@ check("на порцію", n.perServing.kcal, 345);
 // білки: 31*2 + 7*1 = 69 г всього
 check("білки всього", n.total.protein, 69);
 check("покриття 100% (сіль не рахується)", n.coverage, 1);
+
+// Регресія покриття: раніше базові продукти потрапляли в чисельник, але не
+// в знаменник, і покриття виходило 100% навіть коли інгредієнт випав.
+const halfKnown = {
+  ...recipe,
+  ingredients: [
+    { key: "kurka", amount: 200, unit: "g" },
+    { key: "maslo", amount: 20, unit: "g" },
+    { key: "sil", unit: "taste" },
+    { key: "gorikhy", qty: "для подачі" },
+  ],
+};
+const hk = nutrition.recipeNutrition(halfKnown);
+check("покриття не бреше", hk.coverage, 2 / 3);
+check("непораховане названо", hk.skipped, ["Горіхи"]);
+check("сіль не псує покриття", nutrition.recipeNutrition({
+  ...recipe,
+  ingredients: [{ key: "kurka", amount: 200, unit: "g" }, { key: "sil", amount: 1, unit: "tsp" }],
+}).coverage, 1);
 
 // Денний підсумок
 const today = new Date().toISOString();
