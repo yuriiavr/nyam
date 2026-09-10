@@ -152,5 +152,8 @@ export function mergePantryItem(existing: PantryItem, incoming: PantryItem): Pan
     barcode: existing.barcode ?? incoming.barcode,
     // Строк придатності чек не містить взагалі, тож затирати ним нічого.
     expiresAt: existing.expiresAt ?? incoming.expiresAt,
+    // Ціна, навпаки, оновлюється: цікавить те, скільки продукт коштує
+    // тепер, а не скільки коштував пів року тому.
+    pricePerGram: incoming.pricePerGram ?? existing.pricePerGram,
   };
 }

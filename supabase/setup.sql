@@ -131,6 +131,9 @@ create table if not exists public.pantry_items (
   label          text,
   qty            text,
   barcode        text,
+  -- Скільки коштував грам продукту в останній покупці: з чека відома і сума,
+  -- і кількість, а через грам ціна зводиться з кількостями рецептів.
+  price_per_gram numeric(10, 6),
   added_at       timestamptz not null default now(),
   primary key (user_id, ingredient_key)
 );

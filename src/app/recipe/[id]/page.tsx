@@ -36,6 +36,7 @@ import {
   MEAL_LABEL,
   MOOD_META,
 } from "@/lib/utils";
+import { recipeCost } from "@/lib/cost";
 import { macroShares, recipeNutrition } from "@/lib/nutrition";
 import { ingredientQtyLabel } from "@/lib/units";
 
@@ -355,6 +356,7 @@ export default function RecipePage() {
 
       {/* Харчова цінність */}
       <NutritionCard recipe={recipe} servings={currentServings} />
+      <CostCard recipe={recipe} servings={currentServings} />
 
       {/* Кроки */}
       <section className="px-4 pt-7">
@@ -525,16 +527,25 @@ function NutritionCard({ recipe, servings }: { recipe: Recipe; servings: number 
 
         {/* Смужка розподілу БЖВ за калоріями, а не за грамами:
             грам жиру дає вдвічі більше енергії за грам білка. */}
-        <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-surface-2">
-          <div style={{ width: `${shares.protein * 100}%` }} className="bg-sky" />
-          <div style={{ width: `${shares.fat * 100}%` }} className="bg-brand-2" />
-          <div style={{ width: `${shares.carbs * 100}%` }} className="bg-mint" />
+        <div className="mt-3 flex h-2 gap-[2px] overflow-hidden rounded-full bg-surface-2">
+          <div
+            style={{ width: `${shares.protein * 100}%`, background: "var(--macro-protein)" }}
+            className="rounded-full"
+          />
+          <div
+            style={{ width: `${shares.fat * 100}%`, background: "var(--macro-fat)" }}
+            className="rounded-full"
+          />
+          <div
+            style={{ width: `${shares.carbs * 100}%`, background: "var(--macro-carbs)" }}
+            className="rounded-full"
+          />
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <Macro label="Білки" value={per.protein} tone="text-sky" />
-          <Macro label="Жири" value={per.fat} tone="text-brand-2" />
-          <Macro label="Вуглеводи" value={per.carbs} tone="text-mint" />
+          <Macro label="Білки" value={per.protein} tone="text-macro-protein" />
+          <Macro label="Жири" value={per.fat} tone="text-macro-fat" />
+          <Macro label="Вуглеводи" value={per.carbs} tone="text-macro-carbs" />
         </div>
 
         <p className="mt-3 text-[11px] leading-relaxed text-faint">
@@ -542,6 +553,71 @@ function NutritionCard({ recipe, servings }: { recipe: Recipe; servings: number 
             ? `Оцінка приблизна: пораховано лише ${Math.round(n.coverage * 100)}% складу.`
             : "Оцінка за довідковими даними продуктів — без урахування втрат при готуванні."}
           {n.skipped.length > 0 && ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
+        </p>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * Скільки страва коштує за цінами з твоїх чеків.
+ *
+ * Не «дешево / дорого» з картки рецепта — це рівень, який автор ставив на
+ * око й для чужої кухні він майже нічого не означає. Тут гривні: з чека
+ * відомо, скільки коштував кілограм саме цієї курки саме в тому магазині.
+ *
+ * Показуємо тільки тоді, коли ціни відомі бодай для третини складу, і
+ * завжди пишемо, для якої частки. Число «12 ₴» при відомій чверті складу
+ * гірше за відсутнє: воно виглядає точним.
+ */
+function CostCard({ recipe, servings }: { recipe: Recipe; servings: number }) {
+  const pantry = useApp((s) => s.pantry);
+  const cost = useMemo(() => recipeCost(recipe, pantry), [recipe, pantry]);
+  if (!cost || cost.coverage < 0.34) return null;
+
+  const partial = cost.coverage < 0.95;
+  const perServing = Math.round(cost.perServing);
+  const total = Math.round(cost.perServing * servings);
+
+  return (
+    <section className="px-4 pt-7">
+      <h2 className="mb-3 font-display text-[17px] font-bold">Скільки коштує</h2>
+      <Card className="p-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="font-display text-[30px] font-extrabold leading-none">
+              {partial && <span className="text-[15px] font-bold text-muted">від </span>}
+              {perServing} <span className="text-[15px] font-bold text-muted">₴</span>
+            </p>
+            <p className="mt-1 text-[12px] text-muted">за порцію</p>
+          </div>
+          <p className="text-right text-[11.5px] leading-snug text-faint">
+            {servings} {plural(servings, "порція", "порції", "порцій")} ·{" "}
+            {total} ₴ разом
+          </p>
+        </div>
+
+        {cost.top.length > 0 && (
+          <div className="mt-3 flex flex-col gap-1.5">
+            {cost.top.map((part) => (
+              <div key={part.key} className="flex items-center gap-2 rounded-2xl bg-surface-2 px-3 py-2">
+                <span className="text-base">{ing(part.key).emoji}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+                  {ing(part.key).label}
+                </span>
+                <span className="shrink-0 text-[12.5px] font-bold text-muted">
+                  {part.cost < 10 ? part.cost.toFixed(1) : Math.round(part.cost)} ₴
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="mt-3 text-[11px] leading-relaxed text-faint">
+          За цінами з твоїх чеків.{" "}
+          {partial
+            ? `Ціни відомі для ${Math.round(cost.coverage * 100)}% складу — решту не враховано.`
+            : "Ціни відомі для всього складу."}
         </p>
       </Card>
     </section>

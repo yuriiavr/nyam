@@ -45,6 +45,13 @@ interface RecipeRow {
   rating_count?: number;
 }
 
+/** numeric з postgrest приїжджає рядком — зводимо до числа або нічого. */
+function numberOrUndefined(value: number | string | null): number | undefined {
+  if (value == null) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /** Рядок комори так, як він лежить у базі. */
 interface PantryRow {
   ingredient_key: string;
@@ -55,6 +62,7 @@ interface PantryRow {
   barcode: string | null;
   added_at: string;
   expires_at: string | null;
+  price_per_gram: number | string | null;
 }
 
 /**
@@ -78,6 +86,7 @@ const PANTRY_COLUMNS = {
   barcode: true,
   added_at: true,
   expires_at: true,
+  price_per_gram: true,
 } satisfies Record<keyof PantryRow, true>;
 
 export const PANTRY_SELECT = Object.keys(PANTRY_COLUMNS).join(",");
@@ -303,16 +312,17 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
         // рядковим літералом — вивести форму рядка supabase-js уже не може.
         const row = r as unknown as PantryRow;
         // amount приїжджає з numeric — postgrest віддає його рядком.
-        const amount = row.amount == null ? undefined : Number(row.amount);
+        const amount = numberOrUndefined(row.amount);
         return {
           key: row.ingredient_key,
           label: row.label ?? undefined,
-          amount: Number.isFinite(amount) ? amount : undefined,
+          amount,
           unit: (row.unit as PantryItem["unit"]) ?? undefined,
           qty: row.qty ?? undefined,
           barcode: row.barcode ?? undefined,
           addedAt: row.added_at,
           expiresAt: row.expires_at ?? undefined,
+          pricePerGram: numberOrUndefined(row.price_per_gram),
         };
       }),
     ),
@@ -403,6 +413,7 @@ export async function upsertPantryItem(userId: string, item: PantryItem) {
     barcode: item.barcode ?? null,
     added_at: item.addedAt,
     expires_at: item.expiresAt ?? null,
+    price_per_gram: item.pricePerGram ?? null,
   });
   if (error) throw error;
 }
@@ -427,6 +438,7 @@ export async function upsertPantryItems(userId: string, items: PantryItem[]) {
       barcode: item.barcode ?? null,
       added_at: item.addedAt,
       expires_at: item.expiresAt ?? null,
+      price_per_gram: item.pricePerGram ?? null,
     })),
   );
   if (error) throw error;

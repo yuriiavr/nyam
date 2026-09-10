@@ -29,6 +29,7 @@ import {
 } from "@/components/ui";
 import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
 import { RECEIPT_FORMATS, lookupBarcode, teachBarcode, type ProductInfo } from "@/lib/barcode";
+import { priceFromPurchase } from "@/lib/cost";
 import { fridgeMatches, shoppingSuggestions } from "@/lib/matching";
 import {
   fetchReceipt,
@@ -233,6 +234,13 @@ export default function PantryPage() {
         amount: d.amount,
         unit: d.unit,
         addedAt,
+        /*
+         * Ціну рахуємо з підтвердженої кількості, а не з тієї, що вгадав
+         * розбір: якщо людина виправила «1 шт» на «900 г», ціна грама має
+         * піти за виправленням, інакше страва вийде дорожчою в дев'ять разів.
+         */
+        pricePerGram:
+          priceFromPurchase(d.ingredient!.key, d.amount, d.unit, d.line.sum) ?? undefined,
       }));
 
     if (items.length === 0) {

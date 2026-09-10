@@ -20,6 +20,7 @@ const jiti = createJiti(import.meta.url, {
 const units = await jiti.import(path.join(root, "src/lib/units.ts"));
 const nutrition = await jiti.import(path.join(root, "src/lib/nutrition.ts"));
 const pantry = await jiti.import(path.join(root, "src/lib/pantry.ts"));
+const cost = await jiti.import(path.join(root, "src/lib/cost.ts"));
 
 let pass = 0;
 let fail = 0;
@@ -239,6 +240,35 @@ const afterMidnight = nutrition.dayTotals(
   (id) => (id === "t" ? recipe : undefined),
 );
 check("страва по опівночі — сьогоднішня", afterMidnight.meals, 1);
+
+console.log("── Ціна страви ──");
+
+// Літр молока за 50 грн — це 0,05 грн за грам (мілілітр рахуємо як грам).
+check("ціна з покупки", cost.priceFromPurchase("moloko", 1, "l", 50), 0.05);
+// Кілограм курки за 180 грн.
+check("ціна за кілограм", cost.priceFromPurchase("kurka", 1, "kg", 180), 0.18);
+// Абсурдну ціну краще не показати, ніж показати вигадану.
+check("абсурдна ціна відкидається", cost.priceFromPurchase("kurka", 1, "kg", 500000), null);
+check("без кількості ціни немає", cost.priceFromPurchase("kurka", undefined, "kg", 180), null);
+
+const priced = [
+  { key: "kurka", addedAt: new Date().toISOString(), pricePerGram: 0.18 },
+  { key: "rys", addedAt: new Date().toISOString(), pricePerGram: 0.05 },
+];
+const c = cost.recipeCost(recipe, priced);
+// 200 г курки × 0,18 = 36 грн; 100 г рису × 0,05 = 5 грн; разом 41, порція 20,5.
+check("вартість страви", c.total, 41);
+check("вартість порції", c.perServing, 20.5);
+check("сіль за смаком не псує покриття", c.coverage, 1);
+check("найдорожче — курка", c.top[0].key, "kurka");
+
+// Половина складу без цін — і про це має бути видно з покриття.
+const half = cost.recipeCost(recipe, [priced[0]]);
+check("покриття за половиною цін", half.coverage, 0.5);
+check("рахуємо лише відоме", half.total, 36);
+
+// Порожня комора — числа немає взагалі, а не нуль.
+check("без цін немає числа", cost.recipeCost(recipe, []), null);
 
 console.log("── Списання з комори ──");
 

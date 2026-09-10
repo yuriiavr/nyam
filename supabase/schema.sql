@@ -126,6 +126,9 @@ create table if not exists public.pantry_items (
   -- Старий вільний текст кількості; лишається заради записів до появи одиниць.
   qty            text,
   barcode        text,
+  -- Скільки коштував грам продукту в останній покупці: з чека відома і сума,
+  -- і кількість, а через грам ціна зводиться з кількостями рецептів.
+  price_per_gram numeric(10, 6),
   added_at       timestamptz not null default now(),
   -- Строк придатності. Дата, а не мітка часу: година тут нічого не означає.
   expires_at     date,
