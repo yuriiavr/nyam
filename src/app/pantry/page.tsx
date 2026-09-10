@@ -1,7 +1,16 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ChefHat, Plus, ScanBarcode, Search, Sparkles, Trash2, X } from "lucide-react";
+import {
+  ChefHat,
+  Plus,
+  ScanBarcode,
+  Search,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -55,27 +64,58 @@ export default function PantryPage() {
 
   const pantryKeys = state.pantry.map((p) => p.key);
 
-  /* Те, що псується: спершу прострочене, далі найближче за датою.
-     Показуємо лише коли є про що попереджати. */
+  /*
+   * Прострочене виносимо з категорій у власну групу на самому верху.
+   * Інакше пакет зіпсованого кефіру лежав би десь у «Молочному» між іншими
+   * шістьма продуктами — а це єдине в коморі, на що треба зреагувати сьогодні.
+   */
+  const { expired, groups } = useMemo(() => {
+    const gone: PantryItem[] = [];
+    const map = new Map<IngredientCat, PantryItem[]>();
+
+    for (const item of state.pantry) {
+      if (expiryInfo(item.expiresAt)?.tone === "expired") {
+        gone.push(item);
+        continue;
+      }
+      const cat = ing(item.key).cat;
+      map.set(cat, [...(map.get(cat) ?? []), item]);
+    }
+
+    // Найдавніше прострочене — першим: воно найгірше.
+    gone.sort((a, b) => (expiryInfo(a.expiresAt)?.days ?? 0) - (expiryInfo(b.expiresAt)?.days ?? 0));
+
+    // Всередині категорії наперед виходить те, чий строк ближче.
+    // Продукти без дати йдуть після датованих — про них нема що сказати.
+    for (const [cat, items] of map) {
+      map.set(
+        cat,
+        [...items].sort(
+          (a, b) =>
+            (expiryInfo(a.expiresAt)?.days ?? Infinity) -
+            (expiryInfo(b.expiresAt)?.days ?? Infinity),
+        ),
+      );
+    }
+
+    return {
+      expired: gone,
+      groups: CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const),
+    };
+  }, [state.pantry]);
+
+  /* Ще не зіпсоване, але от-от. Прострочене сюди не потрапляє: воно вже
+     має власну помітну групу, і дублювати його тут нема сенсу. */
   const expiring = useMemo(
     () =>
       state.pantry
         .map((item) => ({ item, exp: expiryInfo(item.expiresAt) }))
-        .filter((x): x is { item: (typeof state.pantry)[number]; exp: NonNullable<ReturnType<typeof expiryInfo>> } =>
-          x.exp !== null && x.exp.days <= 3,
+        .filter((x): x is { item: PantryItem; exp: NonNullable<ReturnType<typeof expiryInfo>> } =>
+          x.exp !== null && x.exp.tone === "soon",
         )
         .sort((a, b) => a.exp.days - b.exp.days),
     [state.pantry],
   );
-
-  const grouped = useMemo(() => {
-    const map = new Map<IngredientCat, typeof state.pantry>();
-    for (const item of state.pantry) {
-      const cat = ing(item.key).cat;
-      map.set(cat, [...(map.get(cat) ?? []), item]);
-    }
-    return CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const);
-  }, [state.pantry]);
 
   const { matchCount, suggestions } = useMemo(() => {
     if (!hydrated || pantryKeys.length === 0) return { matchCount: 0, suggestions: [] };
@@ -234,9 +274,7 @@ export default function PantryPage() {
                 >
                   <span>{ing(item.key).emoji}</span>
                   <span>{ing(item.key).label}</span>
-                  <span className={exp.tone === "expired" ? "text-berry" : "text-brand-2"}>
-                    · {exp.label}
-                  </span>
+                  <span className="text-brand-2">· {exp.label}</span>
                 </button>
               ))}
             </div>
@@ -252,75 +290,44 @@ export default function PantryPage() {
           />
         ) : (
           <div className="flex flex-col gap-5">
-            {grouped.map(([cat, items]) => (
+            {/* Прострочене — понад категоріями: це те, з чим треба щось
+                зробити зараз, а не просто інвентар холодильника. */}
+            {expired.length > 0 && (
+              <div>
+                <h3 className="mb-2.5 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-berry">
+                  <TriangleAlert size={13} />
+                  Прострочене · {expired.length}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <AnimatePresence initial={false}>
+                    {expired.map((item) => (
+                      <PantryChip
+                        key={item.key}
+                        item={item}
+                        onOpen={() => setDetailsFor(item.key)}
+                        onRemove={() => state.removePantry(item.key)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              </div>
+            )}
+
+            {groups.map(([cat, items]) => (
               <div key={cat}>
                 <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">
                   {CAT_LABEL[cat]}
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   <AnimatePresence initial={false}>
-                    {items.map((item) => {
-                      const def = ing(item.key);
-                      const exp = expiryInfo(item.expiresAt);
-                      return (
-                        <motion.div
-                          key={item.key}
-                          layout
-                          initial={{ opacity: 0, scale: 0.85 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.85 }}
-                          className={`inline-flex items-center gap-1.5 rounded-full border py-2 pl-3 pr-2 text-[13px] font-semibold ${
-                            exp?.tone === "expired"
-                              ? "border-berry/50 bg-berry/10"
-                              : exp?.tone === "soon"
-                                ? "border-brand-2/50 bg-brand-2/10"
-                                : "border-line bg-surface"
-                          }`}
-                        >
-                          <button
-                            onClick={() => {
-                              haptic(8);
-                              setDetailsFor(item.key);
-                            }}
-                            className="inline-flex items-center gap-1.5"
-                          >
-                            <span>{def.emoji}</span>
-                            <span>{def.label}</span>
-                            {qtyLabel(item) && (
-                              <span className="text-[11px] font-bold text-brand">
-                                {qtyLabel(item)}
-                              </span>
-                            )}
-                            {exp && (
-                              <span
-                                className={`text-[10px] font-bold ${
-                                  exp.tone === "expired"
-                                    ? "text-berry"
-                                    : exp.tone === "soon"
-                                      ? "text-brand-2"
-                                      : "text-faint"
-                                }`}
-                              >
-                                {exp.label}
-                              </span>
-                            )}
-                            {item.barcode && !exp && (
-                              <span className="text-[9px] text-faint">скан</span>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => {
-                              haptic(10);
-                              state.removePantry(item.key);
-                            }}
-                            aria-label={`Прибрати ${def.label}`}
-                            className="grid h-5 w-5 place-items-center"
-                          >
-                            <X size={13} className="text-faint" />
-                          </button>
-                        </motion.div>
-                      );
-                    })}
+                    {items.map((item) => (
+                      <PantryChip
+                        key={item.key}
+                        item={item}
+                        onOpen={() => setDetailsFor(item.key)}
+                        onRemove={() => state.removePantry(item.key)}
+                      />
+                    ))}
                   </AnimatePresence>
                 </div>
               </div>
@@ -593,6 +600,79 @@ function IngredientPicker({
         </div>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * Продукт у коморі.
+ *
+ * Прострочене — червоним, те, що псується найближчим часом, — бурштиновим.
+ * Колір дублюється підписом («прострочено 2 дн. тому»), бо самим кольором
+ * стан передавати не можна: його не побачить ані дальтонік, ані скрінрідер.
+ */
+function PantryChip({
+  item,
+  onOpen,
+  onRemove,
+}: {
+  item: PantryItem;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
+  const def = ing(item.key);
+  const exp = expiryInfo(item.expiresAt);
+  const qty = qtyLabel(item);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.85 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.85 }}
+      className={`inline-flex items-center gap-1.5 rounded-full border py-2 pl-3 pr-2 text-[13px] font-semibold ${
+        exp?.tone === "expired"
+          ? "border-berry bg-berry/15"
+          : exp?.tone === "soon"
+            ? "border-brand-2/50 bg-brand-2/10"
+            : "border-line bg-surface"
+      }`}
+    >
+      <button
+        onClick={() => {
+          haptic(8);
+          onOpen();
+        }}
+        className="inline-flex items-center gap-1.5"
+      >
+        <span>{def.emoji}</span>
+        <span className={exp?.tone === "expired" ? "text-berry" : undefined}>{def.label}</span>
+        {qty && <span className="text-[11px] font-bold text-brand">{qty}</span>}
+        {exp && (
+          <span
+            className={`text-[10px] font-bold ${
+              exp.tone === "expired"
+                ? "text-berry"
+                : exp.tone === "soon"
+                  ? "text-brand-2"
+                  : "text-faint"
+            }`}
+          >
+            {exp.label}
+          </span>
+        )}
+        {item.barcode && !exp && <span className="text-[9px] text-faint">скан</span>}
+      </button>
+      <button
+        onClick={() => {
+          haptic(10);
+          onRemove();
+        }}
+        aria-label={`Прибрати ${def.label}`}
+        className="grid h-5 w-5 place-items-center"
+      >
+        <X size={13} className="text-faint" />
+      </button>
+    </motion.div>
   );
 }
 
