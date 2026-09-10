@@ -113,5 +113,33 @@ byCat(["en:beverages", "en:alcoholic-beverages", "en:beers"], "pyvo");
 // Конкретніший тег важить більше за загальний
 byCat(["en:groceries", "en:canned-foods", "en:canned-tomatoes"], "pomidory_konserv");
 
+console.log("── Чим готувати ──");
+
+const { cookingNeeds, needsSocket } = await jiti.import(path.join(root, "src/lib/power.ts"));
+
+const dish = (...steps) => ({ steps: steps.map((text) => ({ text })) });
+const needs = (text, field, expected) =>
+  check(`«${text}» → ${field}`, cookingNeeds(dish(text))[field], expected);
+
+needs("Розігрій духовку до 200° і запікай 40 хвилин", "oven", true);
+needs("Обсмаж цибулю на сковороді до золотого", "stove", true);
+needs("Звари макарони в підсоленій воді", "stove", true);
+needs("Пробий нут із тахіні до гладкості", "appliance", true);
+needs("Наріж овочі й заправ олією", "stove", false);
+needs("Наріж овочі й заправ олією", "oven", false);
+
+// Газова плита працює й без світла, духовка — ні: у цьому вся різниця
+// між «світла немає» і «готувати нічим».
+check(
+  "плита не потребує розетки",
+  needsSocket(cookingNeeds(dish("Обсмаж на сковороді"))),
+  false,
+);
+check(
+  "духовка потребує розетки",
+  needsSocket(cookingNeeds(dish("Запікай у духовці"))),
+  true,
+);
+
 console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
 process.exit(fail ? 1 : 0);
