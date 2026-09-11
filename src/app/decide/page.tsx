@@ -49,7 +49,7 @@ const METHODS: Method[] = [
     href: "/decide/duel",
     emoji: "⚔️",
     title: "Дуель страв",
-    note: "Турнір на вибування",
+    note: "Переможець лишається, поки не програє",
     accent: "#a78bfa",
   },
   {
