@@ -28,7 +28,13 @@ import {
   useToast,
 } from "@/components/ui";
 import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
-import { RECEIPT_FORMATS, lookupBarcode, teachBarcode, type ProductInfo } from "@/lib/barcode";
+import {
+  RECEIPT_FORMATS,
+  lookupBarcode,
+  teachBarcode,
+  teachReceiptCode,
+  type ProductInfo,
+} from "@/lib/barcode";
 import { priceFromPurchase } from "@/lib/cost";
 import { fridgeMatches, shoppingSuggestions } from "@/lib/matching";
 import {
@@ -599,6 +605,15 @@ export default function PantryPage() {
             unit: quantity?.unit,
           });
           setChosen((prev) => new Set(prev).add(draft.id));
+
+          /*
+           * Підказуємо довіднику спільноти — так само, як це давно робить
+           * сканер штрихкодів. Людина щойно тримала товар у руках і сказала,
+           * що це таке; наступного разу вгадувати вже не доведеться ані їй,
+           * ані будь-кому іншому. Мовчки: це побічний ефект вибору.
+           */
+          const code = lookupableBarcode(draft.line.code);
+          if (code) void teachReceiptCode(code, draft.line.name, def.key);
         }}
       />
 
@@ -1159,8 +1174,15 @@ function ItemSheet({
 
         <div className="mt-5 h-px bg-line" />
 
+        {/*
+          Обіцяти тут можна лише те, що застосунок справді робить. Сповіщень
+          він не шле — ані пуш, ані бейдж не написані. Зате продукт із
+          близьким строком підіймається вгору списку, а «Врятувати продукт»
+          збирає з нього страви. Про це й пишемо.
+        */}
         <p className="mt-4 text-[13px] leading-relaxed text-muted">
-          До якого числа це ще їстівне? Застосунок нагадає, коли строк добігатиме кінця.
+          До якого числа це ще їстівне? Продукт із близьким строком підніметься вгору
+          комори, а «Врятувати продукт» покаже, що з нього приготувати.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">

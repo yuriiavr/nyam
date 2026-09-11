@@ -68,6 +68,25 @@ export async function teachBarcode(
   }
 }
 
+/**
+ * Те саме, але для рядка чека.
+ *
+ * Окремий вхід, бо в чеку немає ані бренду, ані фото — лише код товару й
+ * касова назва. Зате підказка звідти нічим не гірша: людина щойно тримала
+ * цей товар у руках і сама сказала, що це таке.
+ */
+export async function teachReceiptCode(
+  barcode: string,
+  name: string,
+  ingredientKey: string,
+): Promise<void> {
+  try {
+    await cacheBarcode({ barcode, name, ingredientKey });
+  } catch {
+    /* довідник спільноти — приємний бонус, а не умова роботи */
+  }
+}
+
 async function lookupInOpenFoodFacts(barcode: string): Promise<ProductInfo> {
   const fallback: ProductInfo = {
     barcode,
