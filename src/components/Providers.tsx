@@ -22,15 +22,43 @@ function useServiceWorker() {
   }, []);
 }
 
-/** Синхронізує вибрану тему з атрибутом на <html>. */
+/**
+ * Синхронізує вибрану тему з атрибутом на <html> і кольором смуги браузера.
+ *
+ * Колір смуги задаємо одним тегом без media-запиту — і саме тому його не
+ * можна лишати списком у viewport. Зі списком Next малює два теги, по одному
+ * на системну тему, а браузер обирає з них сам. Виходило так: у застосунку
+ * темна тема, у телефоні світла — і смуга вгорі малювалась кремовою поверх
+ * майже чорної сторінки. Тема тут наша, а не системна, тож і колір має бути
+ * один, наш.
+ */
 function useTheme() {
   const theme = useApp((s) => s.theme);
   const hydrated = useApp((s) => s.hydrated);
   useEffect(() => {
     if (!hydrated) return;
     document.documentElement.dataset.theme = theme;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    meta?.setAttribute("content", theme === "light" ? "#fff8f3" : "#0d0a09");
+
+    const color = theme === "light" ? "#fff8f3" : "#0d0a09";
+    const metas = document.querySelectorAll('meta[name="theme-color"]');
+
+    // Зайві теги з попередніх версій розмітки прибираємо: поки вони є,
+    // браузер має з чого вибирати, і вибирає не те.
+    metas.forEach((meta, i) => {
+      if (i > 0) {
+        meta.remove();
+        return;
+      }
+      meta.removeAttribute("media");
+      meta.setAttribute("content", color);
+    });
+
+    if (metas.length === 0) {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.content = color;
+      document.head.appendChild(meta);
+    }
   }, [theme, hydrated]);
 }
 

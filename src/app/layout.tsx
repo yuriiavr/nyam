@@ -45,10 +45,13 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0d0a09" },
-    { media: "(prefers-color-scheme: light)", color: "#fff8f3" },
-  ],
+  /*
+   * Один колір, без media-запитів. Тема в застосунку своя й лежить у
+   * налаштуваннях, а не береться із системної, тож список тут давав браузеру
+   * вибір, якого не мало бути: у темному застосунку на світлому телефоні
+   * смуга вгорі малювалась кремовою. Далі колір міняє Providers разом з темою.
+   */
+  themeColor: "#0d0a09",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

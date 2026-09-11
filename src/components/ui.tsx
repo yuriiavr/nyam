@@ -201,9 +201,24 @@ function useKeyboardInset(active: boolean): number {
     update();
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
+
+    /*
+     * Клавіатура виїжджає з анімацією, і останній resize інколи приходить ще
+     * до її кінця — тоді висота лишається поміряна на півдорозі. Тому після
+     * кожного фокуса в полі переміряємо ще раз, коли рух завершився.
+     */
+    let timer = 0;
+    const remeasure = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(update, 300);
+    };
+    document.addEventListener("focusin", remeasure);
+
     return () => {
+      window.clearTimeout(timer);
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      document.removeEventListener("focusin", remeasure);
     };
   }, [active]);
 
@@ -225,14 +240,45 @@ export function Sheet({
   footer?: ReactNode;
   maxHeight?: string;
 }) {
+  /*
+   * Сторінку під аркушем тримаємо нерухомо жорстко: не `overflow: hidden`, а
+   * `position: fixed` зі збереженою прокруткою.
+   *
+   * На iOS самого overflow замало. Коли клавіатуру ховаєш і знову викликаєш,
+   * Safari прокручує сторінку сам, щоб показати поле, — а аркуш позиціонований
+   * fixed, тобто відносно сторінки. Вона їде, і поле пошуку разом із нею
+   * відлітає вгору. Прибити сторінку на місці дешевше, ніж потім вираховувати
+   * цей зсув: коли прокручуватись нічому, з'їжджати теж нема чому.
+   */
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+
+    const body = document.body;
+    const kept = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+    };
+    const scrollY = window.scrollY;
+
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
+
     return () => {
-      document.body.style.overflow = prev;
+      Object.assign(body.style, kept);
+      // Повертаємо точно туди, де були: інакше закриття аркуша щоразу
+      // викидало б на початок стрічки.
+      window.scrollTo(0, scrollY);
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);

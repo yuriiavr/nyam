@@ -48,8 +48,13 @@ export default function HomePage() {
 
   return (
     <div className="pb-6">
-      {/* Шапка */}
-      <header className="pad-safe-t px-4 pt-3">
+      {/*
+        Шапка прикріплена до верху, як і TopBar на решті сторінок.
+        Вона єдина в застосунку горталася разом зі сторінкою, і на айфонах з
+        островом це виглядало зламано: вміст з'їжджав під виріз без нічого за
+        собою. Тепер за нею glass, а pad-safe-t тримає вміст нижче вирізу.
+      */}
+      <header className="pad-safe-t glass sticky top-0 z-30 border-b border-line px-4 pt-3 pb-3">
         <div className="flex items-center gap-3">
           <Link href="/me" className="shrink-0">
             <Avatar
