@@ -379,7 +379,12 @@ create policy "recipe images update own" on storage.objects
 -- а не від імені власника в'юхи. Без цього приватні рецепти протікали б.
 alter view public.recipe_stats set (security_invoker = on);
 
-create or replace view public.recipes_with_stats
+-- Саме drop + create, а не replace: заміна вимагає, щоб колонки лишались на
+-- тих самих місцях, а нова колонка в recipes вклинюється всередину переліку.
+-- Через це повторний запуск цього файлу на вже наявній базі падав.
+drop view if exists public.recipes_with_stats;
+
+create view public.recipes_with_stats
 with (security_invoker = on) as
 select
   r.*,
