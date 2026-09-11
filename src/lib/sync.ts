@@ -219,8 +219,13 @@ export function pushRecipe(recipe: Recipe, onImageUploaded?: (url: string) => vo
         toSave = { ...recipe, image: url };
         onImageUploaded?.(url);
       } catch (error) {
-        // Фото не критичне — рецепт усе одно має зберегтися.
-        report(error, "завантаження фото");
+        /*
+         * Фото не критичне — рецепт усе одно має зберегтися. Але мовчати про
+         * це не можна: інакше знімок просто зникає, і виглядає це як втрата
+         * даних без пояснення.
+         */
+        console.warn("[sync] фото рецепта не завантажилось", error);
+        listeners.forEach((fn) => fn("Фото не завантажилось — рецепт збережено без нього"));
         toSave = { ...recipe, image: null };
       }
     }

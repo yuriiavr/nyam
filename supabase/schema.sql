@@ -342,6 +342,7 @@ on conflict (id) do update set public = true;
 
 drop policy if exists "recipe images readable"   on storage.objects;
 drop policy if exists "recipe images insert own" on storage.objects;
+drop policy if exists "recipe images update own" on storage.objects;
 drop policy if exists "recipe images delete own" on storage.objects;
 
 create policy "recipe images readable" on storage.objects
@@ -356,6 +357,20 @@ create policy "recipe images insert own" on storage.objects
 
 create policy "recipe images delete own" on storage.objects
   for delete using (
+    bucket_id = 'recipe-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Заміна фото в наявному рецепті — це UPDATE, а не INSERT: шлях той самий
+-- (recipe-images/<user_id>/<recipe_id>.jpg), і клієнт вантажить з upsert.
+-- Без цієї політики перше фото зберігалось, а кожне наступне мовчки зникало.
+create policy "recipe images update own" on storage.objects
+  for update
+  using (
+    bucket_id = 'recipe-images'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  )
+  with check (
     bucket_id = 'recipe-images'
     and auth.uid()::text = (storage.foldername(name))[1]
   );

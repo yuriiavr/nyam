@@ -1024,6 +1024,9 @@ function IngredientPicker({
                     key={def.key}
                     onClick={() => {
                       onPick(def);
+                      // Рядок пошуку скидаємо разом із вибором: продукт уже
+                      // додано, і наступного разу аркуш має відкритись чистим.
+                      setQ("");
                       onClose();
                     }}
                     className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"

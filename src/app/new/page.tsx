@@ -34,8 +34,22 @@ import { COURSE_LABEL, COURSE_ORDER, courseOf } from "@/lib/pairing";
 import { compressImage, haptic, MEAL_LABEL, MOOD_META, newId } from "@/lib/utils";
 
 const EMOJIS = [
-  "🍲", "🍝", "🍜", "🥗", "🍕", "🍔", "🌮", "🍣", "🥘", "🍛",
-  "🥞", "🍳", "🥟", "🍚", "🍰", "🥧", "🍪", "🥤", "🫕", "🥙",
+  // Гаряче й основне
+  "🍲", "🍝", "🍜", "🍛", "🥘", "🫕", "🍚", "🥣", "🍢", "🍥",
+  // Мʼясо й риба
+  "🥩", "🍗", "🍖", "🥓", "🌭", "🍤", "🦐", "🐟", "🦑", "🦞",
+  // Тісто й вулична їжа
+  "🍕", "🍔", "🌮", "🌯", "🥙", "🥪", "🌭", "🥟", "🫓", "🥐",
+  // Сніданки
+  "🍳", "🥞", "🧇", "🥚", "🧀", "🥯", "🍞", "🥖", "🫓", "🥛",
+  // Овочі, салати, зелень
+  "🥗", "🥦", "🥕", "🌽", "🍅", "🥒", "🫑", "🍆", "🥔", "🧄",
+  // Фрукти й ягоди
+  "🍎", "🍌", "🍓", "🍇", "🍋", "🍑", "🍐", "🥝", "🍉", "🥑",
+  // Солодке
+  "🍰", "🧁", "🥧", "🍪", "🍫", "🍩", "🍮", "🍦", "🍯", "🥮",
+  // Напої
+  "🍵", "☕", "🥤", "🧃", "🍷", "🍺", "🥂", "🧋", "🫖", "🍹",
 ];
 
 const GRADIENTS: Array<[string, string]> = [
@@ -284,11 +298,15 @@ function RecipeForm() {
             )}
           </div>
         </div>
+        {/*
+          Без `capture`: саме цей атрибут змушував телефон одразу відкривати
+          камеру, і зняти фото було єдиним способом. Тепер система пропонує
+          вибір — галерея, камера або файл.
+        */}
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
-          capture="environment"
           hidden
           onChange={(e) => pickImage(e.target.files?.[0])}
         />
@@ -842,7 +860,13 @@ function IngredientPicker({
                 {items.map((def) => (
                   <button
                     key={def.key}
-                    onClick={() => onPick(def.key)}
+                    onClick={() => {
+                      onPick(def.key);
+                      // Продукт уже в списку — рядок пошуку більше не потрібен,
+                      // а з ним наступний продукт довелось би шукати крізь
+                      // залишки попереднього запиту.
+                      onQueryChange("");
+                    }}
                     className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 px-3 text-[13px] font-semibold active:bg-surface-2"
                   >
                     <span>{def.emoji}</span>
