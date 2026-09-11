@@ -155,6 +155,46 @@ function mergePantry(local: PantryItem[], remote: PantryItem[]): PantryItem[] {
   return [...unsaved, ...remote.filter((p) => !keys.has(p.key))];
 }
 
+/**
+ * Оптимістично підправляє лічильники в локальній копії рецепта.
+ *
+ * Лічильники приходять із вʼюхи бази, тобто відображають стан на момент
+ * читання. Лайк пишеться окремим рядком у таблицю, і поки той рядок не
+ * перечитають, число на картці лишається старим: серце зафарбовується, а «0
+ * лайків» так і висить. Тому одразу правимо локальну копію, а наступне
+ * читання з бази просто замінить її правдою.
+ *
+ * Лише коли база справді працює: у демо-режимі поправку на себе робить
+ * effectiveStats, і друга поправка тут дала б подвійний рахунок.
+ */
+function bumpStats(
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
+  id: string,
+  delta: Partial<RecipeStats>,
+) {
+  const state = get();
+  if (!state.remoteReady) return;
+
+  const patch = (list: Recipe[]) =>
+    list.map((r) =>
+      r.id === id
+        ? {
+            ...r,
+            stats: {
+              likes: Math.max(0, r.stats.likes + (delta.likes ?? 0)),
+              saves: Math.max(0, r.stats.saves + (delta.saves ?? 0)),
+              cooks: Math.max(0, r.stats.cooks + (delta.cooks ?? 0)),
+              ratingSum: Math.max(0, r.stats.ratingSum + (delta.ratingSum ?? 0)),
+              ratingCount: Math.max(0, r.stats.ratingCount + (delta.ratingCount ?? 0)),
+            },
+          }
+        : r,
+    );
+
+  set({ remoteRecipes: patch(state.remoteRecipes), myRecipes: patch(state.myRecipes) });
+}
+
 export const useApp = create<AppState>()(
   persist(
     (set, get) => ({
@@ -251,14 +291,18 @@ export const useApp = create<AppState>()(
 
       toggleLike: (id) => {
         const next = toggleIn(get().likes, id);
+        const on = next.includes(id);
         set({ likes: next });
-        sync.pushLike(id, next.includes(id));
+        bumpStats(set, get, id, { likes: on ? 1 : -1 });
+        sync.pushLike(id, on);
       },
 
       toggleSave: (id) => {
         const next = toggleIn(get().saved, id);
+        const on = next.includes(id);
         set({ saved: next });
-        sync.pushSave(id, next.includes(id));
+        bumpStats(set, get, id, { saves: on ? 1 : -1 });
+        sync.pushSave(id, on);
       },
 
       toggleFollow: (id) => {
@@ -292,7 +336,14 @@ export const useApp = create<AppState>()(
       },
 
       rate: (id, stars) => {
+        // Оцінка не додається, а замінюється: якщо вже ставили, у сумі
+        // міняється лише різниця, а кількість оцінок лишається тією самою.
+        const previous = get().ratings[id];
         set({ ratings: { ...get().ratings, [id]: stars } });
+        bumpStats(set, get, id, {
+          ratingSum: stars - (previous ?? 0),
+          ratingCount: previous ? 0 : 1,
+        });
         sync.pushRating(id, stars);
       },
 
@@ -332,6 +383,7 @@ export const useApp = create<AppState>()(
           cooked: [{ recipeId: id, at }, ...get().cooked].slice(0, 400),
           wishlist: get().wishlist.filter((x) => x !== id),
         });
+        bumpStats(set, get, id, { cooks: 1 });
         sync.pushCook(id, at);
         if (wasWished) sync.pushWish(id, false);
       },
