@@ -6,7 +6,6 @@ import {
   ChefHat,
   ChevronLeft,
   Clock,
-  Copy,
   Flame,
   Heart,
   Minus,
@@ -247,22 +246,10 @@ export default function RecipePage() {
             <Star size={17} className={myRating ? "fill-brand-2 text-brand-2" : ""} />
             {myRating ? `Твоя оцінка ${myRating}` : "Оцінити"}
           </Button>
-          {!isMine && (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const id = state.forkRecipe(recipe);
-                toast("Рецепт у твоїй галереї — можна редагувати", "📗");
-                router.push(`/recipe/${id}`);
-              }}
-              aria-label="Скопіювати собі"
-              className="w-12 px-0"
-            >
-              <Copy size={17} />
-            </Button>
-          )}
         </div>
 
+        {/* Копіювати рецепти більше не можна: чужий рецепт зберігають, а не
+            розмножують. Підпис лишається заради копій, зроблених раніше. */}
         {recipe.sourceId && (
           <p className="mt-2.5 text-[12px] text-muted">
             Копія рецепта{" "}

@@ -123,19 +123,10 @@ export interface AppState {
   addRecipe: (r: Recipe) => void;
   updateRecipe: (id: string, patch: Partial<Recipe>) => void;
   deleteRecipe: (id: string) => void;
-  forkRecipe: (source: Recipe) => string;
 
   setPlanSlot: (day: string, slot: PlanSlot, recipeId: string | null) => void;
   clearPlan: () => void;
 }
-
-const emptyStats: RecipeStats = {
-  likes: 0,
-  saves: 0,
-  cooks: 0,
-  ratingSum: 0,
-  ratingCount: 0,
-};
 
 const toggleIn = (arr: string[], id: string) =>
   arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
@@ -484,22 +475,6 @@ export const useApp = create<AppState>()(
           plan,
         });
         sync.pushRecipeDelete(id);
-      },
-
-      forkRecipe: (source) => {
-        const id = newId();
-        const copy: Recipe = {
-          ...structuredClone(source),
-          id,
-          authorId: get().profile.id,
-          sourceId: source.sourceId ?? source.id,
-          createdAt: new Date().toISOString(),
-          stats: { ...emptyStats },
-          mine: true,
-        };
-        set({ myRecipes: [copy, ...get().myRecipes] });
-        sync.pushRecipe(copy);
-        return id;
       },
 
       setPlanSlot: (day, slot, recipeId) => {
