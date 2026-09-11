@@ -50,21 +50,38 @@ export function parseReceiptQr(raw: string): ReceiptQuery | null {
   const at = text.indexOf("?");
   const params = new URLSearchParams(at >= 0 ? text.slice(at + 1) : text);
 
-  const fn = params.get("fn")?.trim() ?? "";
-  const id = params.get("id")?.trim() ?? "";
-  const date = params.get("date")?.trim() ?? "";
-  const rawTime = params.get("time")?.trim() ?? "";
-  const rawSum = params.get("sm")?.trim().replace(",", ".") ?? "";
+  /*
+   * Назви параметрів беремо без огляду на регістр: Положення закріплює
+   * формат, але не те, якими літерами його друкують, і каси пишуть і «fn», і
+   * «FN». Через це чек із великими літерами мовчки не розпізнавався взагалі.
+   */
+  const field = (name: string): string => {
+    for (const [key, value] of params) {
+      if (key.trim().toLowerCase() === name) return value.trim();
+    }
+    return "";
+  };
+
+  const fn = digits(field("fn"));
+  const id = field("id").replace(/\s+/g, "");
+  // Дату й час подекуди друкують із роздільниками: «2026-04-29», «22:20:06».
+  const date = digits(field("date"));
+  const time = digits(field("time"));
+  const sum = field("sm").replace(",", ".");
 
   if (!/^\d{6,20}$/.test(fn)) return null;
-  if (!/^\d{1,20}$/.test(id)) return null;
+  // Номер документа майже завжди числовий, але трапляються й літери.
+  if (!/^[A-Za-z0-9-]{1,32}$/.test(id)) return null;
   if (!/^\d{8}$/.test(date)) return null;
-  if (!/^\d{4,6}$/.test(rawTime)) return null;
-  if (!/^\d{1,9}\.\d{1,2}$|^\d{1,9}$/.test(rawSum)) return null;
+  if (!/^\d{4,6}$/.test(time)) return null;
+  if (!/^\d{1,9}(\.\d{1,2})?$/.test(sum)) return null;
 
   // Секунди в QR є не завжди — податкова толерантна до них, але не до хвилини.
-  return { fn, id, date, time: rawTime.padEnd(6, "0"), sm: rawSum };
+  return { fn, id, date, time: time.padEnd(6, "0"), sm: sum };
 }
+
+/** Лишає самі цифри: роздільники в даті й часі формату не псують. */
+const digits = (value: string): string => value.replace(/\D+/g, "");
 
 /** «20260429» + «222006» → «2026-04-29 22:20:06», як того чекає податкова. */
 export function receiptDateTime(query: ReceiptQuery): string {

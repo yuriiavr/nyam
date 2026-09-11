@@ -88,6 +88,10 @@ export default function PantryPage() {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   /** Рядок чека, для якого зараз обирають продукт вручну. */
   const [pickForLine, setPickForLine] = useState<string | null>(null);
+  /** Невдача читання чека разом із тим, що саме прочиталось із QR. */
+  const [receiptError, setReceiptError] = useState<{ message: string; scanned: string } | null>(
+    null,
+  );
 
   const pantryKeys = state.pantry.map((p) => p.key);
 
@@ -189,9 +193,18 @@ export default function PantryPage() {
   const handleReceipt = async (raw: string) => {
     setReceiptOpen(false);
 
+    /*
+     * Про невдачу повідомляємо аркушем, а не тостом. Тост тут з'являвся
+     * рівно тоді, коли на весь екран згасав сканер, і його просто не
+     * помічали: виглядало так, ніби QR прочитано, а далі нічого не сталось.
+     * Аркуш заразом показує, що саме зчиталось, — з цим уже можна щось робити.
+     */
     const query = parseReceiptQr(raw);
     if (!query) {
-      toast("Це не схоже на фіскальний чек", "🤔");
+      setReceiptError({
+        message: "Це не схоже на фіскальний чек. QR прочитано, але в ньому немає полів чека.",
+        scanned: raw,
+      });
       return;
     }
 
@@ -199,7 +212,7 @@ export default function PantryPage() {
     const result = await fetchReceipt(query);
     if (!result.ok) {
       setReceiptBusy(false);
-      toast(RECEIPT_FAILURE[result.reason], "😕");
+      setReceiptError({ message: RECEIPT_FAILURE[result.reason], scanned: raw });
       return;
     }
 
@@ -543,6 +556,41 @@ export default function PantryPage() {
             Питаю податкову, що саме було в цьому чеку…
           </p>
         </div>
+      </Sheet>
+
+      {/* Не вдалося прочитати чек */}
+      <Sheet
+        open={!!receiptError}
+        onClose={() => setReceiptError(null)}
+        title="Чек не прочитався"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setReceiptError(null)}>
+              Закрити
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => {
+                setReceiptError(null);
+                setReceiptOpen(true);
+              }}
+            >
+              Сканувати ще
+            </Button>
+          </div>
+        }
+      >
+        {receiptError && (
+          <div className="pb-2">
+            <p className="text-[14px] leading-relaxed">{receiptError.message}</p>
+            <p className="mt-3 text-[11.5px] font-bold uppercase tracking-wide text-muted">
+              Що зчиталося з коду
+            </p>
+            <p className="mt-1.5 break-all rounded-2xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-muted">
+              {receiptError.scanned.slice(0, 300) || "— порожньо —"}
+            </p>
+          </div>
+        )}
       </Sheet>
 
       {/* Позиції чека */}
