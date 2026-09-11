@@ -22,15 +22,16 @@ import { expiryInfo, formatMinutes, plural } from "@/lib/utils";
  * найбільше й найтерміновіше.
  */
 export default function RescuePage() {
-  const state = useApp();
   const hydrated = useApp((s) => s.hydrated);
+  const pantry = useApp((s) => s.pantry);
+  const myRecipes = useApp((s) => s.myRecipes);
 
   const { matches, expiring, expired } = useMemo(() => {
     if (!hydrated) return { matches: [], expiring: [], expired: [] };
 
     const soon: PantryItem[] = [];
     const gone: PantryItem[] = [];
-    for (const item of state.pantry) {
+    for (const item of pantry) {
       const exp = expiryInfo(item.expiresAt);
       if (!exp) continue;
       if (exp.tone === "expired") gone.push(item);
@@ -39,12 +40,12 @@ export default function RescuePage() {
     soon.sort((a, b) => (expiryInfo(a.expiresAt)?.days ?? 0) - (expiryInfo(b.expiresAt)?.days ?? 0));
 
     return {
-      matches: rescueMatches(allRecipes(state), state.pantry),
+      matches: rescueMatches(allRecipes(useApp.getState()), pantry),
       expiring: soon,
       expired: gone,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.pantry, state.myRecipes]);
+  }, [hydrated, pantry, myRecipes]);
 
   if (hydrated && expiring.length === 0) {
     return (
@@ -54,7 +55,7 @@ export default function RescuePage() {
           emoji="🌿"
           title="Нічого не горить"
           note={
-            state.pantry.some((p) => p.expiresAt)
+            pantry.some((p) => p.expiresAt)
               ? "Жоден продукт не псується найближчими днями. Заходь, коли строк почне спливати."
               : "Тут з'являться страви для продуктів, чий строк спливає. Щоб це працювало, вкажи дати на картках продуктів у коморі."
           }

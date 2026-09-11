@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useMemo } from "react";
 import { Bookmark, Clock, Flame, Heart, Star, Users } from "lucide-react";
 import { useApp, effectiveStats, profileById } from "@/lib/store";
 import type { Recipe } from "@/lib/types";
@@ -62,11 +63,33 @@ export function RecipeMedia({
 /* ── Велика картка стрічки ────────────────────────────────────────────── */
 
 export function FeedCard({ recipe }: { recipe: Recipe }) {
-  const state = useApp();
-  const author = profileById(state, recipe.authorId);
-  const stats = effectiveStats(state, recipe);
-  const liked = state.likes.includes(recipe.id);
-  const saved = state.saved.includes(recipe.id);
+  /*
+   * Картка малюється списками по десятку за раз, тож підписка тут коштує
+   * найдорожче: з `useApp()` кожна картка стрічки перемальовувалась від
+   * будь-якої зміни в застосунку — від кількості солі в коморі теж.
+   */
+  const likes = useApp((s) => s.likes);
+  const saves = useApp((s) => s.saved);
+  const cooked = useApp((s) => s.cooked);
+  const ratings = useApp((s) => s.ratings);
+  const remoteProfiles = useApp((s) => s.remoteProfiles);
+  const toggleLike = useApp((s) => s.toggleLike);
+  const toggleSave = useApp((s) => s.toggleSave);
+
+  // У локальному режимі лічильники враховують власні дії, тож перелічуємо їх
+  // при кожній зміні того, що туди входить.
+  const stats = useMemo(
+    () => effectiveStats(useApp.getState(), recipe),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recipe, likes, saves, cooked, ratings],
+  );
+  const author = useMemo(
+    () => profileById(useApp.getState(), recipe.authorId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recipe.authorId, remoteProfiles],
+  );
+  const liked = likes.includes(recipe.id);
+  const saved = saves.includes(recipe.id);
   const rating = avgRating({ ...recipe, stats });
 
   return (
@@ -112,7 +135,7 @@ export function FeedCard({ recipe }: { recipe: Recipe }) {
           activeClass="text-berry"
           onClick={() => {
             haptic(14);
-            state.toggleLike(recipe.id);
+            toggleLike(recipe.id);
           }}
           icon={<Heart size={18} className={liked ? "fill-current" : ""} />}
           label={compactNumber(stats.likes)}
@@ -122,7 +145,7 @@ export function FeedCard({ recipe }: { recipe: Recipe }) {
           activeClass="text-brand"
           onClick={() => {
             haptic(14);
-            state.toggleSave(recipe.id);
+            toggleSave(recipe.id);
           }}
           icon={<Bookmark size={18} className={saved ? "fill-current" : ""} />}
           label={compactNumber(stats.saves)}
@@ -176,8 +199,15 @@ function ActionButton({
 /* ── Плитка для сітки ─────────────────────────────────────────────────── */
 
 export function RecipeTile({ recipe, badge }: { recipe: Recipe; badge?: React.ReactNode }) {
-  const state = useApp();
-  const stats = effectiveStats(state, recipe);
+  // Лічильники живуть у самому рецепті; підписка потрібна лише щоб плитка
+  // перемалювалась, коли вони змінились.
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const stats = useMemo(
+    () => effectiveStats(useApp.getState(), recipe),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recipe, remoteRecipes, myRecipes],
+  );
   const rating = avgRating({ ...recipe, stats });
 
   return (

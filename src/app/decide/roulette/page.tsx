@@ -31,7 +31,17 @@ function segmentPath(i: number) {
 }
 
 export default function RoulettePage() {
-  const state = useApp();
+  /*
+   * Читаємо саме те, від чого залежить вибірка. Підписка на весь стор
+   * перемальовувала б сторінку від будь-якої зміни — хоч від кількості солі
+   * в коморі, хоч від чужого лайка, що прилетів через realtime.
+   */
+  const myRecipes = useApp((s) => s.myRecipes);
+  const saved = useApp((s) => s.saved);
+  const wishlist = useApp((s) => s.wishlist);
+  const following = useApp((s) => s.following);
+  const cooked = useApp((s) => s.cooked);
+  const toggleWish = useApp((s) => s.toggleWish);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -43,9 +53,9 @@ export default function RoulettePage() {
   const [winner, setWinner] = useState<Recipe | null>(null);
 
   const pool = useMemo(
-    () => (hydrated ? applyFilters(state, filters) : []),
+    () => (hydrated ? applyFilters(useApp.getState(), filters) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, filters, state.myRecipes, state.saved, state.wishlist, state.following, state.cooked],
+    [hydrated, filters, myRecipes, saved, wishlist, following, cooked],
   );
 
   const reshuffle = useCallback(() => {
@@ -247,7 +257,7 @@ export default function RoulettePage() {
                   variant="secondary"
                   className="flex-1"
                   onClick={() => {
-                    state.toggleWish(winner.id);
+                    toggleWish(winner.id);
                     toast("Додано в «хочу приготувати»", "📌");
                   }}
                 >

@@ -64,12 +64,13 @@ export function FilterSheet({
   onChange: (f: Filters) => void;
   resultCount?: number;
 }) {
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
 
   const cuisines = useMemo(() => {
-    const set = new Set(allRecipes(state).map((r) => r.cuisine));
+    const set = new Set(allRecipes(useApp.getState()).map((r) => r.cuisine));
     return [...set].sort();
-  }, [state]);
+  }, [myRecipes, remoteRecipes]);
 
   const toggle = <T,>(arr: T[], v: T): T[] =>
     arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];

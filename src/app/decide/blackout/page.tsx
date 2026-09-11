@@ -29,8 +29,9 @@ const MODE_NOTE: Record<PowerMode, string> = {
 };
 
 export default function BlackoutPage() {
-  const state = useApp();
   const hydrated = useApp((s) => s.hydrated);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
 
   const [mode, setMode] = useState<PowerMode>("window");
   const [minutes, setMinutes] = useState<number | null>(60);
@@ -38,12 +39,12 @@ export default function BlackoutPage() {
   const matches = useMemo(() => {
     if (!hydrated) return [];
     // Без вогню час не обмежуємо: там «готування» це нарізати й змішати.
-    return powerMatches(allRecipes(state), {
+    return powerMatches(allRecipes(useApp.getState()), {
       mode,
       minutes: mode === "cold" ? null : minutes,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, mode, minutes, state.myRecipes, state.remoteRecipes]);
+  }, [hydrated, mode, minutes, myRecipes, remoteRecipes]);
 
   return (
     <div className="pb-8">

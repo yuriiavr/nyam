@@ -19,16 +19,22 @@ type Sort = "trending" | "popular" | "new" | "rating";
 const QUICK_MOODS: Mood[] = ["fast", "comfort", "healthy", "cheap", "spicy", "sweet"];
 
 export default function ExplorePage() {
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const likes = useApp((s) => s.likes);
+  const saved = useApp((s) => s.saved);
+  const cooked = useApp((s) => s.cooked);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
+  const remoteProfiles = useApp((s) => s.remoteProfiles);
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sort, setSort] = useState<Sort>("trending");
 
   const results = useMemo(() => {
-    return topBy(state, applyFilters(state, filters), sort);
+    const snapshot = useApp.getState();
+    return topBy(snapshot, applyFilters(snapshot, filters), sort);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, sort, state.myRecipes, state.likes, state.saved, state.cooked]);
+  }, [filters, sort, myRecipes, likes, saved, cooked, remoteRecipes]);
 
   /* Пошук кухаря за ніком — окремо від пошуку страв.
      Питаємо сервер, бо у вибірку стрічки потрапляють не всі профілі. */
@@ -71,13 +77,14 @@ export default function ExplorePage() {
 
   const cooks = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const r of allRecipes(state)) {
+    for (const r of allRecipes(useApp.getState())) {
       counts.set(r.authorId, (counts.get(r.authorId) ?? 0) + 1);
     }
-    return allProfiles(state)
+    return allProfiles(useApp.getState())
       .map((p) => ({ profile: p, recipes: counts.get(p.id) ?? 0 }))
       .sort((a, b) => b.profile.followers - a.profile.followers);
-  }, [state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myRecipes, remoteRecipes, remoteProfiles]);
 
   return (
     <div className="pb-8">

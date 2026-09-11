@@ -20,7 +20,17 @@ import type { Recipe } from "@/lib/types";
 import { formatMinutes, haptic, shuffle } from "@/lib/utils";
 
 export default function SwipePage() {
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const saved = useApp((s) => s.saved);
+  const following = useApp((s) => s.following);
+  const cooked = useApp((s) => s.cooked);
+  const dismissed = useApp((s) => s.dismissed);
+  const wishlist = useApp((s) => s.wishlist);
+  const toggleWish = useApp((s) => s.toggleWish);
+  const toggleSave = useApp((s) => s.toggleSave);
+  const dismiss = useApp((s) => s.dismiss);
+  const undismiss = useApp((s) => s.undismiss);
+  const clearDismissed = useApp((s) => s.clearDismissed);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -32,13 +42,13 @@ export default function SwipePage() {
   const [flyOut, setFlyOut] = useState<"left" | "right" | null>(null);
 
   const pool = useMemo(
-    () => (hydrated ? applyFilters(state, filters) : []),
+    () => (hydrated ? applyFilters(useApp.getState(), filters) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, filters, state.myRecipes, state.following, state.saved, state.cooked],
+    [hydrated, filters, myRecipes, following, saved, cooked],
   );
 
   useEffect(() => {
-    setDeck(shuffle(pool.filter((r) => !state.dismissed.includes(r.id))));
+    setDeck(shuffle(pool.filter((r) => !dismissed.includes(r.id))));
     setIndex(0);
     setLiked([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,10 +64,10 @@ export default function SwipePage() {
     setFlyOut(dir);
 
     if (dir === "right") {
-      state.toggleWish(current.id);
+      toggleWish(current.id);
       setLiked((prev) => [current, ...prev]);
     } else {
-      state.dismiss(current.id);
+      dismiss(current.id);
     }
 
     setTimeout(() => {
@@ -70,15 +80,15 @@ export default function SwipePage() {
     if (index === 0) return;
     haptic(10);
     const prev = deck[index - 1];
-    state.undismiss(prev.id);
-    if (state.wishlist.includes(prev.id)) state.toggleWish(prev.id);
+    undismiss(prev.id);
+    if (wishlist.includes(prev.id)) toggleWish(prev.id);
     setLiked((l) => l.filter((r) => r.id !== prev.id));
     setIndex((i) => i - 1);
   };
 
   const restart = () => {
     haptic(12);
-    state.clearDismissed();
+    clearDismissed();
     setDeck(shuffle(pool));
     setIndex(0);
     setLiked([]);
@@ -109,7 +119,7 @@ export default function SwipePage() {
               flyOut={flyOut}
               onDecide={decide}
               onSave={() => {
-                state.toggleSave(current.id);
+                toggleSave(current.id);
                 toast("Збережено в галерею", "🔖");
               }}
             />
@@ -128,7 +138,7 @@ export default function SwipePage() {
             </CircleBtn>
             <CircleBtn
               onClick={() => {
-                state.toggleSave(current.id);
+                toggleSave(current.id);
                 haptic(12);
                 toast("Збережено в галерею", "🔖");
               }}

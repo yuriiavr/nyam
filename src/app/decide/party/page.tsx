@@ -19,7 +19,9 @@ const AVATARS = ["🦊", "🐼", "🐸", "🐙", "🦄", "🐯", "🐨", "🦖"]
 const ROUND_SIZE = 8;
 
 export default function PartyPage() {
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const saved = useApp((s) => s.saved);
+  const following = useApp((s) => s.following);
   const hydrated = useApp((s) => s.hydrated);
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
@@ -35,9 +37,9 @@ export default function PartyPage() {
   const [votes, setVotes] = useState<Record<string, number>>({});
 
   const pool = useMemo(
-    () => (hydrated ? applyFilters(state, filters) : []),
+    () => (hydrated ? applyFilters(useApp.getState(), filters) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, filters, state.myRecipes, state.saved, state.following],
+    [hydrated, filters, myRecipes, saved, following],
   );
 
   const start = () => {

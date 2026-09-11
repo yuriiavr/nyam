@@ -34,7 +34,9 @@ interface Day {
 }
 
 export default function DiaryPage() {
-  const state = useApp();
+  const cooked = useApp((s) => s.cooked);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
   const hydrated = useApp((s) => s.hydrated);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -46,21 +48,21 @@ export default function DiaryPage() {
     for (let back = DAYS - 1; back >= 0; back--) {
       const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
       const key = dateKey(date);
-      const dishes = state.cooked
+      const dishes = cooked
         .filter((event) => dateKey(new Date(event.at)) === key)
-        .map((event) => recipeById(state, event.recipeId))
+        .map((event) => recipeById(useApp.getState(), event.recipeId))
         .filter((r): r is Recipe => Boolean(r));
 
       out.push({
         date,
         key,
-        totals: dayTotals(state.cooked, (id) => recipeById(state, id), date),
+        totals: dayTotals(cooked, (id) => recipeById(useApp.getState(), id), date),
         dishes,
       });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.cooked, state.myRecipes, state.remoteRecipes]);
+  }, [hydrated, cooked, myRecipes, remoteRecipes]);
 
   const cookedDays = days.filter((d) => d.totals.meals > 0);
   const peak = Math.max(...days.map((d) => d.totals.kcal), 1);

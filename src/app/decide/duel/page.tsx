@@ -49,7 +49,12 @@ function sizeOptions(available: number): number[] {
 type Stage = "setup" | "duel";
 
 export default function DuelPage() {
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const saved = useApp((s) => s.saved);
+  const following = useApp((s) => s.following);
+  const cooked = useApp((s) => s.cooked);
+  const wishlist = useApp((s) => s.wishlist);
+  const toggleWish = useApp((s) => s.toggleWish);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -65,9 +70,9 @@ export default function DuelPage() {
   const [picked, setPicked] = useState<string | null>(null);
 
   const pool = useMemo(
-    () => (hydrated ? applyFilters(state, filters) : []),
+    () => (hydrated ? applyFilters(useApp.getState(), filters) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, filters, state.myRecipes, state.saved, state.following, state.cooked],
+    [hydrated, filters, myRecipes, saved, following, cooked],
   );
 
   const start = (wanted: number) => {
@@ -98,7 +103,7 @@ export default function DuelPage() {
         haptic([30, 60, 30, 60, 40]);
         // Переможця кладемо у список бажань — але саме кладемо, а не
         // перемикаємо: інакше страва, яка там уже була, звідти б зникла.
-        if (!state.wishlist.includes(winner.id)) state.toggleWish(winner.id);
+        if (!wishlist.includes(winner.id)) toggleWish(winner.id);
       }
     }, 340);
   };

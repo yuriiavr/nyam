@@ -16,17 +16,25 @@ import { formatMinutes, plural } from "@/lib/utils";
 type Mode = "ready" | "almost" | "all";
 
 export default function FridgePage() {
-  const state = useApp();
+  /*
+   * Підписуємось на те, що справді читаємо. `useApp()` без селектора — це
+   * підписка на весь стор: сторінка перемальовувалась би від будь-якої зміни,
+   * хоч від кількості солі в коморі, хоч від чужого лайка через realtime.
+   */
   const hydrated = useApp((s) => s.hydrated);
+  const pantry = useApp((s) => s.pantry);
+  const myRecipes = useApp((s) => s.myRecipes);
   const [mode, setMode] = useState<Mode>("almost");
 
-  const pantryKeys = state.pantry.map((p) => p.key);
+  const pantryKeys = pantry.map((p) => p.key);
 
   const matches = useMemo(() => {
     if (!hydrated || pantryKeys.length === 0) return [];
-    return fridgeMatches(allRecipes(state), pantryKeys);
+    // Бібліотеці потрібен увесь стан, але перемальовування — ні: беремо
+    // знімок у момент обчислення, а залежності перелічені нижче.
+    return fridgeMatches(allRecipes(useApp.getState()), pantryKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.pantry, state.myRecipes]);
+  }, [hydrated, pantry, myRecipes]);
 
   const filtered = useMemo(() => {
     if (mode === "ready") return matches.filter((m) => m.missing.length === 0);

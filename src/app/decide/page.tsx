@@ -76,16 +76,24 @@ const METHODS: Method[] = [
 ];
 
 export default function DecidePage() {
-  const state = useApp();
+  /*
+   * Список рецептів залежить лише від того, звідки вони беруться. Підписка
+   * на весь стор перемальовувала б сторінку від будь-якої зміни.
+   */
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
   const hydrated = useApp((s) => s.hydrated);
   const router = useRouter();
   const [instant, setInstant] = useState<Recipe | null>(null);
 
-  const pool = useMemo(() => (hydrated ? allRecipes(state) : []), [hydrated, state]);
+  const pool = useMemo(
+    () => (hydrated ? allRecipes(useApp.getState()) : []),
+    [hydrated, myRecipes, remoteRecipes],
+  );
 
   const rollInstant = () => {
     haptic([18, 40, 18]);
-    const recs = recommend(state, { limit: 12 });
+    const recs = recommend(useApp.getState(), { limit: 12 });
     const chosen = recs.length ? pick(recs)?.recipe : pick(pool);
     setInstant(chosen ?? null);
   };
