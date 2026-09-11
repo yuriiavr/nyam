@@ -439,8 +439,13 @@ function stems(word: string): string[] {
     if (word.endsWith("es") && word.length >= 5) forms.push(word.slice(0, -2));
   }
 
+  /*
+   * Три букви після відрізання, а не чотири. З чотирма найкоротші назви
+   * взагалі не скорочувались, і застосунок не впізнавав «сиру», «рису»,
+   * «меду», «води» — тобто половину того, що люди пишуть не в називному.
+   */
   for (const end of ENDINGS) {
-    if (word.length - end.length >= 4 && word.endsWith(end)) {
+    if (word.length - end.length >= 3 && word.endsWith(end)) {
       forms.push(word.slice(0, -end.length));
       break;
     }
@@ -449,6 +454,27 @@ function stems(word: string): string[] {
   for (const form of [...forms]) {
     const short = fleeting(form);
     if (short && !forms.includes(short)) forms.push(short);
+  }
+
+  /*
+   * Чергування «і» з «о» та «е»: сіль — солі, сік — соку, ніж — ножа.
+   * У закритому складі стоїть «і», у відкритому — інший голосний, тож
+   * відрізанням закінчення такі пари не звести: після нього лишаються
+   * «сіл» і «сол».
+   *
+   * Тільки для основ у три букви — тобто для односкладових коренів, де це
+   * правило й живе. Довші чіпати не можна: «мілк» зі «Снек Кіндер Мілк
+   * Слайс» перетворювалось на «молк», сходилось із основою молока, і снек
+   * ставав молоком.
+   */
+  for (const form of [...forms]) {
+    if (form.length !== 3) continue;
+    const at = form.lastIndexOf("і");
+    if (at < 0) continue;
+    for (const vowel of ["о", "е"]) {
+      const swapped = form.slice(0, at) + vowel + form.slice(at + 1);
+      if (!forms.includes(swapped)) forms.push(swapped);
+    }
   }
 
   return forms;
