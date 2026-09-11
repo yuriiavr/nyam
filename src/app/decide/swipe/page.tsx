@@ -188,6 +188,7 @@ function SwipeCard({
 
   return (
     <motion.div
+      data-no-pull
       drag="x"
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.7}

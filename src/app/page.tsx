@@ -14,17 +14,27 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { FeedCard, RecipeScroller } from "@/components/RecipeCard";
 import { Avatar, Card, MacroBar, SectionTitle, Skeleton } from "@/components/ui";
 import { allRecipes, cookStreak, recipeById, useApp } from "@/lib/store";
 import { dayTotals } from "@/lib/nutrition";
 import { recommend, topBy } from "@/lib/matching";
+import { refreshIfStale } from "@/lib/session";
 import { greeting, haptic, MEAL_LABEL, currentMeal, plural } from "@/lib/utils";
 
 export default function HomePage() {
   const state = useApp();
   const hydrated = useApp((s) => s.hydrated);
+
+  /*
+   * У стрічку заходять частіше, ніж будь-куди, і чекають там свіже. Але
+   * перечитувати базу на кожен перехід між вкладками не треба: realtime
+   * приносить чуже нове сам, тож оновлюємось, лише якщо дані підстаркуваті.
+   */
+  useEffect(() => {
+    void refreshIfStale();
+  }, []);
 
   const data = useMemo(() => {
     if (!hydrated) return null;

@@ -375,6 +375,7 @@ export default function CookPage() {
 
       <motion.div
         key={step}
+        data-no-pull
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.35}

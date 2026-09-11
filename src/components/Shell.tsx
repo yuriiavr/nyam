@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { PullToRefresh } from "./PullToRefresh";
+import { refreshFromServer } from "@/lib/session";
 import { usePathname } from "next/navigation";
 import { AuthScreen } from "./AuthScreen";
 import { BottomNav, NAV_HEIGHT, useNavHidden } from "./BottomNav";
@@ -26,7 +28,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
             : { paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom))` }
         }
       >
-        <AuthGate pathname={pathname}>{children}</AuthGate>
+        <AuthGate pathname={pathname}>
+          <PullToRefresh onRefresh={refreshFromServer}>{children}</PullToRefresh>
+        </AuthGate>
       </main>
       <BottomNav />
     </div>

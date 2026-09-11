@@ -108,6 +108,7 @@ async function loadUserData(userId: string, email: string, photo?: string) {
     await loadCommunity(userId);
     await refreshNotifications();
     store.setSyncStatus("ready");
+    lastLoadedAt = Date.now();
 
     // Далі за оновлення відповідає база: без цього нове сповіщення чи чужий
     // рецепт зʼявлялись би лише після перезапуску застосунку.
@@ -243,10 +244,26 @@ export async function initSession(): Promise<() => void> {
   };
 }
 
-/** Ручне перезавантаження — кнопка «оновити» в налаштуваннях. */
+/** Коли востаннє все перечитували з бази. */
+let lastLoadedAt = 0;
+
+/** Ручне перезавантаження: потягування згори або повернення у стрічку. */
 export async function refreshFromServer() {
   const account = useApp.getState().account;
   if (account) await loadUserData(account.id, account.email, account.photo);
+}
+
+/**
+ * Те саме, але тільки якщо дані вже підстаркуваті.
+ *
+ * Викликається на вхід у стрічку, а туди заходять часто — по кілька разів за
+ * хвилину, перемикаючись між вкладками. Перечитувати всю базу щоразу означало
+ * б смикати мережу заради того, що й так щойно прочитано; realtime тим часом
+ * приносить чуже свіже сам.
+ */
+export async function refreshIfStale(maxAgeMs = 60_000): Promise<void> {
+  if (Date.now() - lastLoadedAt < maxAgeMs) return;
+  await refreshFromServer();
 }
 
 /* ── Дії авторизації ──────────────────────────────────────────────────── */
