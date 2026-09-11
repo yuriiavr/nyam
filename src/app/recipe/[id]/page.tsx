@@ -18,11 +18,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RecipeMedia, RecipeRow } from "@/components/RecipeCard";
 import { Avatar, Button, Card, EmptyState, Sheet, Stars, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
-import type { Recipe } from "@/lib/types";
+import type { Recipe, RecipeComment } from "@/lib/types";
 import { matchRecipe } from "@/lib/matching";
 import { allRecipes, effectiveStats, profileById, recipeById, useApp } from "@/lib/store";
 import {
@@ -34,7 +34,10 @@ import {
   haptic,
   MEAL_LABEL,
   MOOD_META,
+  timeAgo,
 } from "@/lib/utils";
+import * as api from "@/lib/supabase/api";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { recipeCost } from "@/lib/cost";
 import { COURSE_LABEL, PAIR_HEADING, courseOf, suggestPairs } from "@/lib/pairing";
 import { macroShares, recipeNutrition } from "@/lib/nutrition";
@@ -412,6 +415,8 @@ export default function RecipePage() {
         </section>
       )}
 
+      <CommentsSection recipe={recipe} />
+
       {/* Схожі */}
       {similar.length > 0 && (
         <section className="px-4 pt-7">
@@ -544,6 +549,140 @@ function NutritionCard({ recipe, servings }: { recipe: Recipe; servings: number 
           {n.skipped.length > 0 && ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
         </p>
       </Card>
+    </section>
+  );
+}
+
+/**
+ * Враження тих, хто готував.
+ *
+ * Коментарі живуть у власному стані сторінки, а не в спільному сховищі: вони
+ * стосуються одного рецепта, їх бувають сотні, і тягнути це все в
+ * localStorage разом з усім іншим немає жодної причини.
+ *
+ * Без бази секції немає взагалі — у демо-режимі немає й людей, які могли б
+ * щось написати.
+ */
+function CommentsSection({ recipe }: { recipe: Recipe }) {
+  const state = useApp();
+  const account = useApp((s) => s.account);
+
+  const [comments, setComments] = useState<RecipeComment[] | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !account) return;
+    let alive = true;
+    void api
+      .fetchComments(recipe.id)
+      .then((list) => alive && setComments(list))
+      .catch(() => alive && setComments([]));
+    return () => {
+      alive = false;
+    };
+  }, [recipe.id, account]);
+
+  if (!isSupabaseConfigured || !account) return null;
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      const saved = await api.addComment(recipe.id, account.id, body);
+      setComments((prev) => [saved, ...(prev ?? [])]);
+      setDraft("");
+      haptic(12);
+    } catch {
+      toast("Коментар не надіслався", "⚠️");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    const kept = comments ?? [];
+    setComments(kept.filter((c) => c.id !== id));
+    try {
+      await api.deleteComment(id);
+    } catch {
+      // Не вийшло — повертаємо на місце, щоб не вдавати, ніби видалено.
+      setComments(kept);
+      toast("Не вдалося видалити", "⚠️");
+    }
+  };
+
+  return (
+    <section className="px-4 pt-7">
+      <h2 className="mb-3 font-display text-[17px] font-bold">
+        Враження{comments?.length ? ` · ${comments.length}` : ""}
+      </h2>
+
+      <Card className="p-3">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
+          rows={2}
+          placeholder="Як вийшло? Що змінив би наступного разу?"
+          className="w-full resize-none bg-transparent text-[14px] leading-relaxed"
+        />
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <span className="text-[11px] text-faint">{draft.length}/1000</span>
+          <Button size="sm" onClick={send} disabled={!draft.trim()} loading={sending}>
+            Надіслати
+          </Button>
+        </div>
+      </Card>
+
+      {comments === null ? (
+        <p className="mt-3 text-[12.5px] text-muted">Читаю коментарі…</p>
+      ) : comments.length === 0 ? (
+        <p className="mt-3 text-[12.5px] text-muted">
+          Ще ніхто не писав. Приготуєш — розкажи, як вийшло.
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-2.5">
+          {comments.map((comment) => {
+            const author = profileById(state, comment.authorId);
+            // Прибрати може той, хто написав, і автор рецепта у себе під стравою.
+            const canRemove =
+              comment.authorId === account.id || recipe.authorId === state.profile.id;
+
+            return (
+              <Card key={comment.id} className="flex gap-2.5 p-3">
+                <Avatar
+                  emoji={author.emoji}
+                  gradient={author.gradient}
+                  src={author.avatar}
+                  size={34}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-baseline gap-2 text-[13px] font-bold">
+                    <span className="truncate">{author.name}</span>
+                    <span className="shrink-0 text-[11px] font-normal text-faint">
+                      {timeAgo(comment.createdAt)}
+                    </span>
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed">
+                    {comment.body}
+                  </p>
+                </div>
+                {canRemove && (
+                  <button
+                    onClick={() => void remove(comment.id)}
+                    aria-label="Прибрати коментар"
+                    className="h-8 w-8 shrink-0 text-faint"
+                  >
+                    <Trash2 size={14} className="mx-auto" />
+                  </button>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

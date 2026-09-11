@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, ChefHat, Heart, Star, UserPlus, Users } from "lucide-react";
+import { Bookmark, ChefHat, Heart, MessageCircle, Star, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -19,6 +19,7 @@ const META: Record<NotificationType, { icon: typeof Heart; text: string; tone: s
   cook: { icon: ChefHat, text: "приготував твою страву", tone: "text-mint" },
   rating: { icon: Star, text: "оцінив твій рецепт", tone: "text-brand-2" },
   family_join: { icon: Users, text: "приєднався до твоєї сімʼї", tone: "text-grape" },
+  comment: { icon: MessageCircle, text: "залишив коментар до твого рецепта", tone: "text-sky" },
 };
 
 export default function NotificationsPage() {

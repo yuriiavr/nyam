@@ -221,7 +221,23 @@ export interface FamilyMember {
 
 /* ── Сповіщення ─────────────────────────────────────────────────────────── */
 
-export type NotificationType = "follow" | "like" | "save" | "cook" | "rating" | "family_join";
+export type NotificationType =
+  | "follow"
+  | "like"
+  | "save"
+  | "cook"
+  | "rating"
+  | "family_join"
+  | "comment";
+
+/** Враження від рецепта, залишене тим, хто його готував. */
+export interface RecipeComment {
+  id: string;
+  recipeId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+}
 
 export interface AppNotification {
   id: string;

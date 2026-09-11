@@ -10,6 +10,7 @@ import type {
   PlanSlot,
   Profile,
   Recipe,
+  RecipeComment,
   RecipeIngredient,
   RecipeStep,
   WeekPlan,
@@ -860,6 +861,70 @@ export async function fetchCachedBarcode(barcode: string): Promise<CachedBarcode
  * може переписати чужу відповідь. Через це повторний запис того самого коду
  * очікувано конфліктує — і це не помилка, просто хтось нас випередив.
  */
+/* ── Коментарі до рецептів ────────────────────────────────────────────── */
+
+interface CommentRow {
+  id: string;
+  recipe_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+}
+
+const toComment = (row: CommentRow): RecipeComment => ({
+  id: row.id,
+  recipeId: row.recipe_id,
+  authorId: row.author_id,
+  body: row.body,
+  createdAt: row.created_at,
+});
+
+/**
+ * Коментарі під рецептом, найновіші згори.
+ *
+ * Хто автор — не питаємо тут: профілі вже завантажені в застосунок цілим
+ * списком, і другий запит заради імені й аватара був би зайвим.
+ */
+export async function fetchComments(recipeId: string): Promise<RecipeComment[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+
+  const { data, error } = await sb
+    .from("recipe_comments")
+    .select("id,recipe_id,author_id,body,created_at")
+    .eq("recipe_id", recipeId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (error) throw error;
+  return ((data ?? []) as CommentRow[]).map(toComment);
+}
+
+export async function addComment(
+  recipeId: string,
+  authorId: string,
+  body: string,
+): Promise<RecipeComment> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase не налаштовано");
+
+  const { data, error } = await sb
+    .from("recipe_comments")
+    .insert({ recipe_id: recipeId, author_id: authorId, body })
+    .select("id,recipe_id,author_id,body,created_at")
+    .single();
+
+  if (error) throw error;
+  return toComment(data as CommentRow);
+}
+
+export async function deleteComment(id: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("recipe_comments").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function cacheBarcode(item: CachedBarcode): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
