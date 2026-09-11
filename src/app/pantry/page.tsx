@@ -3,26 +3,22 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
-  ChefHat,
   Plus,
   ReceiptText,
   ScanBarcode,
   Search,
-  Sparkles,
-  Trash2,
   TriangleAlert,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { TopBar } from "@/components/TopBar";
 import {
   Button,
-  Card,
   Chip,
   EmptyState,
   QuantityInput,
+  Segmented,
   Sheet,
   Spinner,
   useToast,
@@ -36,7 +32,6 @@ import {
   type ProductInfo,
 } from "@/lib/barcode";
 import { priceFromPurchase } from "@/lib/cost";
-import { fridgeMatches, shoppingSuggestions } from "@/lib/matching";
 import {
   fetchReceipt,
   lineQuantity,
@@ -46,31 +41,18 @@ import {
   type ReceiptDraft,
   type ReceiptFailure,
 } from "@/lib/receipt";
-import { allRecipes, useApp } from "@/lib/store";
+import { useApp } from "@/lib/store";
 import type { IngredientCat, IngredientDef, PantryItem, Unit } from "@/lib/types";
 import { formatNumber, ingredientQtyLabel } from "@/lib/units";
 import { expiryInfo, haptic, plural } from "@/lib/utils";
-
-const POPULAR = [
-  "yajtsya",
-  "kartoplya",
-  "kurka",
-  "pomidor",
-  "syr",
-  "makarony",
-  "rys",
-  "tsybulya",
-  "moloko",
-  "gryby",
-  "morkva",
-  "khlib",
-];
 
 export default function PantryPage() {
   const state = useApp();
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
+  const [tab, setTab] = useState<"stock" | "basics">("stock");
+  const [addSheet, setAddSheet] = useState(false);
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
@@ -96,6 +78,23 @@ export default function PantryPage() {
   const pantryKeys = state.pantry.map((p) => p.key);
 
   /*
+   * Базові продукти живуть окремою вкладкою-чеклистом, тож із основного
+   * списку їх прибираємо: інакше сіль і олія лежали б у двох місцях одразу.
+   */
+  const stock = state.pantry.filter((item) => !ing(item.key).staple);
+
+  const basics = useMemo(() => {
+    const map = new Map<IngredientCat, IngredientDef[]>();
+    for (const def of INGREDIENTS) {
+      if (!def.staple) continue;
+      map.set(def.cat, [...(map.get(def.cat) ?? []), def]);
+    }
+    return CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const);
+  }, []);
+
+  const basicsHave = INGREDIENTS.filter((d) => d.staple && pantryKeys.includes(d.key)).length;
+
+  /*
    * Прострочене виносимо з категорій у власну групу на самому верху.
    * Інакше пакет зіпсованого кефіру лежав би десь у «Молочному» між іншими
    * шістьма продуктами — а це єдине в коморі, на що треба зреагувати сьогодні.
@@ -105,6 +104,7 @@ export default function PantryPage() {
     const map = new Map<IngredientCat, PantryItem[]>();
 
     for (const item of state.pantry) {
+      if (ing(item.key).staple) continue;
       if (expiryInfo(item.expiresAt)?.tone === "expired") {
         gone.push(item);
         continue;
@@ -134,29 +134,6 @@ export default function PantryPage() {
       groups: CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const),
     };
   }, [state.pantry]);
-
-  /* Ще не зіпсоване, але от-от. Прострочене сюди не потрапляє: воно вже
-     має власну помітну групу, і дублювати його тут нема сенсу. */
-  const expiring = useMemo(
-    () =>
-      state.pantry
-        .map((item) => ({ item, exp: expiryInfo(item.expiresAt) }))
-        .filter((x): x is { item: PantryItem; exp: NonNullable<ReturnType<typeof expiryInfo>> } =>
-          x.exp !== null && x.exp.tone === "soon",
-        )
-        .sort((a, b) => a.exp.days - b.exp.days),
-    [state.pantry],
-  );
-
-  const { matchCount, suggestions } = useMemo(() => {
-    if (!hydrated || pantryKeys.length === 0) return { matchCount: 0, suggestions: [] };
-    const recipes = allRecipes(state);
-    return {
-      matchCount: fridgeMatches(recipes, pantryKeys, { minPct: 60 }).length,
-      suggestions: shoppingSuggestions(recipes, pantryKeys, 6),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.pantry, state.myRecipes]);
 
   const add = (
     key: string,
@@ -290,241 +267,166 @@ export default function PantryPage() {
             : "Що є вдома"
         }
         right={
-          state.pantry.length > 0 ? (
-            <button
-              onClick={() => {
-                if (confirm("Очистити всю комору?")) {
-                  state.clearPantry();
-                  toast("Комору очищено", "🧹");
-                }
-              }}
-              aria-label="Очистити"
-              className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2 text-muted"
-            >
-              <Trash2 size={17} />
-            </button>
-          ) : undefined
+          <button
+            onClick={() => {
+              haptic(12);
+              setAddSheet(true);
+            }}
+            aria-label="Додати продукт"
+            className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-brand-ink"
+          >
+            <Plus size={19} />
+          </button>
         }
       />
 
-      {/* Дії */}
-      <div className="grid grid-cols-2 gap-3 px-4 pt-4">
-        <button
-          onClick={() => {
-            haptic(14);
-            setScanOpen(true);
-          }}
-          className="flex flex-col items-start gap-2 rounded-xl3 border border-line bg-surface p-4 active:bg-surface-2"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 100% 0%, color-mix(in oklab, var(--brand) 16%, transparent), transparent 62%)",
-          }}
-        >
-          <span className="grid h-11 w-11 place-items-center rounded-2xl brand-gradient text-brand-ink">
-            <ScanBarcode size={20} />
-          </span>
-          <span className="text-[14px] font-bold">Сканувати штрихкод</span>
-          <span className="text-[11.5px] leading-snug text-muted">
-            Наведи камеру — продукт додасться сам
-          </span>
-        </button>
-
-        <button
-          onClick={() => {
-            haptic(12);
-            setAddOpen(true);
-          }}
-          className="flex flex-col items-start gap-2 rounded-xl3 border border-line bg-surface p-4 active:bg-surface-2"
-        >
-          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-surface-2">
-            <Plus size={20} />
-          </span>
-          <span className="text-[14px] font-bold">Додати вручну</span>
-          <span className="text-[11.5px] leading-snug text-muted">Пошук по каталогу продуктів</span>
-        </button>
-
-        {/*
-          Чек окремою широкою кнопкою: це найшвидший спосіб наповнити комору
-          після магазину — один QR замість двадцяти штрихкодів.
-        */}
-        <button
-          onClick={() => {
-            haptic(14);
-            setReceiptOpen(true);
-          }}
-          className="col-span-2 flex items-center gap-3 rounded-xl3 border border-line bg-surface p-4 text-left active:bg-surface-2"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--mint) 16%, transparent), transparent 62%)",
-          }}
-        >
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/15 text-mint">
-            <ReceiptText size={20} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[14px] font-bold">Сканувати чек</span>
-            <span className="block text-[11.5px] leading-snug text-muted">
-              QR на касовому чеку — і всі покупки одразу в коморі
-            </span>
-          </span>
-        </button>
+      {/* Вкладки: що приніс і що є з базового */}
+      <div className="px-4 pt-4">
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "stock", label: `У коморі (${stock.length})` },
+            { value: "basics", label: `Базові (${basicsHave})` },
+          ]}
+        />
       </div>
 
-      {/* Швидке додавання */}
-      {hydrated && state.pantry.length < 4 && (
-        <section className="pt-6">
-          <h2 className="mb-2.5 px-4 text-[12px] font-bold uppercase tracking-wide text-muted">
-            Часто додають
-          </h2>
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4">
-            {POPULAR.filter((k) => !pantryKeys.includes(k)).map((k) => {
-              const def = ing(k);
-              return (
-                <Chip key={k} onClick={() => add(k)}>
-                  <span>{def.emoji}</span>
-                  {def.label}
-                  <Plus size={13} className="opacity-60" />
-                </Chip>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Що можна приготувати */}
-      {hydrated && state.pantry.length > 0 && (
-        <section className="px-4 pt-6">
-          <Link href="/decide/fridge">
-            <motion.div whileTap={{ scale: 0.98 }}>
-              <Card className="flex items-center gap-3 border-mint/30 p-4">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint/15 text-2xl">
-                  🧊
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-bold">
-                    {matchCount > 0
-                      ? `${matchCount} ${plural(matchCount, "страва", "страви", "страв")} майже готові`
-                      : "Подивитись, що можна приготувати"}
-                  </p>
-                  <p className="text-[12px] text-muted">
-                    Підбір за вмістом холодильника — з відсотком збігу
-                  </p>
+      {tab === "stock" ? (
+        <section className="px-4 pt-4">
+          {!hydrated ? null : stock.length === 0 ? (
+            <EmptyState
+              emoji="🧊"
+              title="Тут порожньо"
+              note="Додай продукти кнопкою вгорі — скануванням штрихкоду, чека або зі списку."
+              action={<Button onClick={() => setAddOpen(true)}>Додати продукт</Button>}
+            />
+          ) : (
+            <div className="flex flex-col gap-5">
+              {/* Прострочене — понад категоріями: це те, з чим треба щось
+                  зробити зараз, а не просто інвентар холодильника. */}
+              {expired.length > 0 && (
+                <div>
+                  <h3 className="mb-2.5 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-berry">
+                    <TriangleAlert size={13} />
+                    Прострочене · {expired.length}
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    <AnimatePresence initial={false}>
+                      {expired.map((item) => (
+                        <PantryChip
+                          key={item.key}
+                          item={item}
+                          onOpen={() => setDetailsFor(item.key)}
+                          onRemove={() => state.removePantry(item.key)}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
                 </div>
-                <ChefHat size={18} className="shrink-0 text-mint" />
-              </Card>
-            </motion.div>
-          </Link>
-        </section>
-      )}
+              )}
 
-      {/* Список комори */}
-      <section className="px-4 pt-6">
-        {hydrated && expiring.length > 0 && (
-          <Card className="mb-4 border-brand-2/40 bg-brand-2/8 p-3.5">
-            <p className="text-[13px] font-bold">Треба зʼїсти найближчим часом</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {expiring.map(({ item, exp }) => (
-                <button
-                  key={item.key}
-                  onClick={() => {
-                    haptic(8);
-                    setDetailsFor(item.key);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-1 text-[12px] font-semibold"
-                >
-                  <span>{ing(item.key).emoji}</span>
-                  <span>{ing(item.key).label}</span>
-                  <span className="text-brand-2">· {exp.label}</span>
-                </button>
+              {groups.map(([cat, items]) => (
+                <div key={cat}>
+                  <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">
+                    {CAT_LABEL[cat]}
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    <AnimatePresence initial={false}>
+                      {items.map((item) => (
+                        <PantryChip
+                          key={item.key}
+                          item={item}
+                          onOpen={() => setDetailsFor(item.key)}
+                          onRemove={() => state.removePantry(item.key)}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                </div>
               ))}
             </div>
-          </Card>
-        )}
-
-        {!hydrated ? null : state.pantry.length === 0 ? (
-          <EmptyState
-            emoji="🧊"
-            title="Комора порожня"
-            note="Додай продукти — і застосунок покаже, що з них можна приготувати прямо зараз."
-            action={<Button onClick={() => setScanOpen(true)}>Сканувати перший продукт</Button>}
-          />
-        ) : (
-          <div className="flex flex-col gap-5">
-            {/* Прострочене — понад категоріями: це те, з чим треба щось
-                зробити зараз, а не просто інвентар холодильника. */}
-            {expired.length > 0 && (
-              <div>
-                <h3 className="mb-2.5 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-berry">
-                  <TriangleAlert size={13} />
-                  Прострочене · {expired.length}
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  <AnimatePresence initial={false}>
-                    {expired.map((item) => (
-                      <PantryChip
-                        key={item.key}
-                        item={item}
-                        onOpen={() => setDetailsFor(item.key)}
-                        onRemove={() => state.removePantry(item.key)}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              </div>
-            )}
-
-            {groups.map(([cat, items]) => (
+          )}
+        </section>
+      ) : (
+        /*
+         * Базові продукти — не інвентар, а чеклист. Сіль і олія або є, або
+         * немає; скільки саме їх лишилось, ніхто не рахує, і питати про це
+         * означало б вимагати роботи заради нуля користі. Тому тут увесь
+         * список одразу, а не лише те, що вже додано.
+         */
+        <section className="px-4 pt-4">
+          <p className="text-[12.5px] leading-snug text-muted">
+            Те, що зазвичай просто є вдома. Познач, чого бракує, — підбір страв за
+            холодильником це врахує.
+          </p>
+          <div className="mt-4 flex flex-col gap-5">
+            {basics.map(([cat, items]) => (
               <div key={cat}>
                 <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">
                   {CAT_LABEL[cat]}
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  <AnimatePresence initial={false}>
-                    {items.map((item) => (
-                      <PantryChip
-                        key={item.key}
-                        item={item}
-                        onOpen={() => setDetailsFor(item.key)}
-                        onRemove={() => state.removePantry(item.key)}
-                      />
-                    ))}
-                  </AnimatePresence>
+                  {items.map((def) => {
+                    const have = pantryKeys.includes(def.key);
+                    return (
+                      <button
+                        key={def.key}
+                        onClick={() => {
+                          haptic(8);
+                          if (have) state.removePantry(def.key);
+                          else add(def.key);
+                        }}
+                        aria-pressed={have}
+                        className={`inline-flex items-center gap-1.5 rounded-full border py-2 pl-3 pr-3 text-[13px] font-semibold ${
+                          have ? "border-mint/50 bg-mint/12" : "border-line bg-surface text-muted"
+                        }`}
+                      >
+                        <span>{def.emoji}</span>
+                        {def.label}
+                        {have && <Check size={13} className="text-mint" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </section>
-
-      {/* Що докупити */}
-      {suggestions.length > 0 && (
-        <section className="px-4 pt-7">
-          <div className="mb-2.5 flex items-center gap-2">
-            <Sparkles size={15} className="text-brand" />
-            <h2 className="text-[12px] font-bold uppercase tracking-wide text-muted">
-              Докупи — відкриє нові рецепти
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {suggestions.map(({ key, unlocks }) => {
-              const def = ing(key);
-              return (
-                <button
-                  key={key}
-                  onClick={() => add(key)}
-                  className="inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 py-2 pl-3 pr-3.5 text-[13px] font-semibold"
-                >
-                  <span>{def.emoji}</span>
-                  {def.label}
-                  <span className="rounded-full bg-brand/20 px-1.5 text-[11px] font-extrabold text-brand">
-                    +{unlocks}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
         </section>
       )}
+
+      {/* Як додати продукт */}
+      <Sheet open={addSheet} onClose={() => setAddSheet(false)} title="Додати продукт">
+        <div className="flex flex-col gap-2 pb-4">
+          <AddWay
+            icon={<ScanBarcode size={19} />}
+            title="Сканувати штрихкод"
+            note="Наведи камеру на пачку — продукт знайдеться сам"
+            onClick={() => {
+              setAddSheet(false);
+              setScanOpen(true);
+            }}
+          />
+          <AddWay
+            icon={<ReceiptText size={19} />}
+            title="Сканувати чек"
+            note="QR на касовому чеку — усі покупки одразу"
+            onClick={() => {
+              setAddSheet(false);
+              setReceiptOpen(true);
+            }}
+          />
+          <AddWay
+            icon={<Plus size={19} />}
+            title="Обрати зі списку"
+            note="Пошук по каталогу продуктів"
+            onClick={() => {
+              setAddSheet(false);
+              setAddOpen(true);
+            }}
+          />
+        </div>
+      </Sheet>
 
       {/* Картка продукту: скільки є і доки придатний */}
       <ItemSheet
@@ -949,6 +851,34 @@ function ReceiptRow({
         </div>
       )}
     </div>
+  );
+}
+
+/** Один зі способів покласти продукт у комору. */
+function AddWay({
+  icon,
+  title,
+  note,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  note: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 text-left active:bg-surface-2"
+    >
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface-2 text-brand">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[14px] font-bold">{title}</span>
+        <span className="block text-[11.5px] leading-snug text-muted">{note}</span>
+      </span>
+    </button>
   );
 }
 
