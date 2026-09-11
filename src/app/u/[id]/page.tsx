@@ -17,27 +17,38 @@ type Sort = "popular" | "new";
 export default function UserPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const state = useApp();
+  const myProfile = useApp((s) => s.profile);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const likes = useApp((s) => s.likes);
+  const saved = useApp((s) => s.saved);
+  const followingIds = useApp((s) => s.following);
+  const remoteProfiles = useApp((s) => s.remoteProfiles);
+  const toggleFollow = useApp((s) => s.toggleFollow);
   const toast = useToast();
   const [sort, setSort] = useState<Sort>("popular");
 
-  const profile = profileById(state, params.id);
-  const isMe = params.id === state.profile.id;
+  const profile = useMemo(
+    () => profileById(useApp.getState(), params.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [params.id, remoteProfiles],
+  );
+  const isMe = params.id === myProfile.id;
 
   const { recipes, totalCooks, avg } = useMemo(() => {
-    const list = allRecipes(state).filter((r) => r.authorId === params.id);
-    const stats = list.map((r) => effectiveStats(state, r));
+    const snapshot = useApp.getState();
+    const list = allRecipes(snapshot).filter((r) => r.authorId === params.id);
+    const stats = list.map((r) => effectiveStats(snapshot, r));
     const cooks = stats.reduce((sum, s) => sum + s.cooks, 0);
     const rated = list
-      .map((r) => avgRating({ ...r, stats: effectiveStats(state, r) }))
+      .map((r) => avgRating({ ...r, stats: effectiveStats(useApp.getState(), r) }))
       .filter((v) => v > 0);
     return {
-      recipes: topBy(state, list, sort === "popular" ? "popular" : "new"),
+      recipes: topBy(useApp.getState(), list, sort === "popular" ? "popular" : "new"),
       totalCooks: cooks,
       avg: rated.length ? rated.reduce((a, b) => a + b, 0) / rated.length : 0,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id, sort, state.myRecipes, state.likes, state.saved]);
+  }, [params.id, sort, myRecipes, likes, saved]);
 
   useEffect(() => {
     if (isMe) router.replace("/me");
@@ -45,7 +56,7 @@ export default function UserPage() {
 
   if (isMe) return <div className="min-h-dvh" />;
 
-  const following = state.following.includes(profile.id);
+  const following = followingIds.includes(profile.id);
 
   return (
     <div className="pb-8">
@@ -110,7 +121,7 @@ export default function UserPage() {
               full
               variant={following ? "secondary" : "primary"}
               onClick={() => {
-                state.toggleFollow(profile.id);
+                toggleFollow(profile.id);
                 toast(following ? "Ви відписались" : `Тепер ви стежите за ${profile.name}`, "👋");
               }}
             >

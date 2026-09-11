@@ -16,7 +16,11 @@ import { dateKey, haptic, MEAL_LABEL, pick, startOfWeek, WEEKDAYS } from "@/lib/
 const SLOTS: PlanSlot[] = ["breakfast", "lunch", "dinner"];
 
 export default function PlanPage() {
-  const state = useApp();
+  const plan = useApp((s) => s.plan);
+  const pantry = useApp((s) => s.pantry);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const setPlanSlot = useApp((s) => s.setPlanSlot);
+  const addPantry = useApp((s) => s.addPantry);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -40,37 +44,37 @@ export default function PlanPage() {
 
   const plannedRecipes = useMemo(() => {
     if (!hydrated) return [];
-    const ids = days.flatMap((d) => SLOTS.map((s) => state.plan[d.key]?.[s]).filter(Boolean));
+    const ids = days.flatMap((d) => SLOTS.map((s) => plan[d.key]?.[s]).filter(Boolean));
     return [...new Set(ids as string[])]
-      .map((id) => recipeById(state, id))
+      .map((id) => recipeById(useApp.getState(), id))
       .filter((r) => r != null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.plan, days, state.myRecipes]);
+  }, [hydrated, plan, days, myRecipes]);
 
   const shoppingList = useMemo(
-    () => (hydrated ? shoppingListFor(plannedRecipes, state.pantry.map((p) => p.key)) : []),
+    () => (hydrated ? shoppingListFor(plannedRecipes, pantry.map((p) => p.key)) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, plannedRecipes, state.pantry],
+    [hydrated, plannedRecipes, pantry],
   );
 
   // Той самий список, розкладений по відділах у порядку обходу магазину.
   const shoppingAisles = useMemo(() => byAisle(shoppingList), [shoppingList]);
 
   const filledCount = days.reduce(
-    (n, d) => n + SLOTS.filter((s) => state.plan[d.key]?.[s]).length,
+    (n, d) => n + SLOTS.filter((s) => plan[d.key]?.[s]).length,
     0,
   );
 
   const generate = () => {
     haptic([16, 40, 16]);
     const generated = generateWeekPlan(
-      state,
+      useApp.getState(),
       days.map((d) => d.key),
       SLOTS,
     );
     for (const day of days) {
       for (const slot of SLOTS) {
-        state.setPlanSlot(day.key, slot, generated[day.key]?.[slot] ?? null);
+        setPlanSlot(day.key, slot, generated[day.key]?.[slot] ?? null);
       }
     }
     toast("Меню на тиждень готове", "✨");
@@ -78,14 +82,14 @@ export default function PlanPage() {
 
   const searchResults = useMemo(() => {
     if (!hydrated || !picking) return [];
-    const list = applyFilters(state, {
+    const list = applyFilters(useApp.getState(), {
       ...emptyFilters,
       query,
       meals: query ? [] : ([picking.slot] as MealType[]),
     });
     return list.slice(0, 40);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, picking, query, state.myRecipes]);
+  }, [hydrated, picking, query, myRecipes]);
 
   return (
     <div className="pb-8">
@@ -97,7 +101,7 @@ export default function PlanPage() {
             <button
               onClick={() => {
                 if (confirm("Очистити план цього тижня?")) {
-                  days.forEach((d) => SLOTS.forEach((s) => state.setPlanSlot(d.key, s, null)));
+                  days.forEach((d) => SLOTS.forEach((s) => setPlanSlot(d.key, s, null)));
                   toast("План очищено", "🧹");
                 }
               }}
@@ -166,8 +170,8 @@ export default function PlanPage() {
 
               <div className="divide-y divide-line">
                 {SLOTS.map((slot) => {
-                  const id = state.plan[day.key]?.[slot];
-                  const recipe = id && hydrated ? recipeById(state, id) : undefined;
+                  const id = plan[day.key]?.[slot];
+                  const recipe = id && hydrated ? recipeById(useApp.getState(), id) : undefined;
                   return (
                     <div key={slot} className="flex items-center gap-3 px-3 py-2.5">
                       <span className="w-[62px] shrink-0 text-[11.5px] font-bold text-muted">
@@ -193,7 +197,7 @@ export default function PlanPage() {
                           <button
                             onClick={() => {
                               haptic(8);
-                              state.setPlanSlot(day.key, slot, null);
+                              setPlanSlot(day.key, slot, null);
                             }}
                             aria-label="Прибрати"
                             className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-faint"
@@ -216,12 +220,12 @@ export default function PlanPage() {
                           <button
                             onClick={() => {
                               haptic(12);
-                              const pool = applyFilters(state, {
+                              const pool = applyFilters(useApp.getState(), {
                                 ...emptyFilters,
                                 meals: [slot as MealType],
                               });
                               const r = pick(pool);
-                              if (r) state.setPlanSlot(day.key, slot, r.id);
+                              if (r) setPlanSlot(day.key, slot, r.id);
                             }}
                             aria-label="Випадкова страва"
                             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted"
@@ -274,7 +278,7 @@ export default function PlanPage() {
               onClick={() => {
                 if (!picking) return;
                 haptic(12);
-                state.setPlanSlot(picking.day, picking.slot, r.id);
+                setPlanSlot(picking.day, picking.slot, r.id);
                 setPicking(null);
               }}
               className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-2.5 text-left active:bg-surface-2"
@@ -310,7 +314,7 @@ export default function PlanPage() {
             variant="secondary"
             onClick={() => {
               bought.forEach((key) =>
-                state.addPantry({ key, addedAt: new Date().toISOString() }),
+                addPantry({ key, addedAt: new Date().toISOString() }),
               );
               toast(`${bought.size} продуктів у коморі`, "🧊");
               setBought(new Set());

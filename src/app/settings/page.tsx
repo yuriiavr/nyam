@@ -33,7 +33,9 @@ import {
 import { haptic, plural } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const state = useApp();
+  const theme = useApp((s) => s.theme);
+  const setTheme = useApp((s) => s.setTheme);
+  const myRecipes = useApp((s) => s.myRecipes);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -149,10 +151,10 @@ export default function SettingsPage() {
                 key={t.value}
                 onClick={() => {
                   haptic(10);
-                  state.setTheme(t.value);
+                  setTheme(t.value);
                 }}
                 className={`flex items-center justify-center gap-2 rounded-2xl border py-3 text-[13.5px] font-bold ${
-                  state.theme === t.value
+                  theme === t.value
                     ? "border-brand bg-brand/10 text-brand"
                     : "border-line bg-surface text-muted"
                 }`}
@@ -194,7 +196,7 @@ export default function SettingsPage() {
           {hydrated && (
             <p className="mt-3 flex items-center gap-1.5 text-[11.5px] text-faint">
               <Github size={12} />
-              версія 0.1.0 · {state.myRecipes.length} власних рецептів
+              версія 0.1.0 · {myRecipes.length} власних рецептів
             </p>
           )}
         </Card>

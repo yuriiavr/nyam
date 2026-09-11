@@ -46,18 +46,31 @@ import { ingredientQtyLabel } from "@/lib/units";
 export default function RecipePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
+  const remoteProfiles = useApp((s) => s.remoteProfiles);
+  const profile = useApp((s) => s.profile);
+  const likes = useApp((s) => s.likes);
+  const saves = useApp((s) => s.saved);
+  const ratings = useApp((s) => s.ratings);
+  const followingIds = useApp((s) => s.following);
+  const pantryItems = useApp((s) => s.pantry);
+  const toggleLike = useApp((s) => s.toggleLike);
+  const toggleSave = useApp((s) => s.toggleSave);
+  const toggleFollow = useApp((s) => s.toggleFollow);
+  const deleteRecipe = useApp((s) => s.deleteRecipe);
+  const rate = useApp((s) => s.rate);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
   const [servings, setServings] = useState<number | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
 
-  const recipe = recipeById(state, params.id);
+  const recipe = recipeById(useApp.getState(), params.id);
 
   const similar = useMemo(() => {
     if (!recipe) return [];
-    return allRecipes(state)
+    return allRecipes(useApp.getState())
       .filter(
         (r) =>
           r.id !== recipe.id &&
@@ -65,7 +78,7 @@ export default function RecipePage() {
       )
       .slice(0, 4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipe?.id, state.myRecipes]);
+  }, [recipe?.id, myRecipes, remoteRecipes]);
 
   // Власні рецепти живуть у localStorage — до рехідрації їх ще не видно.
   if (!recipe && !hydrated) return <div className="min-h-dvh" />;
@@ -83,18 +96,18 @@ export default function RecipePage() {
     );
   }
 
-  const author = profileById(state, recipe.authorId);
-  const stats = effectiveStats(state, recipe);
+  const author = profileById(useApp.getState(), recipe.authorId);
+  const stats = effectiveStats(useApp.getState(), recipe);
   const rating = avgRating({ ...recipe, stats });
-  const myRating = state.ratings[recipe.id];
-  const liked = state.likes.includes(recipe.id);
-  const saved = state.saved.includes(recipe.id);
-  const isMine = !!recipe.mine || recipe.authorId === state.profile.id;
+  const myRating = ratings[recipe.id];
+  const liked = likes.includes(recipe.id);
+  const saved = saves.includes(recipe.id);
+  const isMine = !!recipe.mine || recipe.authorId === profile.id;
 
   const currentServings = servings ?? recipe.servings;
   const factor = currentServings / recipe.servings;
 
-  const pantry = new Set(state.pantry.map((p) => p.key));
+  const pantry = new Set(pantryItems.map((p) => p.key));
   const match = matchRecipe(recipe, pantry);
 
   const share = async () => {
@@ -146,7 +159,7 @@ export default function RecipePage() {
             <button
               onClick={() => {
                 haptic(14);
-                state.toggleSave(recipe.id);
+                toggleSave(recipe.id);
                 toast(saved ? "Прибрано зі збережених" : "Збережено в галерею", "🔖");
               }}
               aria-label="Зберегти"
@@ -198,16 +211,16 @@ export default function RecipePage() {
           {!isMine && (
             <Button
               size="sm"
-              variant={state.following.includes(author.id) ? "secondary" : "primary"}
+              variant={followingIds.includes(author.id) ? "secondary" : "primary"}
               onClick={() => {
-                state.toggleFollow(author.id);
+                toggleFollow(author.id);
                 toast(
-                  state.following.includes(author.id) ? "Відписано" : `Підписка на ${author.name}`,
+                  followingIds.includes(author.id) ? "Відписано" : `Підписка на ${author.name}`,
                   "👋",
                 );
               }}
             >
-              {state.following.includes(author.id) ? "Ви підписані" : "Підписатись"}
+              {followingIds.includes(author.id) ? "Ви підписані" : "Підписатись"}
             </Button>
           )}
         </div>
@@ -239,7 +252,7 @@ export default function RecipePage() {
             className="flex-1"
             onClick={() => {
               haptic(14);
-              state.toggleLike(recipe.id);
+              toggleLike(recipe.id);
             }}
           >
             <Heart size={17} className={liked ? "fill-current" : ""} />
@@ -295,7 +308,7 @@ export default function RecipePage() {
           </div>
         </div>
 
-        {state.pantry.length > 0 && (
+        {pantryItems.length > 0 && (
           <div className="mb-3 flex items-center gap-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5">
             <span className="text-lg">{match.pct === 100 ? "✅" : "🧊"}</span>
             <p className="flex-1 text-[12.5px] leading-snug">
@@ -331,7 +344,7 @@ export default function RecipePage() {
                       <span className="ml-1.5 text-[11px] font-normal text-faint">(за бажанням)</span>
                     )}
                   </p>
-                  {state.pantry.length > 0 && (
+                  {pantryItems.length > 0 && (
                     <p className={`text-[11px] ${have ? "text-mint" : "text-faint"}`}>
                       {have ? (pantry.has(item.key) ? "є в коморі" : "базовий продукт") : "треба купити"}
                     </p>
@@ -402,7 +415,7 @@ export default function RecipePage() {
               variant="danger"
               onClick={() => {
                 if (confirm(`Видалити «${recipe.title}»?`)) {
-                  state.deleteRecipe(recipe.id);
+                  deleteRecipe(recipe.id);
                   toast("Рецепт видалено", "🗑️");
                   router.push("/me");
                 }
@@ -454,7 +467,7 @@ export default function RecipePage() {
             value={myRating ?? 0}
             size={34}
             onChange={(v) => {
-              state.rate(recipe.id, v);
+              rate(recipe.id, v);
               toast("Дякуємо за оцінку", "⭐");
               setTimeout(() => setRateOpen(false), 420);
             }}
@@ -565,8 +578,9 @@ function NutritionCard({ recipe, servings }: { recipe: Recipe; servings: number 
  * щось написати.
  */
 function CommentsSection({ recipe }: { recipe: Recipe }) {
-  const state = useApp();
   const account = useApp((s) => s.account);
+  const profile = useApp((s) => s.profile);
+  const remoteProfiles = useApp((s) => s.remoteProfiles);
 
   const [comments, setComments] = useState<RecipeComment[] | null>(null);
   const [draft, setDraft] = useState("");
@@ -646,10 +660,10 @@ function CommentsSection({ recipe }: { recipe: Recipe }) {
       ) : (
         <div className="mt-3 flex flex-col gap-2.5">
           {comments.map((comment) => {
-            const author = profileById(state, comment.authorId);
+            const author = profileById(useApp.getState(), comment.authorId);
             // Прибрати може той, хто написав, і автор рецепта у себе під стравою.
             const canRemove =
-              comment.authorId === account.id || recipe.authorId === state.profile.id;
+              comment.authorId === account.id || recipe.authorId === profile.id;
 
             return (
               <Card key={comment.id} className="flex gap-2.5 p-3">
@@ -696,14 +710,18 @@ function CommentsSection({ recipe }: { recipe: Recipe }) {
  * пишемо завжди: порада без пояснення нічим не краща за випадкову.
  */
 function PairingSection({ recipe }: { recipe: Recipe }) {
-  const state = useApp();
   const hydrated = useApp((s) => s.hydrated);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
+  const cooked = useApp((s) => s.cooked);
+  const pantry = useApp((s) => s.pantry);
 
-  const pairs = useMemo(
-    () => (hydrated ? suggestPairs(state, recipe, allRecipes(state)) : []),
+  const pairs = useMemo(() => {
+    if (!hydrated) return [];
+    const snapshot = useApp.getState();
+    return suggestPairs(snapshot, recipe, allRecipes(snapshot));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, recipe.id, state.myRecipes, state.remoteRecipes, state.cooked, state.pantry],
-  );
+  }, [hydrated, recipe.id, myRecipes, remoteRecipes, cooked, pantry]);
 
   const heading = PAIR_HEADING[courseOf(recipe)];
   if (!heading || pairs.length === 0) return null;

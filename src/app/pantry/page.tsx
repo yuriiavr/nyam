@@ -47,7 +47,14 @@ import { formatNumber, ingredientQtyLabel } from "@/lib/units";
 import { expiryInfo, haptic, plural } from "@/lib/utils";
 
 export default function PantryPage() {
-  const state = useApp();
+  /*
+   * Комора читає свої зрізи, а не весь стор: інакше набір кількості в одній
+   * картці перемальовував би сторінку цілком, разом з усіма аркушами.
+   */
+  const pantry = useApp((s) => s.pantry);
+  const addPantry = useApp((s) => s.addPantry);
+  const importPantry = useApp((s) => s.importPantry);
+  const removePantry = useApp((s) => s.removePantry);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -75,13 +82,13 @@ export default function PantryPage() {
     null,
   );
 
-  const pantryKeys = state.pantry.map((p) => p.key);
+  const pantryKeys = pantry.map((p) => p.key);
 
   /*
    * Базові продукти живуть окремою вкладкою-чеклистом, тож із основного
    * списку їх прибираємо: інакше сіль і олія лежали б у двох місцях одразу.
    */
-  const stock = state.pantry.filter((item) => !ing(item.key).staple);
+  const stock = pantry.filter((item) => !ing(item.key).staple);
 
   const basics = useMemo(() => {
     const map = new Map<IngredientCat, IngredientDef[]>();
@@ -103,7 +110,7 @@ export default function PantryPage() {
     const gone: PantryItem[] = [];
     const map = new Map<IngredientCat, PantryItem[]>();
 
-    for (const item of state.pantry) {
+    for (const item of pantry) {
       if (ing(item.key).staple) continue;
       if (expiryInfo(item.expiresAt)?.tone === "expired") {
         gone.push(item);
@@ -133,14 +140,14 @@ export default function PantryPage() {
       expired: gone,
       groups: CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const),
     };
-  }, [state.pantry]);
+  }, [pantry]);
 
   const add = (
     key: string,
     extra?: { label?: string; barcode?: string; amount?: number; unit?: Unit },
   ) => {
     haptic(12);
-    state.addPantry({ key, addedAt: new Date().toISOString(), ...extra });
+    addPantry({ key, addedAt: new Date().toISOString(), ...extra });
   };
 
   const handleDetect = async (code: string) => {
@@ -245,7 +252,7 @@ export default function PantryPage() {
     }
 
     haptic([12, 30, 12]);
-    state.importPantry(items);
+    importPantry(items);
     setReceipt(null);
     toast(`Додано ${items.length} ${plural(items.length, "позицію", "позиції", "позицій")}`, "🧾");
   };
@@ -262,8 +269,8 @@ export default function PantryPage() {
         back={false}
         title="Моя комора"
         subtitle={
-          state.pantry.length
-            ? `${state.pantry.length} ${plural(state.pantry.length, "продукт", "продукти", "продуктів")}`
+          pantry.length
+            ? `${pantry.length} ${plural(pantry.length, "продукт", "продукти", "продуктів")}`
             : "Що є вдома"
         }
         right={
@@ -318,7 +325,7 @@ export default function PantryPage() {
                           key={item.key}
                           item={item}
                           onOpen={() => setDetailsFor(item.key)}
-                          onRemove={() => state.removePantry(item.key)}
+                          onRemove={() => removePantry(item.key)}
                         />
                       ))}
                     </AnimatePresence>
@@ -338,7 +345,7 @@ export default function PantryPage() {
                           key={item.key}
                           item={item}
                           onOpen={() => setDetailsFor(item.key)}
-                          onRemove={() => state.removePantry(item.key)}
+                          onRemove={() => removePantry(item.key)}
                         />
                       ))}
                     </AnimatePresence>
@@ -374,7 +381,7 @@ export default function PantryPage() {
                         key={def.key}
                         onClick={() => {
                           haptic(8);
-                          if (have) state.removePantry(def.key);
+                          if (have) removePantry(def.key);
                           else add(def.key);
                         }}
                         aria-pressed={have}
@@ -624,7 +631,7 @@ export default function PantryPage() {
                   variant="secondary"
                   className="mt-2.5"
                   onClick={() => {
-                    state.removePantry(scanned.ingredient!.key);
+                    removePantry(scanned.ingredient!.key);
                     setPickFor(scanned);
                     setScanned(null);
                   }}
@@ -1053,8 +1060,9 @@ function PantryChip({
  * щоб не змушувати шукати той самий чип у списку після сканування.
  */
 function ScannedQuantity({ itemKey }: { itemKey: string }) {
-  const state = useApp();
-  const item = state.pantry.find((p) => p.key === itemKey);
+  const pantry = useApp((s) => s.pantry);
+  const addPantry = useApp((s) => s.addPantry);
+  const item = pantry.find((p) => p.key === itemKey);
   const def = ing(itemKey);
   if (!item) return null;
 
@@ -1066,7 +1074,7 @@ function ScannedQuantity({ itemKey }: { itemKey: string }) {
       label={item.label ?? def.label}
       allowTaste={false}
       onChange={({ amount, unit }) =>
-        state.addPantry({ ...item, amount, unit, qty: undefined })
+        addPantry({ ...item, amount, unit, qty: undefined })
       }
     />
   );
@@ -1097,13 +1105,15 @@ function ItemSheet({
   /** Показує кнопку «додати ще» — щоб наповнювати комору не по одному аркушу. */
   onAddMore?: () => void;
 }) {
-  const state = useApp();
-  const item = state.pantry.find((p) => p.key === itemKey);
+  const pantry = useApp((s) => s.pantry);
+  const addPantry = useApp((s) => s.addPantry);
+  const removePantry = useApp((s) => s.removePantry);
+  const item = pantry.find((p) => p.key === itemKey);
   const def = itemKey ? ing(itemKey) : null;
 
   const patch = (changes: Partial<PantryItem>) => {
     if (!item) return;
-    state.addPantry({ ...item, ...changes });
+    addPantry({ ...item, ...changes });
   };
 
   const saveExpiry = (expiresAt: string | undefined) => {

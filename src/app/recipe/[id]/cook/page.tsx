@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, EmptyState, Stars, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import type { Consumed } from "@/lib/pantry";
@@ -25,11 +25,20 @@ import { formatClock, haptic } from "@/lib/utils";
 export default function CookPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
+  const restorePantry = useApp((s) => s.restorePantry);
+  const markCooked = useApp((s) => s.markCooked);
+  const consumePantry = useApp((s) => s.consumePantry);
+  const rate = useApp((s) => s.rate);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
-  const recipe = hydrated ? recipeById(state, params.id) : undefined;
+  const recipe = useMemo(
+    () => (hydrated ? recipeById(useApp.getState(), params.id) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hydrated, params.id, myRecipes, remoteRecipes],
+  );
 
   const [step, setStep] = useState(-1); // -1 = екран підготовки
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -164,7 +173,7 @@ export default function CookPage() {
 
   const undoConsume = () => {
     haptic(12);
-    state.restorePantry(pantryBefore);
+    restorePantry(pantryBefore);
     setConsumed([]);
     toast("Продукти повернуто в комору", "↩️");
   };
@@ -182,12 +191,13 @@ export default function CookPage() {
     haptic(12);
     if (step + 1 >= recipe.steps.length) {
       setDone(true);
-      state.markCooked(recipe.id);
+      markCooked(recipe.id);
       // Комора має відповідати холодильнику: продукти, що пішли на страву,
       // з неї зникають. Знімок «до» лишаємо, щоб списання можна було
       // скасувати — помилитись кроком у готуванні легко.
-      const before = state.pantry;
-      const changes = state.consumePantry(recipe);
+      // Знімок комори до списання — щоб було що повернути, якщо скасують.
+      const before = useApp.getState().pantry;
+      const changes = consumePantry(recipe);
       if (changes.length > 0) {
         setConsumed(changes);
         setPantryBefore(before.filter((p) => changes.some((c) => c.key === p.key)));
@@ -196,7 +206,8 @@ export default function CookPage() {
     } else {
       setStep((s) => s + 1);
     }
-  }, [recipe, step, state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipe, step]);
 
   const goPrev = () => {
     haptic(8);
@@ -264,7 +275,7 @@ export default function CookPage() {
               size={32}
               onChange={(v) => {
                 setRating(v);
-                state.rate(recipe.id, v);
+                rate(recipe.id, v);
                 toast("Оцінку збережено", "⭐");
               }}
             />

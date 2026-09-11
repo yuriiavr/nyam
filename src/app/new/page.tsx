@@ -80,7 +80,10 @@ function RecipeForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
-  const state = useApp();
+  const profile = useApp((s) => s.profile);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const updateRecipe = useApp((s) => s.updateRecipe);
+  const addRecipe = useApp((s) => s.addRecipe);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -116,7 +119,7 @@ function RecipeForm() {
   useEffect(() => {
     if (!hydrated || loaded) return;
     if (editId) {
-      const r = recipeById(state, editId);
+      const r = recipeById(useApp.getState(), editId);
       if (r) {
         setTitle(r.title);
         setDescription(r.description);
@@ -138,7 +141,8 @@ function RecipeForm() {
       }
     }
     setLoaded(true);
-  }, [hydrated, editId, loaded, state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, editId, loaded, myRecipes]);
 
   const valid =
     title.trim().length >= 2 &&
@@ -182,20 +186,20 @@ function RecipeForm() {
       steps: cleanSteps,
     };
 
-    if (editId && recipeById(state, editId)) {
-      state.updateRecipe(editId, base);
+    if (editId && recipeById(useApp.getState(), editId)) {
+      updateRecipe(editId, base);
       toast("Рецепт оновлено", "✅");
       router.replace(`/recipe/${editId}`);
     } else {
       const recipe: Recipe = {
         ...base,
         id: newId(),
-        authorId: state.profile.id,
+        authorId: profile.id,
         createdAt: new Date().toISOString(),
         stats: { likes: 0, saves: 0, cooks: 0, ratingSum: 0, ratingCount: 0 },
         mine: true,
       };
-      state.addRecipe(recipe);
+      addRecipe(recipe);
       toast("Рецепт додано в галерею", "🎉");
       router.replace(`/recipe/${recipe.id}`);
     }

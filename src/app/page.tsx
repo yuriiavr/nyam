@@ -24,8 +24,18 @@ import { refreshIfStale } from "@/lib/session";
 import { greeting, haptic, MEAL_LABEL, currentMeal, plural } from "@/lib/utils";
 
 export default function HomePage() {
-  const state = useApp();
+  /*
+   * Стрічка читає своє, а не весь стор: інакше вона перемальовувалась від
+   * будь-якої зміни — від кількості солі в коморі теж.
+   */
   const hydrated = useApp((s) => s.hydrated);
+  const profile = useApp((s) => s.profile);
+  const followingIds = useApp((s) => s.following);
+  const likes = useApp((s) => s.likes);
+  const saved = useApp((s) => s.saved);
+  const cooked = useApp((s) => s.cooked);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const pantry = useApp((s) => s.pantry);
 
   /*
    * У стрічку заходять частіше, ніж будь-куди, і чекають там свіже. Але
@@ -38,22 +48,22 @@ export default function HomePage() {
 
   const data = useMemo(() => {
     if (!hydrated) return null;
-    const all = allRecipes(state);
-    const trending = topBy(state, all, "trending").slice(0, 10);
-    const forYou = recommend(state, { limit: 8, respectPantry: true });
+    const all = allRecipes(useApp.getState());
+    const trending = topBy(useApp.getState(), all, "trending").slice(0, 10);
+    const forYou = recommend(useApp.getState(), { limit: 8, respectPantry: true });
     const following = all
-      .filter((r) => state.following.includes(r.authorId))
+      .filter((r) => followingIds.includes(r.authorId))
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-    const rest = topBy(state, all, "popular").filter(
+    const rest = topBy(useApp.getState(), all, "popular").filter(
       (r) => !following.some((f) => f.id === r.id),
     );
     return { trending, forYou, feed: [...following, ...rest].slice(0, 14) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.likes, state.saved, state.cooked, state.following, state.myRecipes, state.pantry]);
+  }, [hydrated, likes, saved, cooked, followingIds, myRecipes, pantry]);
 
   if (!hydrated || !data) return <HomeSkeleton />;
 
-  const streak = cookStreak(state);
+  const streak = cookStreak(useApp.getState());
   const meal = currentMeal();
 
   return (
@@ -73,9 +83,9 @@ export default function HomePage() {
         <div className="flex items-center gap-3 px-4 py-3">
           <Link href="/me" className="shrink-0">
             <Avatar
-              emoji={state.profile.emoji}
-              gradient={state.profile.gradient}
-              src={state.profile.avatar}
+              emoji={profile.emoji}
+              gradient={profile.gradient}
+              src={profile.avatar}
               size={44}
             />
           </Link>
@@ -211,7 +221,7 @@ export default function HomePage() {
       <section className="pt-7">
         <SectionTitle
           title="Стрічка"
-          note={`Від ${state.following.length} ${plural(state.following.length, "кухаря", "кухарів", "кухарів")}, на яких ти підписаний`}
+          note={`Від ${followingIds.length} ${plural(followingIds.length, "кухаря", "кухарів", "кухарів")}, на яких ти підписаний`}
         />
         <div className="flex flex-col gap-4 px-4">
           {data.feed.map((r) => (
@@ -301,13 +311,15 @@ function HomeSkeleton() {
  * готували — порожня картка «0 ккал» щодня не додає нічого корисного.
  */
 function TodayNutrition() {
-  const state = useApp();
   const hydrated = useApp((s) => s.hydrated);
+  const cooked = useApp((s) => s.cooked);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
 
   const totals = useMemo(
-    () => (hydrated ? dayTotals(state.cooked, (id) => recipeById(state, id)) : null),
+    () => (hydrated ? dayTotals(cooked, (id) => recipeById(useApp.getState(), id)) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, state.cooked, state.myRecipes, state.remoteRecipes],
+    [hydrated, cooked, myRecipes, remoteRecipes],
   );
 
   if (!totals || totals.meals === 0) return null;

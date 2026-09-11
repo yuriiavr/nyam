@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Avatar, Card, EmptyState, Segmented, Spinner } from "@/components/ui";
 import { profileById, useApp } from "@/lib/store";
@@ -16,13 +16,17 @@ type Tab = "followers" | "following";
 export default function FollowersPage() {
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
-  const state = useApp();
+  const remoteProfiles = useApp((s) => s.remoteProfiles);
 
   const [tab, setTab] = useState<Tab>(search.get("tab") === "following" ? "following" : "followers");
   const [people, setPeople] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const profile = profileById(state, params.id);
+  const profile = useMemo(
+    () => profileById(useApp.getState(), params.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [params.id, remoteProfiles],
+  );
 
   useEffect(() => {
     if (!isSupabaseConfigured) {

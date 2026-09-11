@@ -23,44 +23,51 @@ export default function MePage() {
 
 function MeContent() {
   const params = useSearchParams();
-  const state = useApp();
+  const profile = useApp((s) => s.profile);
+  const account = useApp((s) => s.account);
+  const myRecipes = useApp((s) => s.myRecipes);
+  const saved = useApp((s) => s.saved);
+  const wishlist = useApp((s) => s.wishlist);
+  const cooked = useApp((s) => s.cooked);
+  const notifications = useApp((s) => s.notifications);
+  const updateProfile = useApp((s) => s.updateProfile);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
   const initialTab = (params.get("tab") as Tab) ?? "mine";
   const [tab, setTab] = useState<Tab>(initialTab);
   const [editOpen, setEditOpen] = useState(false);
-  const [name, setName] = useState(state.profile.name);
-  const [handle, setHandle] = useState(state.profile.handle);
-  const [bio, setBio] = useState(state.profile.bio);
-  const [emoji, setEmoji] = useState(state.profile.emoji);
+  const [name, setName] = useState(profile.name);
+  const [handle, setHandle] = useState(profile.handle);
+  const [bio, setBio] = useState(profile.bio);
+  const [emoji, setEmoji] = useState(profile.emoji);
   /*
    * Фото з Google чи емодзі. Знімок беремо з акаунта, а не з профілю: у
    * профілі його можна замінити емодзі, і тоді посилання зникло б, а так
    * його завжди можна обрати назад.
    */
-  const googlePhoto = state.account?.photo ?? state.profile.avatar ?? null;
-  const [avatar, setAvatar] = useState<string | null>(state.profile.avatar ?? null);
+  const googlePhoto = account?.photo ?? profile.avatar ?? null;
+  const [avatar, setAvatar] = useState<string | null>(profile.avatar ?? null);
 
   const lists = useMemo(() => {
     if (!hydrated) return { mine: [], saved: [], wish: [], history: [] };
-    const all = allRecipes(state);
+    const all = allRecipes(useApp.getState());
     const byId = new Map(all.map((r) => [r.id, r]));
     return {
-      mine: state.myRecipes,
-      saved: state.saved.map((id) => byId.get(id)).filter((r) => r != null),
-      wish: state.wishlist.map((id) => byId.get(id)).filter((r) => r != null),
-      history: state.cooked
+      mine: myRecipes,
+      saved: saved.map((id) => byId.get(id)).filter((r) => r != null),
+      wish: wishlist.map((id) => byId.get(id)).filter((r) => r != null),
+      history: cooked
         .map((c) => ({ recipe: byId.get(c.recipeId), at: c.at }))
         .filter((x) => x.recipe != null),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.myRecipes, state.saved, state.wishlist, state.cooked]);
+  }, [hydrated, myRecipes, saved, wishlist, cooked]);
 
-  const streak = hydrated ? cookStreak(state) : 0;
+  const streak = hydrated ? cookStreak(useApp.getState()) : 0;
 
   const saveProfile = () => {
-    state.updateProfile({
+    updateProfile({
       name: name.trim() || "Мій профіль",
       handle: handle.trim().replace(/^@/, "") || "me",
       bio: bio.trim(),
@@ -73,7 +80,7 @@ function MeContent() {
 
   const current = tab === "history" ? [] : lists[tab];
 
-  const unread = state.notifications.filter((n) => !n.readAt).length;
+  const unread = notifications.filter((n) => !n.readAt).length;
 
   return (
     <div className="pb-8">
@@ -109,25 +116,25 @@ function MeContent() {
       <section className="px-4 pt-4">
         <div className="flex items-center gap-4">
           <Avatar
-            emoji={state.profile.emoji}
-            gradient={state.profile.gradient}
-            src={state.profile.avatar}
+            emoji={profile.emoji}
+            gradient={profile.gradient}
+            src={profile.avatar}
             size={72}
           />
           <div className="min-w-0 flex-1">
             <h2 className="truncate font-display text-[19px] font-extrabold leading-tight">
-              {state.profile.name}
+              {profile.name}
             </h2>
-            <p className="truncate text-[12.5px] text-muted">@{state.profile.handle}</p>
+            <p className="truncate text-[12.5px] text-muted">@{profile.handle}</p>
             <Button
               size="sm"
               variant="secondary"
               className="mt-2"
               onClick={() => {
-                setName(state.profile.name);
-                setHandle(state.profile.handle);
-                setBio(state.profile.bio);
-                setEmoji(state.profile.emoji);
+                setName(profile.name);
+                setHandle(profile.handle);
+                setBio(profile.bio);
+                setEmoji(profile.emoji);
                 setEditOpen(true);
               }}
             >
@@ -137,15 +144,15 @@ function MeContent() {
           </div>
         </div>
 
-        {state.profile.bio && (
-          <p className="mt-3 text-[13.5px] leading-relaxed text-muted">{state.profile.bio}</p>
+        {profile.bio && (
+          <p className="mt-3 text-[13.5px] leading-relaxed text-muted">{profile.bio}</p>
         )}
 
         {/* Статистика */}
         <div className="mt-4 grid grid-cols-4 gap-2">
           <Stat value={lists.mine.length} label="рецептів" />
           <Stat value={lists.saved.length} label="збережено" />
-          <Stat value={state.cooked.length} label="приготовано" />
+          <Stat value={cooked.length} label="приготовано" />
           <Stat value={streak} label="днів поспіль" accent={streak > 0} />
         </div>
 

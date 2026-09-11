@@ -113,10 +113,15 @@ export default function NotificationsPage() {
 }
 
 function NotificationRow({ n, actor }: { n: AppNotification; actor?: Profile }) {
-  const state = useApp();
+  const myRecipes = useApp((s) => s.myRecipes);
+  const remoteRecipes = useApp((s) => s.remoteRecipes);
   const meta = META[n.type];
   const Icon = meta.icon;
-  const recipe = n.recipeId ? recipeById(state, n.recipeId) : undefined;
+  const recipe = useMemo(
+    () => (n.recipeId ? recipeById(useApp.getState(), n.recipeId) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [n.recipeId, myRecipes, remoteRecipes],
+  );
 
   const body = (
     <div className="flex items-start gap-3 px-4 py-3.5">
