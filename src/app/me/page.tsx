@@ -34,6 +34,13 @@ function MeContent() {
   const [handle, setHandle] = useState(state.profile.handle);
   const [bio, setBio] = useState(state.profile.bio);
   const [emoji, setEmoji] = useState(state.profile.emoji);
+  /*
+   * Фото з Google чи емодзі. Знімок беремо з акаунта, а не з профілю: у
+   * профілі його можна замінити емодзі, і тоді посилання зникло б, а так
+   * його завжди можна обрати назад.
+   */
+  const googlePhoto = state.account?.photo ?? state.profile.avatar ?? null;
+  const [avatar, setAvatar] = useState<string | null>(state.profile.avatar ?? null);
 
   const lists = useMemo(() => {
     if (!hydrated) return { mine: [], saved: [], wish: [], history: [] };
@@ -58,6 +65,7 @@ function MeContent() {
       handle: handle.trim().replace(/^@/, "") || "me",
       bio: bio.trim(),
       emoji,
+      avatar,
     });
     toast("Профіль оновлено", "✅");
     setEditOpen(false);
@@ -265,12 +273,33 @@ function MeContent() {
               Аватар
             </label>
             <div className="flex flex-wrap gap-2">
+              {/* Знімок із Google — першим: він уже є, і найчастіше саме його
+                  й хочуть лишити. Емодзі поруч, для тих, хто не хоче фото. */}
+              {googlePhoto && (
+                <button
+                  onClick={() => setAvatar(googlePhoto)}
+                  aria-label="Фото з Google"
+                  aria-pressed={avatar !== null}
+                  className={`h-12 w-12 overflow-hidden rounded-2xl ${
+                    avatar ? "ring-2 ring-brand" : ""
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={googlePhoto} alt="" className="h-full w-full object-cover" />
+                </button>
+              )}
               {["🧑‍🍳", "👩‍🍳", "👨‍🍳", "🔥", "🥑", "🍜", "🧁", "🌶️", "🐙", "🦊"].map((e) => (
                 <button
                   key={e}
-                  onClick={() => setEmoji(e)}
+                  onClick={() => {
+                    setEmoji(e);
+                    // Обрали емодзі — фото більше не показуємо, інакше вибір
+                    // не мав би жодного видимого наслідку: знімок завжди зверху.
+                    setAvatar(null);
+                  }}
+                  aria-pressed={avatar === null && emoji === e}
                   className={`grid h-12 w-12 place-items-center rounded-2xl text-2xl ${
-                    emoji === e ? "bg-brand/20 ring-2 ring-brand" : "bg-surface-2"
+                    avatar === null && emoji === e ? "bg-brand/20 ring-2 ring-brand" : "bg-surface-2"
                   }`}
                 >
                   {e}

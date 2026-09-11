@@ -69,12 +69,25 @@ async function migrateLocalRecipes(userId: string, remoteIds: Set<string>): Prom
   return uploaded;
 }
 
-/** Тягне все, що стосується користувача, і кладе у сховище. */
-async function loadUserData(userId: string, email: string) {
+/** Посилання на знімок із Google: у метаданих воно лежить під двома назвами. */
+function googlePhoto(user: { user_metadata?: Record<string, unknown> }): string | undefined {
+  const meta = user.user_metadata ?? {};
+  const url = meta.avatar_url ?? meta.picture;
+  return typeof url === "string" && url ? url : undefined;
+}
+
+/**
+ * Тягне все, що стосується користувача, і кладе у сховище.
+ *
+ * `photo` — знімок із Google. Тримаємо його окремо від аватара профілю: той
+ * можна замінити емодзі, і тоді посилання на фото загубилося б назовсім, а
+ * так його завжди можна обрати назад.
+ */
+async function loadUserData(userId: string, email: string, photo?: string) {
   const store = useApp.getState();
   store.setSyncStatus("loading");
   setSyncUser(userId);
-  store.setAccount({ id: userId, email });
+  store.setAccount({ id: userId, email, photo });
 
   try {
     // Сімʼю читаємо першою: від складу учасників залежить, які рядки
@@ -199,7 +212,7 @@ export async function initSession(): Promise<() => void> {
   const session = data.session;
 
   if (session?.user) {
-    await loadUserData(session.user.id, session.user.email ?? "");
+    await loadUserData(session.user.id, session.user.email ?? "", googlePhoto(session.user));
   } else {
     useApp.getState().setSyncStatus("ready");
   }
@@ -212,7 +225,7 @@ export async function initSession(): Promise<() => void> {
     if (event === "SIGNED_IN" && next?.user) {
       const current = useApp.getState().account;
       if (current?.id === next.user.id) return; // вже завантажено
-      void loadUserData(next.user.id, next.user.email ?? "");
+      void loadUserData(next.user.id, next.user.email ?? "", googlePhoto(next.user));
     }
     if (event === "SIGNED_OUT") {
       setSyncUser(null);
@@ -233,7 +246,7 @@ export async function initSession(): Promise<() => void> {
 /** Ручне перезавантаження — кнопка «оновити» в налаштуваннях. */
 export async function refreshFromServer() {
   const account = useApp.getState().account;
-  if (account) await loadUserData(account.id, account.email);
+  if (account) await loadUserData(account.id, account.email, account.photo);
 }
 
 /* ── Дії авторизації ──────────────────────────────────────────────────── */

@@ -65,7 +65,7 @@ export interface AppState {
 
   /* ── Бекенд ─────────────────────────────────────────────────────────── */
   /** Авторизований користувач; null — не увійшов. */
-  account: { id: string; email: string } | null;
+  account: { id: string; email: string; photo?: string } | null;
   /**
    * Чи вже відомо, є сесія чи ні. Поки false, воротар показує заставку:
    * без цього прапорця той, у кого сесія є, встигав побачити екран входу.
@@ -90,7 +90,7 @@ export interface AppState {
   setOnboarded: (v: boolean) => void;
   updateProfile: (patch: Partial<Profile>) => void;
 
-  setAccount: (account: { id: string; email: string } | null) => void;
+  setAccount: (account: { id: string; email: string; photo?: string } | null) => void;
   setAuthChecked: (v: boolean) => void;
   setCommunity: (data: { recipes: Recipe[]; profiles: Profile[] }) => void;
   setSyncStatus: (status: SyncStatus, error?: string | null) => void;
