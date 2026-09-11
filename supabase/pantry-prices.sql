@@ -16,3 +16,8 @@ alter table public.pantry_items
 
 comment on column public.pantry_items.price_per_gram is
   'Ціна грама продукту в гривнях з останньої покупки; null — ціна невідома.';
+
+-- PostgREST тримає схему в кеші й про нову колонку сам може не дізнатись.
+-- Без цього рядка читання комори падатиме з «column does not exist» навіть
+-- після успішної міграції.
+notify pgrst, 'reload schema';
