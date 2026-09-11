@@ -27,7 +27,13 @@ export interface PushMessage {
 const PUSH_SECRET = process.env.PUSH_SECRET ?? "";
 /* Розклад Vercel ходить зі своїм секретом і змінити заголовок не дає. */
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
-const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+/*
+ * Публічний ключ приймаємо під обома назвами. У браузер Next віддає лише
+ * змінні з префіксом NEXT_PUBLIC_, тож там альтернативи немає, а на сервері
+ * читається будь-яка — щоб розсилка не мовчала через одну літеру в назві.
+ */
+const VAPID_PUBLIC =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? process.env.VAPID_PUBLIC_KEY ?? "";
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY ?? "";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
