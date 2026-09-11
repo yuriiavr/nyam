@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Avatar, Button, Card, useToast } from "@/components/ui";
-import { disablePush, enablePush, pushActive, pushSupported } from "@/lib/push";
+import { disablePush, enablePush, pushActive, pushConfigured, pushSupported } from "@/lib/push";
 import { signOut } from "@/lib/session";
 import { useApp } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -280,17 +280,20 @@ function PushCard() {
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  /** Чи налаштований пуш на сервері. Питаємо запитом, а не зі змінної. */
+  const [configured, setConfigured] = useState(false);
 
   useEffect(() => {
-    void pushActive().then((active) => {
+    void Promise.all([pushActive(), pushConfigured()]).then(([active, ok]) => {
       setOn(active);
+      setConfigured(ok);
       setReady(true);
     });
   }, []);
 
   if (!account || !isSupabaseConfigured) return null;
 
-  const supported = pushSupported();
+  const supported = pushSupported() && configured;
   const iosNotInstalled = isIos() && !isStandalone();
 
   const toggle = async () => {
@@ -335,7 +338,7 @@ function PushCard() {
             На iPhone сповіщення працюють лише в застосунку, доданому на екран «Домів».
             Додай Ням туди — і перемикач зʼявиться.
           </p>
-        ) : !supported ? (
+        ) : !ready ? null : !supported ? (
           <p className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] leading-relaxed text-muted">
             Цей браузер не вміє сповіщень, або їх ще не налаштовано на сервері.
           </p>

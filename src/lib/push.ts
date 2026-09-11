@@ -13,17 +13,42 @@ import { deletePushSubscription, savePushSubscription } from "./supabase/api";
  * різні рядки, і відписка на одному не глушить інший.
  */
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+/**
+ * Публічний ключ беремо з сервера, а не зі змінної оточення.
+ *
+ * У браузер Next віддає лише змінні з префіксом NEXT_PUBLIC_, а таку змінну
+ * не можна позначити sensitive у Vercel — і навпаки. Запит знімає це
+ * протиріччя: ключ публічний за призначенням, і його однаково отримує кожен
+ * пристрій, що підписується.
+ */
+let keyCache: string | null = null;
 
-/** Чи вміє цей браузер пуш і чи налаштований ключ. */
+async function vapidKey(): Promise<string> {
+  if (keyCache !== null) return keyCache;
+  try {
+    const res = await fetch("/api/push/key", { headers: { Accept: "application/json" } });
+    const data = (await res.json()) as { key?: string };
+    keyCache = data.key ?? "";
+  } catch {
+    keyCache = "";
+  }
+  return keyCache;
+}
+
+/** Чи вміє цей браузер пуш. Чи налаштований сервер — питаємо окремо. */
 export function pushSupported(): boolean {
   return (
     typeof window !== "undefined" &&
     "serviceWorker" in navigator &&
     "PushManager" in window &&
-    "Notification" in window &&
-    VAPID_PUBLIC_KEY.length > 0
+    "Notification" in window
   );
+}
+
+/** Чи є на сервері ключ, тобто чи є взагалі що вмикати. */
+export async function pushConfigured(): Promise<boolean> {
+  if (!pushSupported()) return false;
+  return (await vapidKey()).length > 0;
 }
 
 export function pushPermission(): NotificationPermission | "unsupported" {
@@ -72,6 +97,9 @@ export type PushResult = "on" | "denied" | "unsupported" | "failed";
 export async function enablePush(userId: string): Promise<PushResult> {
   if (!pushSupported()) return "unsupported";
 
+  const key = await vapidKey();
+  if (!key) return "unsupported";
+
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return "denied";
 
@@ -86,7 +114,7 @@ export async function enablePush(userId: string): Promise<PushResult> {
         // Без цього браузер не доставить нічого, крім повідомлень із тілом,
         // а Chrome такі підписки просто не створює.
         userVisibleOnly: true,
-        applicationServerKey: keyToBytes(VAPID_PUBLIC_KEY),
+        applicationServerKey: keyToBytes(key),
       }));
 
     const json = subscription.toJSON();

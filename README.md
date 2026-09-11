@@ -138,6 +138,7 @@ src/
 │  ├─ api/receipt/      проксі до пошуку фіскального чека ДПС (обхід CORS, без ключів)
 │  ├─ api/cron/expiry/  щоденна перевірка строків придатності → пуш
 │  ├─ api/push/notify/  вебхук бази: подія в notifications → пуш
+│  ├─ api/push/key/     публічний ключ VAPID для підписки пристрою
 │  └─ …
 ├─ components/          UI-кібліотека, картки, сканер, фільтри
 ├─ lib/
@@ -220,8 +221,10 @@ npm run check:receipt    # розбір касового чека: QR, checkXml,
 1. Виконай `supabase/push.sql` — таблиця підписок пристроїв.
 2. Згенеруй свою пару ключів: `npx web-push generate-vapid-keys`.
 3. Додай у **Vercel → Settings → Environment Variables** пʼять змінних із
-   `.env.example`: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
-   `SUPABASE_SERVICE_ROLE_KEY`, `PUSH_SECRET`, `CRON_SECRET`.
+   `.env.example`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `PUSH_SECRET`, `CRON_SECRET`. Усі можна
+   позначати sensitive: публічний ключ браузер бере з `/api/push/key`, а не
+   з бандла, тож префікс `NEXT_PUBLIC_` тут не потрібен.
 4. Щоденні нагадування вже описані у `vercel.json` — Vercel підхопить розклад
    сам після деплою (о 7:00 UTC, тобто 10:00 за Києвом).
 5. Сповіщення про коментарі: **Supabase → Database → Webhooks → Create**,
