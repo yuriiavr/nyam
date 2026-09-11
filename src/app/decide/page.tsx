@@ -39,13 +39,6 @@ const METHODS: Method[] = [
     accent: "#34d399",
   },
   {
-    href: "/decide/swipe",
-    emoji: "🔥",
-    title: "Свайп",
-    note: "Гортай, як у Тіндері",
-    accent: "#f43f6a",
-  },
-  {
     href: "/decide/duel",
     emoji: "⚔️",
     title: "Дуель страв",
@@ -53,39 +46,11 @@ const METHODS: Method[] = [
     accent: "#a78bfa",
   },
   {
-    href: "/decide/mood",
-    emoji: "🎭",
-    title: "За настроєм",
-    note: "Три питання — і готово",
-    accent: "#ffb020",
-  },
-  {
-    href: "/decide/shake",
-    emoji: "📳",
-    title: "Струсити",
-    note: "Потряси телефон",
-    accent: "#38bdf8",
-  },
-  {
     href: "/decide/party",
     emoji: "👥",
     title: "Разом",
     note: "Оберіть компанією на одному телефоні",
     accent: "#f472b6",
-  },
-  {
-    href: "/decide/foryou",
-    emoji: "🔮",
-    title: "Для тебе",
-    note: "Алгоритм на основі твого смаку",
-    accent: "#c084fc",
-  },
-  {
-    href: "/decide/weather",
-    emoji: "🌦️",
-    title: "За погодою",
-    note: "Холодно — суп, спека — салат",
-    accent: "#60a5fa",
   },
   {
     href: "/decide/rescue",
@@ -127,7 +92,7 @@ export default function DecidePage() {
 
   return (
     <div className="pb-8">
-      <TopBar back={false} title="Вирішити за мене" subtitle="12 способів обрати страву" />
+      <TopBar back={false} title="Вирішити за мене" subtitle="7 способів обрати страву" />
 
       {/* Найшвидший варіант */}
       <section className="px-4 pt-4">

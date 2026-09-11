@@ -237,11 +237,11 @@ export default function SettingsPage() {
           </div>
           <p className="mt-2 text-[13px] leading-relaxed text-muted">
             Соціальна кулінарна книга, яка допомагає вирішити, що поїсти. Рулетка, підбір за
-            холодильником, свайп, дуель страв, план на тиждень і сканер штрихкодів.
+            холодильником, дуель страв, план на тиждень, сканер штрихкодів і чеків.
           </p>
           <p className="mt-3 text-[12px] leading-relaxed text-faint">
-            Дані зберігаються локально у твоєму браузері. Штрихкоди звіряються з відкритою базою
-            Open Food Facts, погода — з Open-Meteo.
+            Штрихкоди звіряються з відкритою базою Open Food Facts, а позиції чека приходять із
+            реєстру фіскальних чеків податкової.
           </p>
           <p className="mt-3 flex gap-3 text-[12px]">
             <Link href="/privacy" className="text-brand underline underline-offset-2">

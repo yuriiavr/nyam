@@ -384,57 +384,6 @@ export function recommend(
 
 /* ── Погода → що їсти ─────────────────────────────────────────────────── */
 
-export interface WeatherHint {
-  moods: Mood[];
-  title: string;
-  note: string;
-  emoji: string;
-}
-
-export function weatherHint(tempC: number, code: number): WeatherHint {
-  const rainy = [51, 53, 55, 61, 63, 65, 80, 81, 82, 95, 96, 99].includes(code);
-  const snowy = [71, 73, 75, 77, 85, 86].includes(code);
-
-  if (snowy || tempC <= 2) {
-    return {
-      moods: ["cozy", "comfort", "hearty"],
-      title: "Надворі мороз",
-      note: "Саме час для гарячого супу і чогось ситного.",
-      emoji: "❄️",
-    };
-  }
-  if (rainy) {
-    return {
-      moods: ["comfort", "cozy"],
-      title: "Дощить",
-      note: "Комфорт-фуд і щось тепле — найкращий план.",
-      emoji: "🌧️",
-    };
-  }
-  if (tempC >= 26) {
-    return {
-      moods: ["fresh", "healthy", "fast"],
-      title: "Спека",
-      note: "Плиту краще не вмикати. Свіже і холодне.",
-      emoji: "🥵",
-    };
-  }
-  if (tempC >= 16) {
-    return {
-      moods: ["fresh", "healthy"],
-      title: "Гарна погода",
-      note: "Легке та швидке зайде найкраще.",
-      emoji: "☀️",
-    };
-  }
-  return {
-    moods: ["cozy", "comfort"],
-    title: "Прохолодно",
-    note: "Щось тепле й затишне.",
-    emoji: "🌤️",
-  };
-}
-
 /* ── Генератор плану на тиждень ───────────────────────────────────────── */
 
 export function generateWeekPlan(

@@ -7,7 +7,7 @@ import {
   ChevronRight,
   Dices,
   Flame,
-  Heart,
+  LifeBuoy,
   Plus,
   Refrigerator,
   Settings2,
@@ -111,7 +111,7 @@ export default function HomePage() {
               Дозволь застосунку вирішити
             </h2>
             <p className="mt-1 text-[13px] text-muted">
-              12 способів обрати страву — від холодильника до рулетки.
+              7 способів обрати страву — від холодильника до рулетки.
             </p>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
@@ -121,7 +121,7 @@ export default function HomePage() {
                 icon={<Refrigerator size={19} />}
                 label="Холодильник"
               />
-              <QuickAction href="/decide/swipe" icon={<Heart size={19} />} label="Свайп" />
+              <QuickAction href="/decide/rescue" icon={<LifeBuoy size={19} />} label="Врятувати" />
             </div>
 
             <Link
@@ -165,11 +165,6 @@ export default function HomePage() {
           <SectionTitle
             title="Схоже на твій смак"
             note="Підібрано з твоїх лайків, комори і часу доби"
-            action={
-              <Link href="/decide/foryou" className="text-[12px] font-bold text-brand">
-                Більше
-              </Link>
-            }
           />
           <div className="no-scrollbar flex gap-3 overflow-x-auto px-4 pb-1">
             {data.forYou.slice(0, 6).map(({ recipe, reasons }) => (
