@@ -6,6 +6,7 @@ import { Button, Chip, Sheet } from "./ui";
 import { allRecipes, useApp } from "@/lib/store";
 import { emptyFilters, POOL_LABEL, type Filters, type Pool } from "@/lib/matching";
 import type { MealType, Mood } from "@/lib/types";
+import { COURSE_LABEL, COURSE_ORDER } from "@/lib/pairing";
 import { MEAL_LABEL, MOOD_META, haptic } from "@/lib/utils";
 
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "snack", "dessert"];
@@ -97,6 +98,19 @@ export function FilterSheet({
         {POOLS.map((p) => (
           <Chip key={p} active={value.pool === p} onClick={() => onChange({ ...value, pool: p })}>
             {POOL_LABEL[p]}
+          </Chip>
+        ))}
+      </Group>
+
+      {/* Частина прийому їжі: гарнір окремо від основної страви. */}
+      <Group title="Частина страви">
+        {COURSE_ORDER.map((c) => (
+          <Chip
+            key={c}
+            active={value.courses.includes(c)}
+            onClick={() => onChange({ ...value, courses: toggle(value.courses, c) })}
+          >
+            {COURSE_LABEL[c]}
           </Chip>
         ))}
       </Group>

@@ -52,6 +52,9 @@ create table if not exists public.recipes (
   steps        jsonb not null default '[]'::jsonb,
   source_id    uuid references public.recipes (id) on delete set null,
   is_public    boolean not null default true,
+  -- Чим страва є на столі: гарнір, основна, суп… Порожньо — рецепт створено
+  -- до появи поля, і частину виводить сам застосунок.
+  course       text,
   -- Базова популярність демо-рецептів, щоб стрічка не була порожньою.
   seed_likes   int not null default 0,
   seed_saves   int not null default 0,

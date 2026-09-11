@@ -37,6 +37,7 @@ import {
   MOOD_META,
 } from "@/lib/utils";
 import { recipeCost } from "@/lib/cost";
+import { COURSE_LABEL, PAIR_HEADING, courseOf, suggestPairs } from "@/lib/pairing";
 import { macroShares, recipeNutrition } from "@/lib/nutrition";
 import { ingredientQtyLabel } from "@/lib/units";
 
@@ -357,6 +358,7 @@ export default function RecipePage() {
       {/* Харчова цінність */}
       <NutritionCard recipe={recipe} servings={currentServings} />
       <CostCard recipe={recipe} servings={currentServings} />
+      <PairingSection recipe={recipe} />
 
       {/* Кроки */}
       <section className="px-4 pt-7">
@@ -555,6 +557,47 @@ function NutritionCard({ recipe, servings }: { recipe: Recipe; servings: number 
           {n.skipped.length > 0 && ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
         </p>
       </Card>
+    </section>
+  );
+}
+
+/**
+ * Що подати разом.
+ *
+ * Показуємо лише там, де це має сенс: до самодостатньої страви на кшталт
+ * піци гарнір не пропонують, і мовчання тут — теж відповідь. Причину поруч
+ * пишемо завжди: порада без пояснення нічим не краща за випадкову.
+ */
+function PairingSection({ recipe }: { recipe: Recipe }) {
+  const state = useApp();
+  const hydrated = useApp((s) => s.hydrated);
+
+  const pairs = useMemo(
+    () => (hydrated ? suggestPairs(state, recipe, allRecipes(state)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [hydrated, recipe.id, state.myRecipes, state.remoteRecipes, state.cooked, state.pantry],
+  );
+
+  const heading = PAIR_HEADING[courseOf(recipe)];
+  if (!heading || pairs.length === 0) return null;
+
+  return (
+    <section className="px-4 pt-7">
+      <h2 className="mb-3 font-display text-[17px] font-bold">{heading}</h2>
+      <div className="flex flex-col gap-2">
+        {pairs.map(({ recipe: pair, reason }) => (
+          <RecipeRow
+            key={pair.id}
+            recipe={pair}
+            href={`/recipe/${pair.id}`}
+            subtitle={
+              <span className="text-[11.5px] text-brand">
+                {COURSE_LABEL[courseOf(pair)].toLowerCase()} · {reason}
+              </span>
+            }
+          />
+        ))}
+      </div>
     </section>
   );
 }

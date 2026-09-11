@@ -90,6 +90,7 @@ const raw: SeedRecipe[] = [
     servings: 6,
     kcal: 279,
     costLevel: 1,
+    course: "soup",
     ingredients: [
       { key: "buryak", qty: "2 шт" },
       { key: "kartoplya", qty: "4 шт" },
@@ -130,6 +131,7 @@ const raw: SeedRecipe[] = [
     servings: 3,
     kcal: 249,
     costLevel: 1,
+    course: "main",
     ingredients: [
       { key: "kartoplya", qty: "6 шт" },
       { key: "tsybulya", qty: "1 шт" },
@@ -165,6 +167,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 387,
     costLevel: 1,
+    course: "whole",
     ingredients: [
       { key: "tvorog", qty: "400 г" },
       { key: "yajtsya", qty: "1 шт" },
@@ -200,6 +203,7 @@ const raw: SeedRecipe[] = [
     servings: 4,
     kcal: 947,
     costLevel: 1,
+    course: "whole",
     ingredients: [
       { key: "boroshno", qty: "500 г" },
       { key: "voda", qty: "250 мл" },
@@ -237,6 +241,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 918,
     costLevel: 2,
+    course: "whole",
     ingredients: [
       { key: "makarony", qty: "200 г" },
       { key: "bekon", qty: "120 г" },
@@ -271,6 +276,7 @@ const raw: SeedRecipe[] = [
     servings: 3,
     kcal: 342,
     costLevel: 3,
+    course: "soup",
     ingredients: [
       { key: "krevetky", qty: "300 г" },
       { key: "tom_yam_pasta", qty: "2 ст. л." },
@@ -310,6 +316,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 688,
     costLevel: 2,
+    course: "whole",
     ingredients: [
       { key: "kurka", qty: "400 г" },
       { key: "soyevyi", qty: "4 ст. л." },
@@ -346,6 +353,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 579,
     costLevel: 1,
+    course: "whole",
     ingredients: [
       { key: "lokshyna", qty: "200 г" },
       { key: "perets", qty: "1 шт" },
@@ -382,6 +390,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 384,
     costLevel: 1,
+    course: "whole",
     ingredients: [
       { key: "yajtsya", qty: "4 шт" },
       { key: "pomidory_konserv", qty: "400 г" },
@@ -420,6 +429,7 @@ const raw: SeedRecipe[] = [
     servings: 4,
     kcal: 170,
     costLevel: 1,
+    course: "soup",
     ingredients: [
       { key: "garbuz", qty: "800 г" },
       { key: "morkva", qty: "1 шт" },
@@ -456,6 +466,7 @@ const raw: SeedRecipe[] = [
     servings: 4,
     kcal: 309,
     costLevel: 1,
+    course: "snack",
     ingredients: [
       // Довідкове значення нуту — для сухого. Консервований уже розварений
       // і важить утричі більше на ту саму калорійність, тож задаємо етикетку.
@@ -496,6 +507,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 477,
     costLevel: 2,
+    course: "salad",
     ingredients: [
       { key: "pomidor", qty: "3 шт" },
       { key: "ogirok", qty: "1 шт" },
@@ -531,6 +543,7 @@ const raw: SeedRecipe[] = [
     servings: 1,
     kcal: 614,
     costLevel: 2,
+    course: "whole",
     ingredients: [
       { key: "yagody", qty: "200 г заморожених" },
       { key: "banan", qty: "1 шт" },
@@ -563,6 +576,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 907,
     costLevel: 2,
+    course: "whole",
     ingredients: [
       { key: "farsh", qty: "400 г" },
       { key: "bulochka", qty: "2 шт" },
@@ -601,6 +615,7 @@ const raw: SeedRecipe[] = [
     servings: 6,
     kcal: 902,
     costLevel: 2,
+    course: "whole",
     ingredients: [
       { key: "rys", qty: "600 г" },
       { key: "yalovychyna", qty: "600 г" },
@@ -638,6 +653,7 @@ const raw: SeedRecipe[] = [
     servings: 2,
     kcal: 533,
     costLevel: 3,
+    course: "main",
     ingredients: [
       { key: "losos", qty: "2 стейки" },
       { key: "lymon", qty: "1 шт" },
@@ -673,6 +689,7 @@ const raw: SeedRecipe[] = [
     servings: 5,
     kcal: 342,
     costLevel: 1,
+    course: "soup",
     ingredients: [
       { key: "kurka", qty: "500 г" },
       { key: "lokshyna", qty: "150 г" },
@@ -708,6 +725,7 @@ const raw: SeedRecipe[] = [
     servings: 6,
     kcal: 559,
     costLevel: 2,
+    course: "dessert",
     ingredients: [
       { key: "savoyardi", qty: "24 шт" },
       { key: "yajtsya", qty: "4 шт" },
@@ -744,6 +762,7 @@ const raw: SeedRecipe[] = [
     servings: 4,
     kcal: 571,
     costLevel: 1,
+    course: "dessert",
     ingredients: [
       { key: "boroshno", qty: "200 г" },
       { key: "moloko", qty: "500 мл" },
@@ -779,6 +798,7 @@ const raw: SeedRecipe[] = [
     servings: 1,
     kcal: 521,
     costLevel: 1,
+    course: "main",
     ingredients: [
       { key: "yajtsya", qty: "3 шт" },
       { key: "moloko", qty: "2 ст. л." },
@@ -811,6 +831,7 @@ const raw: SeedRecipe[] = [
     servings: 3,
     kcal: 509,
     costLevel: 1,
+    course: "side",
     ingredients: [
       { key: "grechka", qty: "250 г" },
       { key: "gryby", qty: "300 г" },
@@ -844,6 +865,7 @@ const raw: SeedRecipe[] = [
     servings: 3,
     kcal: 657,
     costLevel: 1,
+    course: "whole",
     ingredients: [
       { key: "boroshno", qty: "300 г" },
       { key: "drizhdzhi", qty: "7 г" },
@@ -880,6 +902,7 @@ const raw: SeedRecipe[] = [
     servings: 4,
     kcal: 168,
     costLevel: 1,
+    course: "side",
     ingredients: [
       { key: "kartoplya", qty: "4 шт" },
       { key: "kabachok", qty: "1 шт" },

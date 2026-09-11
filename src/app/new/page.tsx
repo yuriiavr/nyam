@@ -22,6 +22,7 @@ import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/dat
 import { lookupBarcode } from "@/lib/barcode";
 import { recipeById, useApp } from "@/lib/store";
 import type {
+  Course,
   IngredientCat,
   MealType,
   Mood,
@@ -29,6 +30,7 @@ import type {
   RecipeIngredient,
   RecipeStep,
 } from "@/lib/types";
+import { COURSE_LABEL, COURSE_ORDER, courseOf } from "@/lib/pairing";
 import { compressImage, haptic, MEAL_LABEL, MOOD_META, newId } from "@/lib/utils";
 
 const EMOJIS = [
@@ -77,6 +79,7 @@ function RecipeForm() {
   const [image, setImage] = useState<string | null>(null);
   const [cuisine, setCuisine] = useState("Домашня");
   const [mealTypes, setMealTypes] = useState<MealType[]>(["dinner"]);
+  const [course, setCourse] = useState<Course>("whole");
   const [moods, setMoods] = useState<Mood[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
@@ -108,6 +111,7 @@ function RecipeForm() {
         setImage(r.image ?? null);
         setCuisine(r.cuisine);
         setMealTypes(r.mealTypes);
+        setCourse(courseOf(r));
         setMoods(r.moods);
         setTags(r.tags);
         setTimeMin(r.timeMin);
@@ -152,6 +156,7 @@ function RecipeForm() {
       image,
       cuisine: cuisine.trim() || "Домашня",
       mealTypes: mealTypes.length ? mealTypes : (["dinner"] as MealType[]),
+      course,
       moods,
       tags,
       timeMin,
@@ -324,6 +329,19 @@ function RecipeForm() {
 
       {/* Параметри */}
       <section className="px-4 pt-2">
+        {/* Чим страва є на столі — від цього залежать і фільтри, і підказки
+            «до цього підійде…». Одне значення, а не набір: страва не буває
+            одночасно гарніром і супом. */}
+        <Field label="Що це за страва">
+          <div className="flex flex-wrap gap-2">
+            {COURSE_ORDER.map((c) => (
+              <Chip key={c} active={course === c} onClick={() => setCourse(c)}>
+                {COURSE_LABEL[c]}
+              </Chip>
+            ))}
+          </div>
+        </Field>
+
         <Field label="Коли це їдять">
           <div className="flex flex-wrap gap-2">
             {MEALS.map((m) => (

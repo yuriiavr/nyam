@@ -1,7 +1,17 @@
 import { CAT_LABEL, ing } from "@/data/ingredients";
 import type { AppState } from "./store";
 import { allRecipes, daysSinceCooked, effectiveStats } from "./store";
-import type { IngredientCat, MatchResult, MealType, Mood, PantryItem, Recipe, Unit } from "./types";
+import { courseOf } from "./pairing";
+import type {
+  Course,
+  IngredientCat,
+  MatchResult,
+  MealType,
+  Mood,
+  PantryItem,
+  Recipe,
+  Unit,
+} from "./types";
 import { formatSummed, quantityOf, sumQuantities, type SummedQuantity } from "./units";
 import { avgRating, currentMeal, expiryInfo } from "./utils";
 
@@ -17,6 +27,8 @@ export interface Filters {
   maxDifficulty: number | null;
   maxCost: number | null;
   cuisines: string[];
+  /** Частина прийому їжі: гарнір, основна, суп… */
+  courses: Course[];
   query: string;
   /** виключити страви, приготовані за останні N днів */
   avoidRecentDays: number | null;
@@ -30,6 +42,7 @@ export const emptyFilters: Filters = {
   maxDifficulty: null,
   maxCost: null,
   cuisines: [],
+  courses: [],
   query: "",
   avoidRecentDays: null,
 };
@@ -73,6 +86,7 @@ export function applyFilters(state: AppState, f: Filters, source?: Recipe[]): Re
     if (f.maxDifficulty != null && r.difficulty > f.maxDifficulty) return false;
     if (f.maxCost != null && r.costLevel > f.maxCost) return false;
     if (f.cuisines.length && !f.cuisines.includes(r.cuisine)) return false;
+    if (f.courses.length && !f.courses.includes(courseOf(r))) return false;
     if (f.avoidRecentDays != null && daysSinceCooked(state, r.id) < f.avoidRecentDays) return false;
     if (q) {
       const hay = [
@@ -93,7 +107,7 @@ export function applyFilters(state: AppState, f: Filters, source?: Recipe[]): Re
 export function activeFilterCount(f: Filters): number {
   let n = 0;
   if (f.pool !== "all") n++;
-  n += f.meals.length + f.moods.length + f.cuisines.length;
+  n += f.meals.length + f.moods.length + f.cuisines.length + f.courses.length;
   if (f.maxTime != null) n++;
   if (f.maxDifficulty != null) n++;
   if (f.maxCost != null) n++;

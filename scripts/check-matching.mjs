@@ -167,5 +167,44 @@ check(
   true,
 );
 
+console.log("── Що до чого подавати ──");
+
+const { suggestPairs, courseOf } = await jiti.import(path.join(root, "src/lib/pairing.ts"));
+const { SEED_RECIPES } = await jiti.import(path.join(root, "src/data/seed.ts"));
+
+const byTitle = (t) => SEED_RECIPES.find((r) => r.title.startsWith(t));
+const empty = { cooked: [], pantry: [], myRecipes: [], remoteRecipes: [] };
+const titlesFor = (recipe, state = empty) =>
+  suggestPairs(state, recipe, SEED_RECIPES, 3).map((p) => p.recipe.title);
+
+const salmon = byTitle("Лосось");
+const buckwheat = byTitle("Гречка");
+const pizza = byTitle("Піца");
+
+check("тип страви з поля", courseOf(salmon), "main");
+check("гарнір лишається гарніром", courseOf(buckwheat), "side");
+
+// До самодостатньої страви гарнір не пропонують — мовчання теж відповідь.
+check("до піци нічого не радимо", suggestPairs(empty, pizza, SEED_RECIPES).length, 0);
+
+// До основної страви йде гарнір, і гречка має бути серед підказок.
+check("до риби радять гарнір", titlesFor(salmon).includes(buckwheat.title), true);
+
+// Сама себе страва не радить.
+check("без самого себе", titlesFor(buckwheat).includes(buckwheat.title), false);
+
+/*
+ * Найсильніший сигнал — власна історія. Дві страви, які вже готували одного
+ * дня, мають виходити наперед, навіть коли інші ознаки за них не говорять.
+ */
+const together = {
+  ...empty,
+  cooked: [
+    { recipeId: salmon.id, at: "2026-09-01T18:00:00.000Z" },
+    { recipeId: byTitle("Овочеве рагу").id, at: "2026-09-01T18:30:00.000Z" },
+  ],
+};
+check("історія готувань важить найбільше", titlesFor(salmon, together)[0], byTitle("Овочеве рагу").title);
+
 console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
 process.exit(fail ? 1 : 0);

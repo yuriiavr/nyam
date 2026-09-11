@@ -12,6 +12,24 @@ export type Mood =
   | "cozy"      // зігрітись
   | "fresh";    // освіжитись
 
+/**
+ * Чим страва є на столі — на відміну від mealType, який каже, коли її їдять.
+ *
+ * «whole» означає самодостатню: паста, піца чи бургер не потребують пари, і
+ * пропонувати до них гарнір безглуздо. Саме за цим полем працюють і фільтри,
+ * і підказки «до цього підійде…».
+ */
+export type Course =
+  | "whole"
+  | "main"
+  | "side"
+  | "soup"
+  | "salad"
+  | "snack"
+  | "sauce"
+  | "dessert"
+  | "drink";
+
 export type IngredientCat =
   | "veg" | "fruit" | "meat" | "fish" | "dairy" | "grain"
   | "spice" | "sauce" | "bakery" | "drink" | "other";
@@ -119,6 +137,11 @@ export interface Recipe {
   kcal?: number;
   /** 1 — дешево, 3 — дорого */
   costLevel: 1 | 2 | 3;
+  /**
+   * Частина прийому їжі. Необовʼязкове: рецепти, створені до появи поля,
+   * нікуди не зникають — для них частина виводиться з того, що вже відомо.
+   */
+  course?: Course;
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   createdAt: string;
