@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bell,
   ChevronRight,
   CloudOff,
   Download,
@@ -18,7 +19,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Avatar, Button, Card, useToast } from "@/components/ui";
-import { refreshFromServer, signOut } from "@/lib/session";
+import { disablePush, enablePush, pushActive, pushSupported } from "@/lib/push";
+import { signOut } from "@/lib/session";
 import { useApp } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
@@ -163,6 +165,9 @@ export default function SettingsPage() {
         </Card>
       </section>
 
+      {/* Сповіщення */}
+      <PushCard />
+
       {/* Про застосунок */}
       <section className="px-4 pt-4">
         <Card className="p-4">
@@ -255,6 +260,98 @@ function AccountCard() {
         <LogOut size={16} />
       </Button>
     </Card>
+  );
+}
+
+/**
+ * Пуш-сповіщення на цьому пристрої.
+ *
+ * Дозвіл питаємо лише у відповідь на натиск: браузери карають за питання без
+ * приводу, а людина, яку спитали зненацька, тисне «ні» — і назавжди.
+ *
+ * На айфоні пуш працює тільки в застосунку, доданому на екран «Домів». Це не
+ * наша вигадка й не вада — просто так влаштований iOS, і сказати про це
+ * чесніше, ніж мовчки показувати перемикач, який нічого не вмикає.
+ */
+function PushCard() {
+  const account = useApp((s) => s.account);
+  const toast = useToast();
+
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    void pushActive().then((active) => {
+      setOn(active);
+      setReady(true);
+    });
+  }, []);
+
+  if (!account || !isSupabaseConfigured) return null;
+
+  const supported = pushSupported();
+  const iosNotInstalled = isIos() && !isStandalone();
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      if (on) {
+        await disablePush();
+        setOn(false);
+        toast("Сповіщення вимкнено", "🔕");
+        return;
+      }
+
+      const result = await enablePush(account.id);
+      if (result === "on") {
+        setOn(true);
+        toast("Сповіщення увімкнено", "🔔");
+      } else if (result === "denied") {
+        toast("Дозвіл не надано — увімкни в налаштуваннях браузера", "🔕");
+      } else {
+        toast("Не вдалося увімкнути сповіщення", "⚠️");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="px-4 pt-4">
+      <Card className="p-4">
+        <div className="flex items-center gap-2">
+          <Bell size={17} className="text-brand" />
+          <h2 className="font-display text-[16px] font-bold">Сповіщення</h2>
+        </div>
+
+        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+          Нагадаємо, коли продукт у коморі доживає останній день, і скажемо про коментар до
+          твого рецепта. Приходить на цей пристрій, навіть коли застосунок закрито.
+        </p>
+
+        {iosNotInstalled ? (
+          <p className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] leading-relaxed text-muted">
+            На iPhone сповіщення працюють лише в застосунку, доданому на екран «Домів».
+            Додай Ням туди — і перемикач зʼявиться.
+          </p>
+        ) : !supported ? (
+          <p className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] leading-relaxed text-muted">
+            Цей браузер не вміє сповіщень, або їх ще не налаштовано на сервері.
+          </p>
+        ) : (
+          <Button
+            full
+            variant={on ? "secondary" : "primary"}
+            className="mt-3"
+            onClick={() => void toggle()}
+            loading={busy || !ready}
+          >
+            {on ? "Вимкнути на цьому пристрої" : "Увімкнути сповіщення"}
+          </Button>
+        )}
+      </Card>
+    </section>
   );
 }
 

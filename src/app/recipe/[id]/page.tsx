@@ -317,7 +317,8 @@ export default function RecipePage() {
         <Card className="divide-y divide-line p-0">
           {recipe.ingredients.map((item) => {
             const def = ing(item.key);
-            const have = pantry.has(item.key) || def.staple;
+            // Базове позначається наявним лише тоді, коли воно справді в коморі.
+            const have = pantry.has(item.key);
             return (
               <div key={item.key} className="flex items-center gap-3 px-3.5 py-3">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-lg">

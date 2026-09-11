@@ -30,6 +30,57 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/* ── Пуш-сповіщення ───────────────────────────────────────────────────── */
+
+/**
+ * Показ повідомлення. Приходить від сервера як JSON; якщо тіло зіпсоване,
+ * показуємо бодай щось — мовчазний пуш виглядав би як збій пристрою.
+ */
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+
+  const title = payload.title || "Ням";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || "",
+      icon: "/api/icon?size=192",
+      badge: "/api/icon?size=192",
+      lang: "uk",
+      // Тег склеює повторні сповіщення про те саме: щоденне нагадування про
+      // строки не має накопичуватись стосом за тиждень.
+      tag: payload.tag || undefined,
+      renotify: Boolean(payload.tag),
+      data: { url: payload.url || "/" },
+    }),
+  );
+});
+
+/** Натиск на сповіщення веде туди, звідки воно прийшло. */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      // Уже відкритий застосунок не піднімаємо вдруге, а просто переводимо.
+      for (const client of windows) {
+        if ("focus" in client) {
+          client.navigate(target);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
+});
+
+/* ── Кеш ──────────────────────────────────────────────────────────────── */
+
 const isAsset = (url) =>
   url.pathname.startsWith("/_next/static/") ||
   url.pathname.startsWith("/api/icon") ||

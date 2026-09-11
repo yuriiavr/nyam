@@ -196,7 +196,7 @@ export function suggestPairs(state: AppState, recipe: Recipe, pool: Recipe[], li
     }
 
     // 6. Те, що вже є вдома, краще за те, по що треба йти.
-    const missing = [...theirs].filter((key) => !pantry.has(key) && !ing(key).staple).length;
+    const missing = [...theirs].filter((key) => !pantry.has(key)).length;
     score += Math.max(0, 12 - missing * 4);
     if (missing === 0 && pantry.size > 0) {
       reasons.push({ weight: 80, text: "усе вже є в коморі" });

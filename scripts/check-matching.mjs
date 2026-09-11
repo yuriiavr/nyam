@@ -167,6 +167,34 @@ check(
   true,
 );
 
+console.log("── Базові продукти ──");
+
+const { matchRecipe } = await jiti.import(path.join(root, "src/lib/matching.ts"));
+
+const withSalt = {
+  ingredients: [{ key: "kurka" }, { key: "sil" }],
+};
+
+/*
+ * Базове більше не вважається наявним за замовчуванням: у коморі для нього є
+ * власний чеклист, і якщо олії там не позначено, то її справді немає.
+ */
+check(
+  "без солі в коморі вона в списку браку",
+  matchRecipe(withSalt, new Set(["kurka"])).missing.join(","),
+  "sil",
+);
+check(
+  "позначена сіль рахується наявною",
+  matchRecipe(withSalt, new Set(["kurka", "sil"])).missing.join(","),
+  "",
+);
+check(
+  "відсоток збігу теж це враховує",
+  matchRecipe(withSalt, new Set(["kurka"])).pct,
+  50,
+);
+
 console.log("── Що до чого подавати ──");
 
 const { suggestPairs, courseOf } = await jiti.import(path.join(root, "src/lib/pairing.ts"));

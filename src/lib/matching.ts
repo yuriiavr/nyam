@@ -128,8 +128,13 @@ export function matchRecipe(r: Recipe, have: Set<string>): MatchResult {
 
   for (const item of required) {
     const def = ing(item.key);
+    /*
+     * Базові продукти більше не вважаються наявними за замовчуванням: у
+     * коморі для них є власний чеклист, і якщо олія там не позначена, то її
+     * справді немає. Припущення «сіль точно є» колись рятувало від порожньої
+     * комори, а тепер просто брехало б людині, яка щойно сказала протилежне.
+     */
     if (have.has(item.key)) haveKeys.push(item.key);
-    else if (def.staple) haveKeys.push(item.key); // припускаємо, що є вдома
     else missing.push(item.key);
   }
 
@@ -444,7 +449,8 @@ export function shoppingListFor(
   for (const r of recipes) {
     for (const item of r.ingredients) {
       if (item.optional) continue;
-      if (have.has(item.key) || ing(item.key).staple) continue;
+      // Базове теж потрапляє в список: скінчилась олія — треба купити олію.
+      if (have.has(item.key)) continue;
 
       const entry = map.get(item.key) ?? { parts: [], free: [], count: 0 };
       const q = quantityOf(item);

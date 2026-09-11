@@ -861,6 +861,47 @@ export async function fetchCachedBarcode(barcode: string): Promise<CachedBarcode
  * може переписати чужу відповідь. Через це повторний запис того самого коду
  * очікувано конфліктує — і це не помилка, просто хтось нас випередив.
  */
+/* ── Підписки на пуш ──────────────────────────────────────────────────── */
+
+export interface PushSubscriptionRow {
+  userId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  agent?: string;
+}
+
+/**
+ * Записує підписку пристрою.
+ *
+ * Саме upsert за endpoint: браузер може видати той самий endpoint після
+ * перевстановлення застосунку, і другий рядок про той самий пристрій означав
+ * би два однакові сповіщення.
+ */
+export async function savePushSubscription(sub: PushSubscriptionRow): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+
+  const { error } = await sb.from("push_subscriptions").upsert(
+    {
+      endpoint: sub.endpoint,
+      user_id: sub.userId,
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+      agent: sub.agent ?? null,
+    },
+    { onConflict: "endpoint" },
+  );
+  if (error) throw error;
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  if (error) throw error;
+}
+
 /* ── Коментарі до рецептів ────────────────────────────────────────────── */
 
 interface CommentRow {
