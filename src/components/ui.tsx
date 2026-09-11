@@ -172,57 +172,56 @@ export function Card({
 /* ── Bottom sheet ─────────────────────────────────────────────────────── */
 
 /**
- * Скільки знизу займає екранна клавіатура.
+ * Видима частина екрана — та, що лишається поверх клавіатури.
  *
- * Одиниці dvh на неї не реагують: клавіатура не змінює layout viewport, тож
- * аркуш, притиснутий до низу екрана, опиняється просто під нею. Через це в
- * пошуку продуктів останній результат ховався за клавіатурою, і щоб його
- * натиснути, її доводилось щоразу згортати.
+ * Раніше тут рахувалась висота клавіатури, і аркуш підіймався на це число.
+ * Виходило крихко: iOS шле подію посеред анімації, а ще сам прокручує
+ * сторінку, щоб показати поле, — і будь-яке одне невдало піймане значення
+ * лишало аркуш під клавіатурою. Саме тому він зникав, коли стерти назву й
+ * почати писати іншу.
  *
- * Дрібні зміни ігноруємо: адресний рядок браузера теж рухає visualViewport,
- * але це не клавіатура.
+ * Тепер числа нема. Є контейнер, який дорівнює видимій області (висота й
+ * зсув беруться з visualViewport), а аркуш просто притиснутий до його низу.
+ * Що б не робив браузер із viewport, контейнер їде разом із ним, і «низ
+ * видимого» лишається низом видимого.
  */
-function useKeyboardInset(active: boolean): number {
-  const [inset, setInset] = useState(0);
+function useVisibleViewport(active: boolean) {
+  const [view, setView] = useState(() => ({
+    height: typeof window === "undefined" ? 0 : window.innerHeight,
+    offsetTop: 0,
+    keyboard: false,
+  }));
 
   useEffect(() => {
-    if (!active) {
-      setInset(0);
-      return;
-    }
-    const vv = typeof window !== "undefined" ? window.visualViewport : null;
-    if (!vv) return;
+    if (!active) return;
+    const vv = window.visualViewport;
 
     const update = () => {
-      const covered = window.innerHeight - vv.height - vv.offsetTop;
-      setInset(covered > 80 ? Math.round(covered) : 0);
+      if (!vv) {
+        setView({ height: window.innerHeight, offsetTop: 0, keyboard: false });
+        return;
+      }
+      setView({
+        height: Math.round(vv.height),
+        offsetTop: Math.round(vv.offsetTop),
+        // Адресний рядок теж рухає viewport, але не на цілу клавіатуру.
+        keyboard: window.innerHeight - vv.height > 80,
+      });
     };
 
     update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-
-    /*
-     * Клавіатура виїжджає з анімацією, і останній resize інколи приходить ще
-     * до її кінця — тоді висота лишається поміряна на півдорозі. Тому після
-     * кожного фокуса в полі переміряємо ще раз, коли рух завершився.
-     */
-    let timer = 0;
-    const remeasure = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(update, 300);
-    };
-    document.addEventListener("focusin", remeasure);
+    vv?.addEventListener("resize", update);
+    vv?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
 
     return () => {
-      window.clearTimeout(timer);
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-      document.removeEventListener("focusin", remeasure);
+      vv?.removeEventListener("resize", update);
+      vv?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
     };
   }, [active]);
 
-  return inset;
+  return view;
 }
 
 export function Sheet({
@@ -283,7 +282,7 @@ export function Sheet({
     };
   }, [open, onClose]);
 
-  const keyboard = useKeyboardInset(open);
+  const view = useVisibleViewport(open);
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 620) {
@@ -303,6 +302,15 @@ export function Sheet({
             onClick={onClose}
             className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px]"
           />
+          {/*
+            Контейнер дорівнює видимій області екрана й їде разом із нею;
+            аркуш усередині просто притиснутий до низу. Клавіатура від цього
+            перестає бути окремим випадком: вона просто зменшує видиме.
+          */}
+          <div
+            style={{ height: view.height, transform: `translateY(${view.offsetTop}px)` }}
+            className="pointer-events-none fixed inset-x-0 top-0 z-50"
+          >
           <motion.div
             role="dialog"
             aria-modal="true"
@@ -314,11 +322,8 @@ export function Sheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={handleDragEnd}
-            style={{
-              maxHeight: keyboard ? `calc(${maxHeight} - ${keyboard}px)` : maxHeight,
-              bottom: keyboard,
-            }}
-            className="fixed left-1/2 z-50 flex w-full max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[28px] border border-line bg-bg-elev"
+            style={{ maxHeight: `min(${maxHeight}, 100%)` }}
+            className="pointer-events-auto absolute bottom-0 left-1/2 flex w-full max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[28px] border border-line bg-bg-elev"
           >
             <div className="flex cursor-grab justify-center pt-3 pb-1 active:cursor-grabbing">
               <div className="h-1.5 w-11 rounded-full bg-line" />
@@ -339,8 +344,9 @@ export function Sheet({
             )}
             {/* Відступ під вирізи телефона потрібен лише коли аркуш справді
                 внизу екрана: над клавіатурою він просто марно займає місце. */}
-            {keyboard === 0 && <div className="pad-safe-b" />}
+            {!view.keyboard && <div className="pad-safe-b" />}
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>
@@ -493,7 +499,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={value}>
       {children}
-      <div className="pad-safe-t pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-4 pt-3">
+      {/*
+        Відступ під виріз і видимий відступ — на різних елементах. Разом вони
+        сперечаються за padding-top, і pt-3 перемагає (він пізніше в CSS), тож
+        тост виїжджав просто під острів, поверх годинника.
+      */}
+      <div className="pad-safe-t pointer-events-none fixed inset-x-0 top-0 z-[60] px-4">
+        <div className="flex flex-col items-center gap-2 pt-3">
         <AnimatePresence initial={false}>
           {items.map((t) => (
             <motion.div
@@ -509,6 +521,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             </motion.div>
           ))}
         </AnimatePresence>
+        </div>
       </div>
     </ToastCtx.Provider>
   );

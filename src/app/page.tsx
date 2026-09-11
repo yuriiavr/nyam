@@ -51,11 +51,16 @@ export default function HomePage() {
       {/*
         Шапка прикріплена до верху, як і TopBar на решті сторінок.
         Вона єдина в застосунку горталася разом зі сторінкою, і на айфонах з
-        островом це виглядало зламано: вміст з'їжджав під виріз без нічого за
-        собою. Тепер за нею glass, а pad-safe-t тримає вміст нижче вирізу.
+        островом це виглядало зламано.
+
+        Відступ під виріз лишається на самій шапці, а видимі відступи — на
+        внутрішньому рядку, і саме тому вони розділені. Обидва задають
+        padding-top, і коли вони стояли поруч, перемагав pt-3: він іде
+        пізніше в згенерованому CSS. Вміст шапки опинявся за дванадцять
+        пікселів від краю екрана, тобто просто під островом, поверх годинника.
       */}
-      <header className="pad-safe-t glass sticky top-0 z-30 border-b border-line px-4 pt-3 pb-3">
-        <div className="flex items-center gap-3">
+      <header className="pad-safe-t glass sticky top-0 z-30 border-b border-line">
+        <div className="flex items-center gap-3 px-4 py-3">
           <Link href="/me" className="shrink-0">
             <Avatar
               emoji={state.profile.emoji}
@@ -106,7 +111,7 @@ export default function HomePage() {
               Дозволь застосунку вирішити
             </h2>
             <p className="mt-1 text-[13px] text-muted">
-              10 способів обрати страву — від холодильника до рулетки.
+              12 способів обрати страву — від холодильника до рулетки.
             </p>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
@@ -262,8 +267,9 @@ function QuickAction({
 
 function HomeSkeleton() {
   return (
-    <div className="pad-safe-t px-4 pt-4">
-      <div className="flex items-center gap-3">
+    // Відступ під виріз окремо від видимого — інакше pt-4 його затирає.
+    <div className="pad-safe-t">
+      <div className="flex items-center gap-3 px-4 pt-4">
         <Skeleton className="h-11 w-11 rounded-full" />
         <div className="flex-1 space-y-2">
           <Skeleton className="h-3 w-24" />
