@@ -89,6 +89,16 @@ function MeContent() {
         title="Мій профіль"
         right={
           <div className="flex items-center gap-2">
+            {/* Створення рецепта — головна дія профілю, тож вона вгорі й
+                помітна, а не кнопкою під списком, до якої треба догортати. */}
+            <Link
+              href="/new"
+              onClick={() => haptic(12)}
+              aria-label="Додати рецепт"
+              className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-brand-ink"
+            >
+              <Plus size={19} />
+            </Link>
             <Link
               href="/notifications"
               aria-label={unread ? `Сповіщення, непрочитаних: ${unread}` : "Сповіщення"}
@@ -250,18 +260,6 @@ function MeContent() {
           </div>
         )}
       </section>
-
-      {/* Додати рецепт */}
-      {tab === "mine" && lists.mine.length > 0 && (
-        <div className="px-4 pt-5">
-          <Link href="/new" onClick={() => haptic(12)}>
-            <Button variant="secondary" full>
-              <Plus size={17} />
-              Додати ще рецепт
-            </Button>
-          </Link>
-        </div>
-      )}
 
       {/* Редагування профілю */}
       <Sheet

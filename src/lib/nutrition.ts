@@ -23,6 +23,7 @@ const GRAMS_PER_UNIT: Partial<Record<Unit, number>> = {
   tbsp: 15,
   tsp: 5,
   cup: 240,
+  clove: 3,
   bunch: 30,
   handful: 30,
   pinch: 0.5,

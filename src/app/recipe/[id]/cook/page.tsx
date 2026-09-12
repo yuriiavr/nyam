@@ -9,13 +9,14 @@ import {
   Pause,
   Play,
   RotateCcw,
+  SlidersHorizontal,
   Timer,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, EmptyState, Stars, useToast } from "@/components/ui";
+import { Button, EmptyState, Sheet, Stars, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import type { Consumed } from "@/lib/pantry";
 import { recipeById, useApp } from "@/lib/store";
@@ -83,13 +84,22 @@ export default function CookPage() {
 
   const currentStep = recipe && step >= 0 ? recipe.steps[step] : null;
 
+  /*
+   * Власний час для кроку, заданий на ходу. Рецепт каже «варити 10 хвилин»,
+   * але макарони бувають різні, і міняти заради цього сам рецепт безглуздо:
+   * зміна живе рівно стільки, скільки триває це готування.
+   */
+  const [customSec, setCustomSec] = useState<Record<number, number>>({});
+  const [timerSheet, setTimerSheet] = useState(false);
+  const baseSec = customSec[step] ?? currentStep?.timerSec ?? null;
+
   // Скидаємо таймер при зміні кроку
   useEffect(() => {
     setRunning(false);
     deadlineRef.current = null;
     firedRef.current = false;
-    setRemaining(currentStep?.timerSec ?? null);
-  }, [step, currentStep?.timerSec]);
+    setRemaining(baseSec);
+  }, [step, baseSec]);
 
   const finish = useCallback(() => {
     if (firedRef.current) return;
@@ -148,7 +158,7 @@ export default function CookPage() {
         deadlineRef.current = null;
         return false;
       }
-      const base = remaining && remaining > 0 ? remaining : (currentStep?.timerSec ?? 0);
+      const base = remaining && remaining > 0 ? remaining : (baseSec ?? 0);
       if (base <= 0) return false;
       firedRef.current = false;
       deadlineRef.current = Date.now() + base * 1000;
@@ -165,7 +175,7 @@ export default function CookPage() {
       }
       return true;
     });
-  }, [remaining, currentStep?.timerSec]);
+  }, [remaining, baseSec]);
 
   /** Що списали з комори — показуємо на екрані завершення. */
   const [consumed, setConsumed] = useState<Consumed[]>([]);
@@ -183,8 +193,8 @@ export default function CookPage() {
     setRunning(false);
     deadlineRef.current = null;
     firedRef.current = false;
-    setRemaining(currentStep?.timerSec ?? 0);
-  }, [currentStep?.timerSec]);
+    setRemaining(baseSec ?? 0);
+  }, [baseSec]);
 
   const goNext = useCallback(() => {
     if (!recipe) return;
@@ -412,6 +422,21 @@ export default function CookPage() {
 
         {/* Таймер */}
         <AnimatePresence>
+          {remaining == null && (
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              onClick={() => {
+                haptic(10);
+                setTimerSheet(true);
+              }}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl3 border border-line bg-surface p-3.5 text-[13.5px] font-semibold text-muted"
+            >
+              <Timer size={17} />
+              Поставити таймер на цей крок
+            </motion.button>
+          )}
+
           {remaining != null && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -427,6 +452,16 @@ export default function CookPage() {
               >
                 {formatClock(remaining)}
               </span>
+              <button
+                onClick={() => {
+                  haptic(10);
+                  setTimerSheet(true);
+                }}
+                aria-label="Змінити час"
+                className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2 text-muted"
+              >
+                <SlidersHorizontal size={17} />
+              </button>
               <button
                 onClick={resetTimer}
                 aria-label="Скинути таймер"
@@ -469,7 +504,103 @@ export default function CookPage() {
           Можна гортати кроки свайпом. Екран не згасне під час готування.
         </p>
       </div>
+
+      {/* Свій час на цей крок */}
+      <TimerSheet
+        open={timerSheet}
+        current={baseSec ?? currentStep?.timerSec ?? 0}
+        onClose={() => setTimerSheet(false)}
+        onApply={(seconds) => {
+          setCustomSec((prev) => ({ ...prev, [step]: seconds }));
+          setTimerSheet(false);
+          toast(seconds > 0 ? "Час оновлено" : "Таймер прибрано", "⏱️");
+        }}
+      />
     </div>
+  );
+}
+
+/**
+ * Свій час замість того, що написав автор.
+ *
+ * Міняє таймер лише на це готування й лише на цей крок: рецепт від того не
+ * змінюється, бо десять хвилин у ньому — правда для чужої плити, а не
+ * помилка. Міру обираєш сам: сорок секунд і півтори години тут однаково
+ * доречні.
+ */
+function TimerSheet({
+  open,
+  current,
+  onClose,
+  onApply,
+}: {
+  open: boolean;
+  current: number;
+  onClose: () => void;
+  onApply: (seconds: number) => void;
+}) {
+  const UNITS: Array<{ key: "sec" | "min" | "hour"; label: string; size: number }> = [
+    { key: "sec", label: "секунди", size: 1 },
+    { key: "min", label: "хвилини", size: 60 },
+    { key: "hour", label: "години", size: 3600 },
+  ];
+
+  const [unit, setUnit] = useState<"sec" | "min" | "hour">(
+    current > 0 && current % 3600 === 0 ? "hour" : current > 0 && current % 60 !== 0 ? "sec" : "min",
+  );
+  const size = UNITS.find((u) => u.key === unit)?.size ?? 60;
+  const [value, setValue] = useState(current > 0 ? String(Math.round(current / size)) : "");
+
+  const seconds = Math.max(0, Number(value.replace(/[^\d]/g, "")) || 0) * size;
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Свій час"
+      footer={
+        <div className="flex gap-2">
+          <Button variant="secondary" className="flex-1" onClick={() => onApply(0)}>
+            Без таймера
+          </Button>
+          <Button className="flex-1" onClick={() => onApply(seconds)} disabled={seconds <= 0}>
+            Поставити {seconds > 0 ? formatClock(seconds) : ""}
+          </Button>
+        </div>
+      }
+    >
+      <div className="pb-2">
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value.replace(/[^\d]/g, ""))}
+          inputMode="numeric"
+          autoFocus
+          placeholder="10"
+          className="h-16 w-full rounded-2xl bg-surface-2 text-center font-display text-3xl font-extrabold tabular-nums"
+        />
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {UNITS.map((u) => (
+            <button
+              key={u.key}
+              onClick={() => {
+                haptic(8);
+                setUnit(u.key);
+              }}
+              className={`rounded-2xl border py-2.5 text-[13px] font-bold ${
+                unit === u.key
+                  ? "border-brand bg-brand/10 text-brand"
+                  : "border-line bg-surface text-muted"
+              }`}
+            >
+              {u.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-[11.5px] leading-snug text-faint">
+          Зміна діє на цей крок і лише зараз — рецепт лишається таким, як його написав автор.
+        </p>
+      </div>
+    </Sheet>
   );
 }
 

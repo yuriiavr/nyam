@@ -26,6 +26,9 @@ export const UNITS: UnitDef[] = [
   { key: "ml", label: "мл", base: "ml", factor: 1, decimals: 0 },
   { key: "l", label: "л", base: "ml", factor: 1000, decimals: 2 },
   { key: "pcs", label: "шт", base: "pcs", factor: 1, decimals: 1 },
+  // Зубчик — окрема міра, а не «штука часнику»: у рецептах пишуть саме так,
+  // і три грами на зубчик дають чеснішу вагу, ніж ціла головка.
+  { key: "clove", label: "зубчик", base: "clove", factor: 1, decimals: 0 },
   { key: "tbsp", label: "ст. л.", base: "tbsp", factor: 1, decimals: 1 },
   { key: "tsp", label: "ч. л.", base: "tsp", factor: 1, decimals: 1 },
   { key: "cup", label: "скл.", base: "cup", factor: 1, decimals: 2 },
@@ -45,7 +48,7 @@ export const unitLabel = (unit: Unit): string => unitDef(unit).label;
 export const UNIT_GROUPS: Array<{ title: string; units: Unit[] }> = [
   { title: "Вага", units: ["g", "kg"] },
   { title: "Обʼєм", units: ["ml", "l", "cup"] },
-  { title: "Штуки", units: ["pcs", "bunch", "handful"] },
+  { title: "Штуки", units: ["pcs", "clove", "bunch", "handful"] },
   { title: "Ложки", units: ["tbsp", "tsp", "pinch"] },
   { title: "Без міри", units: ["taste"] },
 ];
@@ -140,7 +143,7 @@ const ALIASES: Array<[RegExp, Unit]> = [
   [/^(мл|ml|мілілітр\p{L}*)$/iu, "ml"],
   [/^(л|l|літр\p{L}*)$/iu, "l"],
   [/^(шт|шт\.|штук\p{L}*|pcs)$/iu, "pcs"],
-  [/^(зубчик|зубчик\p{L}*|зубок|зубк\p{L}*|clove)$/iu, "pcs"],
+  [/^(зубчик|зубчик\p{L}*|зубок|зубк\p{L}*|clove)$/iu, "clove"],
   [/^(скиб\p{L}*|шматок|шматк\p{L}*|шматочок|шматочк\p{L}*|slice)$/iu, "pcs"],
   [/^(стейк|стейк\p{L}*|філе|steak|fillet)$/iu, "pcs"],
   [/^(головк\p{L}*|качан\p{L}*|head)$/iu, "pcs"],

@@ -77,6 +77,7 @@ export type Unit =
   | "ml"
   | "l"
   | "pcs"
+  | "clove"
   | "tbsp"
   | "tsp"
   | "cup"

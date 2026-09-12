@@ -52,6 +52,10 @@ const EMOJIS = [
   "🍵", "☕", "🥤", "🧃", "🍷", "🍺", "🥂", "🧋", "🫖", "🍹",
 ];
 
+/** Міри таймера. Зберігаємо в секундах, показуємо в зручній. */
+type TimerUnit = "sec" | "min" | "hour";
+const TIMER_UNITS: Record<TimerUnit, number> = { sec: 1, min: 60, hour: 3600 };
+
 const GRADIENTS: Array<[string, string]> = [
   ["#ff6b35", "#ffb020"],
   ["#f43f6a", "#ff6b35"],
@@ -607,23 +611,12 @@ function RecipeForm() {
                   />
 
                   <div className="mt-2 flex items-center gap-2">
-                    <div className="flex h-9 flex-1 items-center gap-1.5 rounded-xl bg-surface-2 px-2.5">
-                      <Timer size={14} className="shrink-0 text-muted" />
-                      <input
-                        value={step.timerSec ? String(Math.round(step.timerSec / 60)) : ""}
-                        onChange={(e) => {
-                          const min = Number(e.target.value.replace(/\D/g, ""));
-                          setSteps((prev) =>
-                            prev.map((s, j) =>
-                              j === i ? { ...s, timerSec: min ? min * 60 : undefined } : s,
-                            ),
-                          );
-                        }}
-                        inputMode="numeric"
-                        placeholder="таймер, хв"
-                        className="h-full w-full text-[13px]"
-                      />
-                    </div>
+                    <TimerInput
+                      seconds={step.timerSec}
+                      onChange={(timerSec) =>
+                        setSteps((prev) => prev.map((s, j) => (j === i ? { ...s, timerSec } : s)))
+                      }
+                    />
                     {steps.length > 1 && (
                       <button
                         onClick={() => setSteps((prev) => prev.filter((_, j) => j !== i))}
@@ -751,6 +744,66 @@ function RecipeForm() {
 }
 
 /* ── Допоміжні ────────────────────────────────────────────────────────── */
+
+/**
+ * Таймер кроку: число плюс міра.
+ *
+ * Зберігаємо завжди в секундах, а показуємо в тій мірі, яка в цьому числі
+ * читається найкраще: година лишається годиною, а не «60 хв», і навпаки —
+ * сорок секунд не перетворюються на дріб. Хвилини за замовчуванням, бо в
+ * рецептах їх майже завжди й пишуть.
+ */
+function TimerInput({
+  seconds,
+  onChange,
+}: {
+  seconds?: number;
+  onChange: (seconds: number | undefined) => void;
+}) {
+  const guess = (value?: number): TimerUnit => {
+    if (!value) return "min";
+    if (value % 3600 === 0) return "hour";
+    if (value % 60 === 0) return "min";
+    return "sec";
+  };
+
+  const [unit, setUnit] = useState<TimerUnit>(() => guess(seconds));
+  const size = TIMER_UNITS[unit];
+  const shown = seconds ? String(Math.round((seconds / size) * 100) / 100) : "";
+
+  return (
+    <div className="flex h-9 flex-1 items-center gap-1.5 rounded-xl bg-surface-2 pl-2.5">
+      <Timer size={14} className="shrink-0 text-muted" />
+      <input
+        value={shown}
+        onChange={(e) => {
+          const raw = Number(e.target.value.replace(/[^\d]/g, ""));
+          onChange(raw > 0 ? raw * size : undefined);
+        }}
+        inputMode="numeric"
+        placeholder="таймер"
+        className="h-full min-w-0 flex-1 text-[13px]"
+      />
+      <select
+        value={unit}
+        onChange={(e) => {
+          const next = e.target.value as TimerUnit;
+          // Число лишається тим самим, міняється його міра: «5 хв» на
+          // перемиканні стає «5 год», а не «300 год».
+          const value = seconds ? Math.round(seconds / size) : 0;
+          setUnit(next);
+          if (value > 0) onChange(value * TIMER_UNITS[next]);
+        }}
+        aria-label="Міра таймера"
+        className="h-full shrink-0 rounded-r-xl bg-surface-2 px-2 text-[12px] font-semibold text-muted"
+      >
+        <option value="sec">сек</option>
+        <option value="min">хв</option>
+        <option value="hour">год</option>
+      </select>
+    </div>
+  );
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
