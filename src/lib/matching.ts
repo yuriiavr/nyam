@@ -484,13 +484,19 @@ const AISLE_ORDER: IngredientCat[] = [
   "veg", "fruit", "bakery", "dairy", "meat", "fish", "grain", "sauce", "spice", "drink", "other",
 ];
 
-/** Список покупок, розкладений по відділах у порядку обходу. */
-export function byAisle<T extends { key: string }>(
+/**
+ * Список покупок, розкладений по відділах у порядку обходу.
+ *
+ * Ключ продукту необовʼязковий: у списку бувають рядки, написані від руки —
+ * батарейки, вода коту, «щось до чаю». Відділу в них немає, тож лягають у
+ * «Інше» — наприкінці, там, де в магазині все, чого не купиш у харчових рядах.
+ */
+export function byAisle<T extends { key?: string }>(
   items: T[],
 ): Array<{ cat: IngredientCat; label: string; items: T[] }> {
   const map = new Map<IngredientCat, T[]>();
   for (const item of items) {
-    const cat = ing(item.key).cat;
+    const cat = item.key ? ing(item.key).cat : "other";
     map.set(cat, [...(map.get(cat) ?? []), item]);
   }
   return AISLE_ORDER.filter((cat) => map.has(cat)).map((cat) => ({

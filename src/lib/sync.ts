@@ -2,7 +2,7 @@
 
 import * as api from "./supabase/api";
 import { friendlyError, isSupabaseConfigured } from "./supabase/client";
-import type { PantryItem, PlanSlot, Profile, Recipe } from "./types";
+import type { PantryItem, PlanSlot, Profile, Recipe, ShoppingItem } from "./types";
 
 /**
  * Тонкий шар між сховищем стану і базою.
@@ -114,8 +114,17 @@ function fireDebounced(
   pending.set(
     key,
     setTimeout(() => {
-      pending.delete(key);
       fire(context, run);
+      /*
+       * Позначку тримаємо ще трохи після відправлення. Сам запит теж триває:
+       * якщо зняти її одразу, знімок, замовлений до нього, повернеться вже
+       * без нашого значення й затре щойно введене — рівно та біда, заради
+       * якої ці позначки й існують.
+       */
+      pending.set(
+        key,
+        setTimeout(() => pending.delete(key), BULK_GUARD_MS),
+      );
     }, delayMs),
   );
 }
@@ -130,6 +139,11 @@ function fireDebounced(
  */
 export function hasPendingPantryWrite(key: string): boolean {
   return pending.has(`pantry:${key}`);
+}
+
+/** Те саме для рядка списку покупок — див. hasPendingPantryWrite. */
+export function hasPendingShoppingWrite(id: string): boolean {
+  return pending.has(`shopping:${id}`);
 }
 
 /* ── Комора і план ────────────────────────────────────────────────────── */
@@ -149,6 +163,16 @@ export const pushPantryAdd = (item: PantryItem) =>
 const BULK_GUARD_MS = 3000;
 
 /**
+ * Скільки пачка чекає перед відправленням.
+ *
+ * Без цієї паузи фільтр нижче не робить нічого: `fire` виконується тієї ж
+ * миті, тож перевіряє позначки, які сам щойно й поставив. А рядок, прибраний
+ * одразу після додавання, встигав полетіти в базу вже після власного
+ * видалення — і повертався до списку наступним знімком.
+ */
+const BULK_SEND_MS = 250;
+
+/**
  * Запис цілого чека одним запитом.
  *
  * Позначку «запис у польоті» ставимо на кожен продукт до відправлення, а не
@@ -166,11 +190,13 @@ export const pushPantryBulk = (items: PantryItem[]) => {
     pending.set(key, setTimeout(() => pending.delete(key), BULK_GUARD_MS));
   }
 
-  fire("комора", (uid) =>
+  setTimeout(() => {
     // Продукт, який устигли прибрати з комори, поки чек летів, у пакет не
     // потрапляє: pushPantryRemove знімає його позначку, і це наш сигнал.
-    api.upsertPantryItems(uid, items.filter((item) => pending.has(`pantry:${item.key}`))),
-  );
+    const payload = items.filter((item) => pending.has(`pantry:${item.key}`));
+    if (payload.length === 0) return;
+    fire("комора", (uid) => api.upsertPantryItems(uid, payload));
+  }, BULK_SEND_MS);
 };
 
 export const pushPantryRemove = (key: string) => {
@@ -191,6 +217,94 @@ export const pushPantryClear = () => {
     }
   }
   fire("комора", (uid) => api.clearPantry(uid, scope(uid)));
+};
+
+/* ── Список покупок ───────────────────────────────────────────────────── */
+
+/**
+ * Записи списку йдуть у базу по черзі.
+ *
+ * Решта сутностей обходиться без цього, бо там ключ рядка — пара «людина +
+ * продукт», і два записи про різне не стикаються. Тут ключ власний, і по
+ * одному рядку за секунду може піти кілька запитів: додали позицію, одразу
+ * поставили галочку, потім прибрали. Відправлені врізнобіч, вони можуть
+ * прийти не в тому порядку — і в базі лишиться стан із середини, а галочка
+ * «куплено» сама зніметься за хвилину, коли прилетить наступний знімок.
+ *
+ * Черга нічого не блокує в інтерфейсі: він і так не чекає на мережу.
+ */
+let shoppingQueue: Promise<unknown> = Promise.resolve();
+
+function fireShopping(run: (uid: string) => Promise<unknown>) {
+  if (!canSync()) return;
+  const uid = userId as string;
+  shoppingQueue = shoppingQueue
+    .then(() => run(uid))
+    .catch((error) => report(error, "список покупок"));
+}
+
+/**
+ * Один рядок: галочка «куплено», зміна кількості, перейменування.
+ *
+ * З відкладенням, як і кількість у коморі: люди набирають число посимвольно,
+ * і без цього «200» летіло б у базу трьома запитами, відповіді на які можуть
+ * прийти не в тому порядку.
+ */
+export const pushShoppingItem = (item: ShoppingItem) => {
+  const key = `shopping:${item.id}`;
+  const existing = pending.get(key);
+  if (existing) clearTimeout(existing);
+
+  pending.set(
+    key,
+    setTimeout(() => {
+      fireShopping((uid) => api.upsertShoppingItems(uid, [item]));
+      // Позначку тримаємо ще трохи після відправлення — як у fireDebounced.
+      pending.set(key, setTimeout(() => pending.delete(key), BULK_GUARD_MS));
+    }, 400),
+  );
+};
+
+/** Ціла пачка одразу — те, що приносить кнопка «додати, чого бракує». */
+export const pushShoppingBulk = (items: ShoppingItem[]) => {
+  if (items.length === 0) return;
+
+  for (const item of items) {
+    const key = `shopping:${item.id}`;
+    const existing = pending.get(key);
+    if (existing) clearTimeout(existing);
+    // Вартовий нічого не пише — лише тримає ознаку запису, поки лист летить.
+    pending.set(key, setTimeout(() => pending.delete(key), BULK_GUARD_MS));
+  }
+
+  setTimeout(() => {
+    // Рядок, який устигли прибрати зі списку, поки пачка чекала, у неї не
+    // потрапляє: pushShoppingRemove знімає позначку, і це наш сигнал.
+    const payload = items.filter((item) => pending.has(`shopping:${item.id}`));
+    if (payload.length === 0) return;
+    fireShopping((uid) => api.upsertShoppingItems(uid, payload));
+  }, BULK_SEND_MS);
+};
+
+export const pushShoppingRemove = (id: string) => {
+  const timer = pending.get(`shopping:${id}`);
+  if (timer) {
+    clearTimeout(timer);
+    pending.delete(`shopping:${id}`);
+  }
+  fireShopping((uid) => api.deleteShoppingItems(uid, [id], scope(uid)));
+};
+
+export const pushShoppingRemoveMany = (ids: string[]) => {
+  if (ids.length === 0) return;
+  for (const id of ids) {
+    const timer = pending.get(`shopping:${id}`);
+    if (timer) {
+      clearTimeout(timer);
+      pending.delete(`shopping:${id}`);
+    }
+  }
+  fireShopping((uid) => api.deleteShoppingItems(uid, ids, scope(uid)));
 };
 
 export const pushPlanSlot = (day: string, slot: PlanSlot, recipeId: string | null) =>

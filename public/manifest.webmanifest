@@ -49,6 +49,11 @@
       "url": "/pantry"
     },
     {
+      "name": "Список покупок",
+      "short_name": "Покупки",
+      "url": "/shopping"
+    },
+    {
       "name": "Новий рецепт",
       "short_name": "Додати",
       "url": "/new"

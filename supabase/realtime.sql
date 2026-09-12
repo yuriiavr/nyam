@@ -21,6 +21,7 @@ begin
     'notifications',   -- хто підписався, вподобав, приготував
     'recipes',         -- нові та змінені рецепти у стрічці
     'pantry_items',    -- спільна комора сімʼї
+    'shopping_items',  -- спільний список покупок
     'plan_slots',      -- спільний план харчування
     'family_members'   -- склад сімʼї
   ] loop
@@ -40,5 +41,6 @@ end $$;
 -- зі свого стану. Для recipes вистачає ключа за замовчуванням.
 alter table public.notifications  replica identity full;
 alter table public.pantry_items   replica identity full;
+alter table public.shopping_items replica identity full;
 alter table public.plan_slots     replica identity full;
 alter table public.family_members replica identity full;

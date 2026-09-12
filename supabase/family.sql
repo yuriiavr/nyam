@@ -231,12 +231,13 @@ create policy "family members readable" on public.family_members
   for select using (family_id = public.my_family_id());
 
 -- ── Розширення наявних політик на сімʼю ────────────────────────────────────
--- Комора і план: спільні на читання ТА на запис — прибрати молоко, яке додав
--- хтось інший, це нормальна дія у спільному холодильнику.
+-- Комора, список покупок і план: спільні на читання ТА на запис — прибрати
+-- молоко, яке додав хтось інший, це нормальна дія у спільному холодильнику,
+-- а викреслити хліб — у спільному поході в магазин.
 do $$
 declare t text;
 begin
-  foreach t in array array['pantry_items', 'plan_slots'] loop
+  foreach t in array array['pantry_items', 'shopping_items', 'plan_slots'] loop
     execute format('drop policy if exists "%1$s own" on public.%1$I', t);
     execute format('drop policy if exists "%1$s own or family" on public.%1$I', t);
     execute format(

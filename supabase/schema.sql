@@ -142,6 +142,52 @@ create index if not exists pantry_items_expires_idx
   on public.pantry_items (user_id, expires_at)
   where expires_at is not null;
 
+-- ── Список покупок ─────────────────────────────────────────────────────────
+-- Окрема таблиця, а не похідна від плану: у список дописують батарейки й
+-- «щось до чаю» — те, до чого застосунку діла немає, але без чого список
+-- у магазині неправдивий. Похідну не відредагуєш: вона рахується наново.
+create table if not exists public.shopping_items (
+  -- Ідентифікатор свій, а не пара «користувач + продукт»: у списку буває
+  -- два однакові рядки з різних причин, а довільний запис ключа не має.
+  id             uuid primary key,
+  user_id        uuid not null references public.profiles (id) on delete cascade,
+  ingredient_key text,
+  text           text,
+  amount         numeric(10, 2),
+  unit           text,
+  done           boolean not null default false,
+  added_at       timestamptz not null default now(),
+  source         text,
+  -- Без зовнішнього ключа навмисно: рецепт, який щойно створили, потрапляє в
+  -- базу на секунду пізніше за покупки з нього, і ключ рубав би всю пачку.
+  recipe_id      uuid,
+  constraint shopping_items_named check (ingredient_key is not null or text is not null)
+);
+
+create index if not exists shopping_items_user_idx
+  on public.shopping_items (user_id, added_at desc);
+
+-- Власник рядка не змінюється ніколи.
+--
+-- Ключ таблиці — сам рядок, а не пара «людина + продукт», як у коморі. Тому
+-- upsert від іншого учасника сімʼї переписав би user_id на себе: досить
+-- поставити галочку на чужому хлібі. Далі це тихо коштувало б даних — при
+-- виході з сімʼї покупки пішли б за тим, хто останній їх торкався, а не за
+-- тим, хто їх додав.
+create or replace function public.keep_shopping_owner()
+returns trigger language plpgsql as $$
+begin
+  new.user_id := old.user_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists shopping_items_keep_owner on public.shopping_items;
+create trigger shopping_items_keep_owner
+  before update on public.shopping_items
+  for each row execute function public.keep_shopping_owner();
+
+
 create table if not exists public.plan_slots (
   user_id    uuid not null references public.profiles (id) on delete cascade,
   day        date not null,
@@ -271,6 +317,7 @@ alter table public.ratings      enable row level security;
 alter table public.cooks        enable row level security;
 alter table public.follows      enable row level security;
 alter table public.pantry_items enable row level security;
+alter table public.shopping_items enable row level security;
 alter table public.plan_slots   enable row level security;
 alter table public.dismissed    enable row level security;
 alter table public.barcode_cache enable row level security;
@@ -320,7 +367,7 @@ create policy "follows write own" on public.follows
 do $$
 declare t text;
 begin
-  foreach t in array array['pantry_items', 'plan_slots', 'dismissed'] loop
+  foreach t in array array['pantry_items', 'shopping_items', 'plan_slots', 'dismissed'] loop
     execute format('drop policy if exists "%1$s own" on public.%1$I', t);
     execute format(
       'create policy "%1$s own" on public.%1$I for all

@@ -110,6 +110,8 @@ export function subscribeRealtime(userId: string, handlers: Handlers): () => voi
     // Спільні комора й план — щоб холодильник сімʼї сходився в обох.
     .on("postgres_changes", { event: "*", schema: "public", table: "pantry_items" }, userState)
     .on("postgres_changes", { event: "*", schema: "public", table: "plan_slots" }, userState)
+    // І список покупок: один пішов у магазин, другий дописує з дому.
+    .on("postgres_changes", { event: "*", schema: "public", table: "shopping_items" }, userState)
 
     // Хтось увійшов або вийшов із сімʼї — змінюється сам склад спільних даних.
     .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, family)

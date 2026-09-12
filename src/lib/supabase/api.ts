@@ -13,6 +13,7 @@ import type {
   RecipeComment,
   RecipeIngredient,
   RecipeStep,
+  ShoppingItem,
   WeekPlan,
 } from "@/lib/types";
 
@@ -91,6 +92,68 @@ const PANTRY_COLUMNS = {
 } satisfies Record<keyof PantryRow, true>;
 
 export const PANTRY_SELECT = Object.keys(PANTRY_COLUMNS).join(",");
+
+/** Рядок списку покупок так, як він лежить у базі. */
+interface ShoppingRow {
+  id: string;
+  user_id: string;
+  ingredient_key: string | null;
+  text: string | null;
+  amount: number | string | null;
+  unit: string | null;
+  done: boolean;
+  added_at: string;
+  source: string | null;
+  recipe_id: string | null;
+}
+
+/** Ті самі правила, що й для комори: перелік колонок виводиться з типу. */
+const SHOPPING_COLUMNS = {
+  id: true,
+  user_id: true,
+  ingredient_key: true,
+  text: true,
+  amount: true,
+  unit: true,
+  done: true,
+  added_at: true,
+  source: true,
+  recipe_id: true,
+} satisfies Record<keyof ShoppingRow, true>;
+
+export const SHOPPING_SELECT = Object.keys(SHOPPING_COLUMNS).join(",");
+
+/**
+ * Ідентифікатор рецепта пишемо лише тоді, коли він справді з бази.
+ *
+ * Поки спільнота не завантажилась, застосунок показує демо-набір, де в
+ * рецептів ключі на кшталт «r_borsch». Такий рядок Postgres у колонку uuid
+ * не прийме, і додавання в список впало б з помилкою просто тому, що людина
+ * відкрила знайомий рецепт офлайн. Підпис «для „Борщу“» від цього зникає —
+ * але сама покупка лишається, а це головне.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function shoppingToRow(userId: string, item: ShoppingItem) {
+  return {
+    id: item.id,
+    /*
+     * Власник — той, хто рядок створив, а не той, хто його зараз чіпає.
+     * Ключ таблиці — сам рядок, тож upsert без цього переписував би user_id
+     * на кожній галочці, і покупки, додані однією людиною, при виході з
+     * сімʼї пішли б за іншою.
+     */
+    user_id: item.ownerId ?? userId,
+    ingredient_key: item.key ?? null,
+    text: item.text ?? null,
+    amount: item.amount ?? null,
+    unit: item.unit ?? null,
+    done: item.done,
+    added_at: item.addedAt,
+    source: item.source ?? null,
+    recipe_id: item.recipeId && UUID_RE.test(item.recipeId) ? item.recipeId : null,
+  };
+}
 
 interface ProfileRow {
   id: string;
@@ -201,6 +264,7 @@ export interface RemoteSnapshot {
   cooked: CookEvent[];
   following: string[];
   pantry: PantryItem[];
+  shopping: ShoppingItem[];
   plan: WeekPlan;
 }
 
@@ -251,7 +315,7 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
 
   const shared = memberIds.length ? memberIds : [userId];
 
-  const [likes, saves, wishlist, dismissed, ratings, cooks, follows, pantry, plan, profile] =
+  const [likes, saves, wishlist, dismissed, ratings, cooks, follows, pantry, shopping, plan, profile] =
     await Promise.all([
       sb.from("likes").select("recipe_id").eq("user_id", userId),
       sb.from("saves").select("recipe_id").in("user_id", shared),
@@ -269,6 +333,11 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
         .from("pantry_items")
         .select(PANTRY_SELECT)
         .in("user_id", shared),
+      sb
+        .from("shopping_items")
+        .select(SHOPPING_SELECT)
+        .in("user_id", shared)
+        .order("added_at", { ascending: false }),
       sb.from("plan_slots").select("day,slot,recipe_id").in("user_id", shared),
       sb
         .from("profiles_with_counts")
@@ -277,7 +346,7 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
         .maybeSingle(),
     ]);
 
-  const firstError = [likes, saves, wishlist, dismissed, ratings, cooks, follows, pantry, plan, profile]
+  const firstError = [likes, saves, wishlist, dismissed, ratings, cooks, follows, pantry, shopping, plan, profile]
     .map((r) => r.error)
     .find(Boolean);
   if (firstError) throw firstError;
@@ -327,6 +396,21 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
         };
       }),
     ),
+    // Список покупок у сімʼї спільний, і зводити рядки не треба: дві пачки
+    // молока, додані двома людьми, — це не помилка, а два рядки, за якими
+    // видно, що обоє про нього подумали.
+    shopping: ((shopping.data ?? []) as unknown as ShoppingRow[]).map((row) => ({
+      id: row.id,
+      ownerId: row.user_id,
+      key: row.ingredient_key ?? undefined,
+      text: row.text ?? undefined,
+      amount: numberOrUndefined(row.amount),
+      unit: (row.unit as ShoppingItem["unit"]) ?? undefined,
+      done: row.done,
+      addedAt: row.added_at,
+      source: (row.source as ShoppingItem["source"]) ?? undefined,
+      recipeId: row.recipe_id ?? undefined,
+    })),
     plan: planMap,
   };
 }
@@ -442,6 +526,37 @@ export async function upsertPantryItems(userId: string, items: PantryItem[]) {
       price_per_gram: item.pricePerGram ?? null,
     })),
   );
+  if (error) throw error;
+}
+
+/** Дописує або оновлює рядки списку покупок — пачкою, як і комора. */
+export async function upsertShoppingItems(userId: string, items: ShoppingItem[]) {
+  const sb = getSupabase();
+  if (!sb || items.length === 0) return;
+  const { error } = await sb
+    .from("shopping_items")
+    .upsert(items.map((item) => shoppingToRow(userId, item)));
+  if (error) throw error;
+}
+
+/**
+ * Прибирає рядки списку — зокрема ті, які додав хтось інший із сімʼї.
+ *
+ * Ідентифікатор рядка свій власний, тож обмеження по user_id тут не для
+ * пошуку, а щоб запит не міг зачепити нічого поза сімʼєю.
+ */
+export async function deleteShoppingItems(
+  userId: string,
+  ids: string[],
+  memberIds: string[] = [userId],
+) {
+  const sb = getSupabase();
+  if (!sb || ids.length === 0) return;
+  const { error } = await sb
+    .from("shopping_items")
+    .delete()
+    .in("user_id", memberIds.length ? memberIds : [userId])
+    .in("id", ids);
   if (error) throw error;
 }
 

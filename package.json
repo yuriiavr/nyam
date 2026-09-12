@@ -11,7 +11,8 @@
     "db:seed-sql": "node scripts/generate-seed-sql.mjs",
     "check:nutrition": "node scripts/check-nutrition.mjs",
     "check:matching": "node scripts/check-matching.mjs",
-    "check:receipt": "node scripts/check-receipt.mjs"
+    "check:receipt": "node scripts/check-receipt.mjs",
+    "check:shopping": "node scripts/check-shopping.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

@@ -6,12 +6,14 @@ import {
   Plus,
   ReceiptText,
   ScanBarcode,
-  Search,
+  ShoppingBasket,
   TriangleAlert,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { IngredientPicker } from "@/components/IngredientPicker";
 import { TopBar } from "@/components/TopBar";
 import {
   Button,
@@ -52,6 +54,7 @@ export default function PantryPage() {
    * картці перемальовував би сторінку цілком, разом з усіма аркушами.
    */
   const pantry = useApp((s) => s.pantry);
+  const shopping = useApp((s) => s.shopping);
   const addPantry = useApp((s) => s.addPantry);
   const importPantry = useApp((s) => s.importPantry);
   const removePantry = useApp((s) => s.removePantry);
@@ -83,6 +86,9 @@ export default function PantryPage() {
   );
 
   const pantryKeys = pantry.map((p) => p.key);
+
+  /** Скільки ще не викреслено в списку покупок — число на значку кошика. */
+  const toBuy = shopping.filter((x) => !x.done).length;
 
   /*
    * Базові продукти живуть окремою вкладкою-чеклистом, тож із основного
@@ -274,16 +280,32 @@ export default function PantryPage() {
             : "Що є вдома"
         }
         right={
-          <button
-            onClick={() => {
-              haptic(12);
-              setAddSheet(true);
-            }}
-            aria-label="Додати продукт"
-            className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-brand-ink"
-          >
-            <Plus size={19} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Список покупок — зворотний бік комори: те, чого в ній немає. */}
+            <Link
+              href="/shopping"
+              onClick={() => haptic(8)}
+              aria-label="Список покупок"
+              className="relative grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
+            >
+              <ShoppingBasket size={18} />
+              {toBuy > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-brand px-1 text-[10px] font-extrabold text-brand-ink">
+                  {toBuy}
+                </span>
+              )}
+            </Link>
+            <button
+              onClick={() => {
+                haptic(12);
+                setAddSheet(true);
+              }}
+              aria-label="Додати продукт"
+              className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-brand-ink"
+            >
+              <Plus size={19} />
+            </button>
+          </div>
         }
       />
 
@@ -891,97 +913,6 @@ function AddWay({
 
 /* ── Вибір інгредієнта ────────────────────────────────────────────────── */
 
-function IngredientPicker({
-  open,
-  onClose,
-  title,
-  onPick,
-  exclude = [],
-  query: controlledQuery,
-  onQueryChange,
-  results,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  onPick: (def: IngredientDef) => void;
-  exclude?: string[];
-  query?: string;
-  onQueryChange?: (v: string) => void;
-  results?: IngredientDef[];
-}) {
-  const [localQuery, setLocalQuery] = useState("");
-  const q = controlledQuery ?? localQuery;
-  const setQ = onQueryChange ?? setLocalQuery;
-
-  const list = useMemo(() => {
-    const found = q.trim() ? results ?? searchIngredients(q) : INGREDIENTS;
-    return found.filter((d) => !exclude.includes(d.key));
-  }, [q, results, exclude]);
-
-  const grouped = useMemo(() => {
-    const map = new Map<IngredientCat, IngredientDef[]>();
-    for (const d of list) map.set(d.cat, [...(map.get(d.cat) ?? []), d]);
-    return CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const);
-  }, [list]);
-
-  return (
-    <Sheet open={open} onClose={onClose} title={title}>
-      <div className="sticky top-0 z-10 -mx-5 mb-2 bg-bg-elev px-5 pb-3">
-        <div className="flex h-12 items-center gap-2 rounded-2xl border border-line bg-surface px-3.5">
-          <Search size={17} className="shrink-0 text-muted" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Помідор, курка, рис…"
-            className="h-full flex-1 text-[15px]"
-          />
-          {q && (
-            <button onClick={() => setQ("")} aria-label="Очистити">
-              <X size={16} className="text-muted" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {list.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-muted">
-          Нічого не знайшлось. Спробуй іншу назву.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-4 pb-4">
-          {grouped.map(([cat, items]) => (
-            <div key={cat}>
-              <h3 className="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">
-                {CAT_LABEL[cat]}
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {items.map((def) => (
-                  <button
-                    key={def.key}
-                    onClick={() => {
-                      onPick(def);
-                      // Рядок пошуку скидаємо разом із вибором: продукт уже
-                      // додано, і наступного разу аркуш має відкритись чистим.
-                      setQ("");
-                      onClose();
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"
-                  >
-                    <span>{def.emoji}</span>
-                    {def.label}
-                    <Plus size={13} className="text-brand" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Sheet>
-  );
-}
-
 /**
  * Продукт у коморі.
  *
@@ -1024,7 +955,11 @@ function PantryChip({
         className="inline-flex items-center gap-1.5"
       >
         <span>{def.emoji}</span>
-        <span className={exp?.tone === "expired" ? "text-berry" : undefined}>{def.label}</span>
+        {/* Назва з етикетки важливіша за довідкову: продукт, якого в
+            каталозі немає, інакше показував би власний ключ. */}
+        <span className={exp?.tone === "expired" ? "text-berry" : undefined}>
+          {item.label ?? def.label}
+        </span>
         {qty && <span className="text-[11px] font-bold text-brand">{qty}</span>}
         {exp && (
           <span
@@ -1046,7 +981,7 @@ function PantryChip({
           haptic(10);
           onRemove();
         }}
-        aria-label={`Прибрати ${def.label}`}
+        aria-label={`Прибрати ${item.label ?? def.label}`}
         className="grid h-5 w-5 place-items-center"
       >
         <X size={13} className="text-faint" />
@@ -1061,6 +996,7 @@ function PantryChip({
  */
 function ScannedQuantity({ itemKey }: { itemKey: string }) {
   const pantry = useApp((s) => s.pantry);
+  const shopping = useApp((s) => s.shopping);
   const addPantry = useApp((s) => s.addPantry);
   const item = pantry.find((p) => p.key === itemKey);
   const def = ing(itemKey);
@@ -1106,6 +1042,7 @@ function ItemSheet({
   onAddMore?: () => void;
 }) {
   const pantry = useApp((s) => s.pantry);
+  const shopping = useApp((s) => s.shopping);
   const addPantry = useApp((s) => s.addPantry);
   const removePantry = useApp((s) => s.removePantry);
   const item = pantry.find((p) => p.key === itemKey);

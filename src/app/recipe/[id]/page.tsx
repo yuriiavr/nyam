@@ -12,6 +12,7 @@ import {
   Pencil,
   Plus,
   Share2,
+  ShoppingBasket,
   Star,
   Trash2,
   Users,
@@ -33,6 +34,7 @@ import {
 import { ing } from "@/data/ingredients";
 import type { Recipe, RecipeComment } from "@/lib/types";
 import { matchRecipe } from "@/lib/matching";
+import { itemsForRecipe } from "@/lib/shopping";
 import {
   allRecipes,
   effectiveStats,
@@ -74,6 +76,7 @@ export default function RecipePage() {
   const toggleFollow = useApp((s) => s.toggleFollow);
   const deleteRecipe = useApp((s) => s.deleteRecipe);
   const rate = useApp((s) => s.rate);
+  const addShopping = useApp((s) => s.addShopping);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -385,6 +388,35 @@ export default function RecipePage() {
             <Link href="/pantry" className="text-[12px] font-bold text-brand">
               Комора
             </Link>
+          </div>
+        )}
+
+        {match.missing.length > 0 && (
+          <div className="mb-3">
+            <Button
+              full
+              variant="secondary"
+              onClick={() => {
+                haptic(12);
+                const items = itemsForRecipe(recipe, match.missing, factor);
+                const { fresh, merged } = addShopping(items);
+                toast(
+                  fresh > 0
+                    ? `${fresh} ${plural(fresh, "позиція", "позиції", "позицій")} у списку покупок`
+                    : merged > 0
+                      ? "Усе це вже в списку — кількості долито"
+                      : "Усе це вже в списку покупок",
+                  "🛒",
+                );
+              }}
+            >
+              <ShoppingBasket size={17} />
+              Додати в список покупок · {match.missing.length}
+            </Button>
+            <p className="mt-1.5 text-center text-[11px] text-faint">
+              Кількості — на {currentServings}{" "}
+              {plural(currentServings, "порцію", "порції", "порцій")}
+            </p>
           </div>
         )}
 

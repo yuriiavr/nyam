@@ -9,9 +9,10 @@ import { RecipeMedia } from "@/components/RecipeCard";
 import { Button, Card, Sheet, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import { applyFilters, byAisle, emptyFilters, generateWeekPlan, shoppingListFor } from "@/lib/matching";
+import { pickQuantity } from "@/lib/shopping";
 import { allRecipes, recipeById, useApp } from "@/lib/store";
 import type { MealType, PlanSlot } from "@/lib/types";
-import { dateKey, haptic, MEAL_LABEL, pick, startOfWeek, WEEKDAYS } from "@/lib/utils";
+import { dateKey, haptic, MEAL_LABEL, newId, pick, plural, startOfWeek, WEEKDAYS } from "@/lib/utils";
 
 const SLOTS: PlanSlot[] = ["breakfast", "lunch", "dinner"];
 
@@ -20,7 +21,7 @@ export default function PlanPage() {
   const pantry = useApp((s) => s.pantry);
   const myRecipes = useApp((s) => s.myRecipes);
   const setPlanSlot = useApp((s) => s.setPlanSlot);
-  const addPantry = useApp((s) => s.addPantry);
+  const addShopping = useApp((s) => s.addShopping);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
 
@@ -28,7 +29,12 @@ export default function PlanPage() {
   const [picking, setPicking] = useState<{ day: string; slot: PlanSlot } | null>(null);
   const [query, setQuery] = useState("");
   const [shopOpen, setShopOpen] = useState(false);
-  const [bought, setBought] = useState<Set<string>>(new Set());
+  /*
+   * Позначки тут означають «беремо», а не «купив»: цей аркуш лише збирає
+   * список із плану, а сам похід живе на окремій сторінці, де галочки
+   * переживають перезапуск застосунку.
+   */
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
 
   const days = useMemo(() => {
     const start = startOfWeek();
@@ -243,15 +249,31 @@ export default function PlanPage() {
         })}
       </section>
 
-      {/* Список покупок */}
-      {shoppingList.length > 0 && (
-        <section className="px-4 pt-6">
-          <Button variant="secondary" full size="lg" onClick={() => setShopOpen(true)}>
+      {/* Що треба докупити на цей тиждень */}
+      <section className="flex flex-col gap-2 px-4 pt-6">
+        {shoppingList.length > 0 && (
+          <Button
+            variant="secondary"
+            full
+            size="lg"
+            onClick={() => {
+              haptic(12);
+              // Наперед позначаємо все: людина відкрила це, щоб узяти список,
+              // а не щоб зібрати його заново по галочці.
+              setChosen(new Set(shoppingList.map((i) => i.key)));
+              setShopOpen(true);
+            }}
+          >
             <ShoppingBasket size={18} />
-            Список покупок · {shoppingList.length}
+            Зібрати список на тиждень · {shoppingList.length}
           </Button>
-        </section>
-      )}
+        )}
+        <Link href="/shopping" onClick={() => haptic(8)}>
+          <Button variant="ghost" full>
+            Відкрити список покупок
+          </Button>
+        </Link>
+      </section>
 
       {/* Вибір страви у слот */}
       <Sheet
@@ -311,24 +333,49 @@ export default function PlanPage() {
         footer={
           <Button
             full
-            variant="secondary"
             onClick={() => {
-              bought.forEach((key) =>
-                addPantry({ key, addedAt: new Date().toISOString() }),
+              haptic(14);
+              const items = shoppingList
+                .filter((entry) => chosen.has(entry.key))
+                .map((entry) => {
+                  /*
+                   * Коли міри не звелись («500 г» і «2 ст. л.»), у списку
+                   * лишається вагова: саме нею міряють у магазині. Вигадана
+                   * сума гірша за неповну правду, а сам продукт потрібен у
+                   * будь-якому разі.
+                   */
+                  const q = pickQuantity(entry.quantities);
+                  return {
+                    id: newId(),
+                    key: entry.key,
+                    amount: q?.amount,
+                    unit: q?.unit,
+                    done: false,
+                    addedAt: new Date().toISOString(),
+                    source: "plan" as const,
+                  };
+                });
+
+              const { fresh, merged } = addShopping(items);
+              toast(
+                fresh > 0
+                  ? `${fresh} ${plural(fresh, "позиція", "позиції", "позицій")} у списку покупок`
+                  : merged > 0
+                    ? "Усе це вже в списку — кількості долито"
+                    : "Усе це вже в списку покупок",
+                "🛒",
               );
-              toast(`${bought.size} продуктів у коморі`, "🧊");
-              setBought(new Set());
               setShopOpen(false);
             }}
-            disabled={bought.size === 0}
+            disabled={chosen.size === 0}
           >
-            Перенести куплене в комору ({bought.size})
+            Додати в список покупок ({chosen.size})
           </Button>
         }
       >
         <p className="pb-3 text-[12.5px] leading-snug text-muted">
-          Зібрано з {plannedRecipes.length} страв у плані, у порядку обходу магазину. Те, що вже
-          є в коморі, не показуємо.
+          Зібрано з {plannedRecipes.length} страв цього тижня, у порядку обходу магазину. Те, що
+          вже є в коморі, не показуємо. Зніми позначку з того, чого брати не треба.
         </p>
         <div className="flex flex-col gap-5 pb-4">
           {shoppingAisles.map(({ cat, label: aisle, items }) => (
@@ -339,14 +386,14 @@ export default function PlanPage() {
               <div className="flex flex-col gap-2">
               {items.map(({ key, label: qtyLabel, count }) => {
                 const def = ing(key);
-                const checked = bought.has(key);
+                const checked = chosen.has(key);
                 return (
                   <motion.button
                     key={key}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
                       haptic(8);
-                      setBought((prev) => {
+                      setChosen((prev) => {
                         const next = new Set(prev);
                         if (next.has(key)) next.delete(key);
                         else next.add(key);
@@ -366,7 +413,9 @@ export default function PlanPage() {
                     </span>
                     <span className="text-lg">{def.emoji}</span>
                     <span
-                      className={`min-w-0 flex-1 text-[14px] font-semibold ${checked ? "line-through opacity-60" : ""}`}
+                      /* Позначка тут означає «беремо», тож викреслюємо,
+                         навпаки, те, що людина зі списку зняла. */
+                      className={`min-w-0 flex-1 text-[14px] font-semibold ${checked ? "" : "line-through opacity-50"}`}
                     >
                       {def.label}
                       {count > 1 && (
