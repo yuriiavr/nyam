@@ -113,6 +113,10 @@ export function subscribeRealtime(userId: string, handlers: Handlers): () => voi
     // І список покупок: один пішов у магазин, другий дописує з дому.
     .on("postgres_changes", { event: "*", schema: "public", table: "shopping_items" }, userState)
 
+    /* Продукт, дописаний людиною, приїжджає разом зі спільнотою: поки він не
+       долетів, рецепт із ним показує сирий ключ замість назви. */
+    .on("postgres_changes", { event: "*", schema: "public", table: "custom_ingredients" }, community)
+
     // Хтось увійшов або вийшов із сімʼї — змінюється сам склад спільних даних.
     .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, family)
 

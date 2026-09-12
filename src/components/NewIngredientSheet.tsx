@@ -47,9 +47,24 @@ export function NewIngredientSheet({
   const [carbs, setCarbs] = useState("");
   const [more, setMore] = useState(false);
 
-  // Аркуш відкривають із рядка пошуку — те, що вже набрали, і є назвою.
+  /*
+   * Аркуш відкривають із рядка пошуку — те, що вже набрали, і є назвою.
+   * Решту скидаємо тут, а не після збереження: закрити можна й не зберігши,
+   * а компонент лишається змонтованим. Інакше наступний продукт відкривався б
+   * із чужим значком, категорією й калоріями від попередньої спроби.
+   */
   useEffect(() => {
-    if (open) setLabel(initialName);
+    if (!open) return;
+    setLabel(initialName);
+    setEmoji("📦");
+    setCat("other");
+    setUnit("g");
+    setPerPiece("");
+    setKcal("");
+    setProtein("");
+    setFat("");
+    setCarbs("");
+    setMore(false);
   }, [open, initialName]);
 
   const num = (v: string) => {
@@ -84,20 +99,7 @@ export function NewIngredientSheet({
     haptic(14);
     addCustomIngredient(def);
     onCreated?.(def);
-    reset();
     onClose();
-  };
-
-  const reset = () => {
-    setEmoji("📦");
-    setCat("other");
-    setUnit("g");
-    setPerPiece("");
-    setKcal("");
-    setProtein("");
-    setFat("");
-    setCarbs("");
-    setMore(false);
   };
 
   return (

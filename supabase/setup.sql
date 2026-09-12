@@ -425,8 +425,12 @@ create policy "barcodes readable" on public.barcode_cache for select using (true
 create policy "barcodes insert" on public.barcode_cache
   for insert with check (auth.uid() is not null);
 drop policy if exists "barcodes update own" on public.barcode_cache;
+-- Уточнити картку може її автор — або будь-хто, якщо автора немає: записи без
+-- автора приходять із чеків, де відома лише назва.
 create policy "barcodes update own" on public.barcode_cache
-  for update using (auth.uid() = taught_by) with check (auth.uid() = taught_by);
+  for update
+  using (taught_by is null or auth.uid() = taught_by)
+  with check (taught_by is null or auth.uid() = taught_by);
 
 -- Власні продукти: бачать усі (вони стоять у публічних рецептах), додає
 -- кожен лише від свого імені, править автор.

@@ -997,15 +997,29 @@ function rowToIngredient(row: CustomIngredientRow): IngredientDef {
 export async function fetchCustomIngredients(): Promise<IngredientDef[]> {
   const sb = getSupabase();
   if (!sb) return [];
-  const { data, error } = await sb.from("custom_ingredients").select(CUSTOM_INGREDIENT_SELECT);
+  const { data, error } = await sb
+    .from("custom_ingredients")
+    .select(CUSTOM_INGREDIENT_SELECT)
+    // Порядок і стеля явні: без них вибірка залежала б від налаштувань
+    // PostgREST, і на різних пристроях каталог міг би розійтись.
+    .order("created_at", { ascending: true })
+    .limit(2000);
   if (error) throw error;
   return ((data ?? []) as unknown as CustomIngredientRow[]).map(rowToIngredient);
 }
 
+/**
+ * Записує власний продукт.
+ *
+ * Саме insert, а не upsert: єдиний шлях сюди — створення, а перезапис за
+ * ключем означав би, що чийсь продукт мовчки підмінили чужим. Ключі
+ * випадкові, тож збіг практично неможливий; а якщо він таки стався, хай
+ * краще буде видима помилка, ніж тихо підмінені калорії в чужому рецепті.
+ */
 export async function upsertCustomIngredient(def: IngredientDef, userId: string): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("custom_ingredients").upsert({
+  const { error } = await sb.from("custom_ingredients").insert({
     key: def.key,
     label: def.label,
     emoji: def.emoji,
@@ -1021,7 +1035,9 @@ export async function upsertCustomIngredient(def: IngredientDef, userId: string)
     carbs: def.nutrition?.carbs ?? null,
     created_by: userId,
   });
-  if (error) throw error;
+  // 23505 — такий ключ уже є. Повторний запис того самого продукту (він
+  // буває при злитті після офлайну) не помилка, а підтвердження.
+  if (error && error.code !== "23505") throw error;
 }
 
 /* ── Спільний довідник штрихкодів ─────────────────────────────────────── */
@@ -1229,4 +1245,42 @@ export async function cacheBarcode(item: CachedBarcode, userId?: string): Promis
   // 23505 — код уже в довіднику. Це не помилка: хтось устиг раніше, і його
   // відповідь не гірша за нашу.
   if (error && error.code !== "23505") throw error;
+}
+
+/**
+ * Записує заповнену людиною картку — навіть якщо код у довіднику вже є.
+ *
+ * Саме «навіть якщо»: найчастіше там лежить бідний запис із чека, де відома
+ * тільки назва й продукт. Людина щойно переписала з пачки вагу й КБЖВ, і
+ * мовчки викинути це означало б попросити її про роботу задарма.
+ *
+ * Перезаписати чужу картку не вийде: політика доступу пускає лише автора
+ * запису — або будь-кого, якщо автора не було (так виходять записи з чека).
+ */
+export async function saveBarcodeCard(item: CachedBarcode, userId?: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+
+  const { error } = await sb.from("barcode_cache").upsert(
+    {
+      barcode: item.barcode,
+      name: item.name,
+      brand: item.brand ?? null,
+      image_url: item.image ?? null,
+      ingredient_key: item.ingredientKey,
+      amount: item.amount ?? null,
+      unit: item.unit ?? null,
+      kcal: item.nutrition?.kcal ?? null,
+      protein: item.nutrition?.protein ?? null,
+      fat: item.nutrition?.fat ?? null,
+      carbs: item.nutrition?.carbs ?? null,
+      taught_by: userId ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "barcode" },
+  );
+
+  // Чужу картку база не дасть перезаписати — і це правильно, а не помилка,
+  // про яку треба доповідати людині.
+  if (error && error.code !== "42501") throw error;
 }

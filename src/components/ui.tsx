@@ -224,6 +224,16 @@ function useVisibleViewport(active: boolean) {
   return view;
 }
 
+/**
+ * Скільки аркушів відкрито просто зараз.
+ *
+ * Живе в модулі, а не в стані: замок прокрутки — це властивість сторінки, а
+ * не окремого аркуша, і знімати його має лише останній, хто йшов.
+ */
+let sheetDepth = 0;
+let lockedScrollY = 0;
+let lockedStyles: Record<string, string> | null = null;
+
 export function Sheet({
   open,
   onClose,
@@ -253,32 +263,48 @@ export function Sheet({
     if (!open) return;
 
     const body = document.body;
-    const kept = {
-      overflow: body.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
+    /*
+     * Аркуші складаються в стос: із картки товару відкривається вибір
+     * продукту, з нього — створення свого. Тому і замок прокрутки, і Escape
+     * рахують глибину. Без цього другий аркуш запамʼятовував би як
+     * «початковий» вже прибитий стан сторінки й на виході повертав її на
+     * початок, а Escape закривав би весь стос замість верхнього аркуша.
+     */
+    const depth = ++sheetDepth;
+    if (depth === 1) {
+      lockedStyles = {
+        overflow: body.style.overflow,
+        position: body.style.position,
+        top: body.style.top,
+        left: body.style.left,
+        right: body.style.right,
+        width: body.style.width,
+      };
+      lockedScrollY = window.scrollY;
+
+      body.style.overflow = "hidden";
+      body.style.position = "fixed";
+      body.style.top = `-${lockedScrollY}px`;
+      body.style.left = "0";
+      body.style.right = "0";
+      body.style.width = "100%";
+    }
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && sheetDepth === depth) onClose();
     };
-    const scrollY = window.scrollY;
-
-    body.style.overflow = "hidden";
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
 
     return () => {
-      Object.assign(body.style, kept);
-      // Повертаємо точно туди, де були: інакше закриття аркуша щоразу
-      // викидало б на початок стрічки.
-      window.scrollTo(0, scrollY);
+      sheetDepth = Math.max(0, sheetDepth - 1);
       window.removeEventListener("keydown", onKey);
+      if (sheetDepth === 0 && lockedStyles) {
+        Object.assign(body.style, lockedStyles);
+        // Повертаємо точно туди, де були: інакше закриття аркуша щоразу
+        // викидало б на початок стрічки.
+        window.scrollTo(0, lockedScrollY);
+        lockedStyles = null;
+      }
     };
   }, [open, onClose]);
 

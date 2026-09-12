@@ -38,6 +38,7 @@ import {
 import {
   RECEIPT_FORMATS,
   lookupBarcode,
+  saveProductCard,
   teachBarcode,
   teachReceiptCode,
   type ProductInfo,
@@ -66,6 +67,12 @@ export default function PantryPage() {
    */
   const pantry = useApp((s) => s.pantry);
   const shopping = useApp((s) => s.shopping);
+  /*
+   * Підписка на каталог, дописаний людьми: сам опис лежить у реєстрі модуля,
+   * і без цього рядка екран не дізнався б, що він нарешті приїхав, — власний
+   * продукт показувався б сирим ключем до наступного дотику.
+   */
+  useApp((s) => s.customIngredients);
   const account = useApp((s) => s.account);
   const addPantry = useApp((s) => s.addPantry);
   const importPantry = useApp((s) => s.importPantry);
@@ -79,6 +86,8 @@ export default function PantryPage() {
   const [addOpen, setAddOpen] = useState(false);
   /** Назва для картки власного продукту; null — картка закрита. */
   const [creating, setCreating] = useState<string | null>(null);
+  /** Товар зі сканера, для якого створюють продукт: код, вага, назва з етикетки. */
+  const [creatingFor, setCreatingFor] = useState<ProductInfo | null>(null);
   /** Товар, для якого зараз заповнюють картку. */
   const [carding, setCarding] = useState<ProductInfo | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
@@ -193,7 +202,10 @@ export default function PantryPage() {
 
       if (!result.ok) {
         setReceiptBusy(false);
-        setReceiptError({ message: RECEIPT_FAILURE[result.reason], scanned: "фото чека" });
+        setReceiptError({
+          message: PHOTO_FAILURE[result.reason] ?? RECEIPT_FAILURE[result.reason],
+          scanned: "фото чека",
+        });
         return;
       }
 
@@ -592,10 +604,13 @@ export default function PantryPage() {
               className="flex-1"
               onClick={() => {
                 setReceiptError(null);
-                setReceiptOpen(true);
+                // Повертаємо туди, звідки прийшли: пропонувати QR тому, хто
+                // щойно фотографував (бо QR на чеку й немає), — знущання.
+                if (receiptFrom === "photo") photoInput.current?.click();
+                else setReceiptOpen(true);
               }}
             >
-              Сканувати ще
+              {receiptFrom === "photo" ? "Сфотографувати ще" : "Сканувати ще"}
             </Button>
           </div>
         }
@@ -603,12 +618,19 @@ export default function PantryPage() {
         {receiptError && (
           <div className="pb-2">
             <p className="text-[14px] leading-relaxed">{receiptError.message}</p>
-            <p className="mt-3 text-[11.5px] font-bold uppercase tracking-wide text-muted">
-              Що зчиталося з коду
-            </p>
-            <p className="mt-1.5 break-all rounded-2xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-muted">
-              {receiptError.scanned.slice(0, 300) || "— порожньо —"}
-            </p>
+            {/* Для QR показуємо, що саме зчиталось: із цим уже можна щось
+                зрозуміти. Для фото показувати нічого — знімок людина бачила
+                на власні очі. */}
+            {receiptFrom !== "photo" && (
+              <>
+                <p className="mt-3 text-[11.5px] font-bold uppercase tracking-wide text-muted">
+                  Що зчиталося з коду
+                </p>
+                <p className="mt-1.5 break-all rounded-2xl bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-muted">
+                  {receiptError.scanned.slice(0, 300) || "— порожньо —"}
+                </p>
+              </>
+            )}
           </div>
         )}
       </Sheet>
@@ -816,9 +838,9 @@ export default function PantryPage() {
         onClose={() => setPickFor(null)}
         title="Що це за продукт?"
         onCreate={(name) => {
-          const product = pickFor;
+          setCreatingFor(pickFor);
           setPickFor(null);
-          setCreating(name || product?.name || "");
+          setCreating(name);
         }}
         exclude={pantryKeys}
         onPick={(def) => {
@@ -850,7 +872,7 @@ export default function PantryPage() {
           });
           // Наступному, хто відсканує цей код, вгадувати вже не доведеться —
           // і він побачить не лише «це молоко», а й вагу пачки з калоріями.
-          void teachBarcode(filled, def.key, account?.id);
+          void saveProductCard(filled, def.key, account?.id);
           toast(`«${filled.name}» у коморі`, "📦");
           setDetailsFor(def.key);
         }}
@@ -859,10 +881,26 @@ export default function PantryPage() {
       <NewIngredientSheet
         open={creating !== null}
         initialName={creating ?? ""}
-        onClose={() => setCreating(null)}
+        onClose={() => {
+          setCreating(null);
+          setCreatingFor(null);
+        }}
         onCreated={(def) => {
-          add(def.key);
+          /*
+           * Коли продукт створюють після сканування, у руках уже є і код, і
+           * вага пачки. Не перенести їх означало б залишити код невідомим
+           * назавжди — попри обіцянку на тій самій панелі.
+           */
+          add(def.key, {
+            label: creatingFor?.name,
+            barcode: creatingFor?.barcode,
+            amount: creatingFor?.amount,
+            unit: creatingFor?.unit,
+          });
+          if (creatingFor) void teachBarcode(creatingFor, def.key, account?.id);
+          setCreatingFor(null);
           toast(`«${def.label}» у каталозі й у коморі`, "📦");
+          setDetailsFor(def.key);
         }}
       />
 
@@ -896,15 +934,29 @@ export default function PantryPage() {
 
 /* ── Чек ──────────────────────────────────────────────────────────────── */
 
+/**
+ * Що сказати, коли чек не прочитався.
+ *
+ * Двома наборами, бо винуватці різні: QR іде в податкову, фото — у
+ * розпізнавання. Писати «податкова не відповідає» тому, хто щойно
+ * сфотографував чек, означало б послати його чекати того, що не станеться.
+ */
+const PHOTO_FAILURE: Partial<Record<ReceiptFailure, string>> = {
+  upstream: "Розпізнавання не відповідає. Спробуй ще раз за кілька хвилин",
+  noitems: "На фото не видно жодного товару. Спробуй зняти весь чек цілком",
+  notfound: "На фото не видно чека",
+};
+
 const RECEIPT_FAILURE: Record<ReceiptFailure, string> = {
   notfound: "Податкова не знайшла такого чека",
   noitems: "У цьому чеку немає списку товарів",
   upstream: "Податкова не відповідає — спробуй пізніше",
   offline: "Немає звʼязку — чек читається тільки онлайн",
-  throttled: "Забагато спроб поспіль. Спробуй за хвилину",
+  throttled: "Забагато спроб поспіль. Спробуй пізніше",
   nokey: "Розпізнавання фото ще не налаштоване — немає ключа Gemini",
   unauthorized: "Схоже, сесія застаріла. Онови сторінку й спробуй ще раз",
   unreadable: "На фото не видно чека. Спробуй зняти рівніше й ближче",
+  toobig: "Знімок завеликий. Сфотографуй чек ще раз — камера дасть менший файл",
 };
 
 /**

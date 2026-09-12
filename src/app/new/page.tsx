@@ -744,7 +744,18 @@ function RecipeForm() {
         initialName={creating ?? ""}
         onClose={() => setCreating(null)}
         onCreated={(def) => {
-          setIngredients((p) => [...p, { key: def.key, unit: def.defaultUnit ?? "g" }]);
+          setIngredients((p) => [
+            ...p,
+            {
+              key: def.key,
+              unit: def.defaultUnit ?? "g",
+              // Назву дублюємо в сам рецепт: він їде у спільноту, і якщо опис
+              // продукту чомусь не долетить, рядок покаже «Кокосове борошно»,
+              // а не сирий ключ.
+              label: def.label,
+              nutrition: def.nutrition,
+            },
+          ]);
           toast(`«${def.label}» тепер у каталозі`, "📦");
         }}
       />

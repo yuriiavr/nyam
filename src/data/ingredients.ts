@@ -458,11 +458,15 @@ export function ownKey(label: string, taken: (key: string) => boolean = () => fa
       .replace(/^_+|_+$/g, "")
       .slice(0, 32) || "produkt";
 
+  /*
+   * Хвіст є завжди, навіть коли збігу не видно. Видно ж лише те, що встиг
+   * завантажитись: каталог спільноти приїжджає з мережею, і на першому
+   * запуску чи в літаку він порожній. Без хвоста двоє, що створили «Домашній
+   * сир», отримали б однаковий ключ — а це не два продукти з однією назвою,
+   * а один продукт, у якому чужі калорії тихо підмінили твої.
+   */
   for (let i = 0; i < 50; i++) {
-    // Перша спроба без хвоста: «own_domashnij_syr» читається краще за
-    // «own_domashnij_syr_k3f», і найчастіше збігу немає.
-    const suffix = i === 0 ? "" : `_${Math.random().toString(36).slice(2, 6)}`;
-    const key = `${OWN_PREFIX}${base}${suffix}`;
+    const key = `${OWN_PREFIX}${base}_${Math.random().toString(36).slice(2, 6)}`;
     if (!ING_BY_KEY.has(key) && !CUSTOM.has(key) && !taken(key)) return key;
   }
   return `${OWN_PREFIX}${base}_${Date.now().toString(36)}`;

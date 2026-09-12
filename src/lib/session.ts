@@ -4,7 +4,7 @@ import * as api from "./supabase/api";
 import { friendlyError, getSupabase, isSupabaseConfigured } from "./supabase/client";
 import { useApp } from "./store";
 import { subscribeRealtime, unsubscribeRealtime } from "./realtime";
-import { setSyncFamily, setSyncUser } from "./sync";
+import { pushCustomIngredient, setSyncFamily, setSyncUser } from "./sync";
 import type { IngredientDef, Recipe } from "./types";
 import { newId } from "./utils";
 
@@ -31,8 +31,23 @@ async function loadCommunity(myId: string | null) {
       api.fetchCommunity(myId),
       api.fetchCustomIngredients().catch(() => [] as IngredientDef[]),
     ]);
+    /*
+     * Каталог ставимо ПЕРШИМ, ще до рецептів. Інакше екрани перемальовуються
+     * від нових рецептів, коли опису продукту ще немає, — і рядок показує
+     * сирий ключ до наступного оновлення.
+     *
+     * Створене без мережі живе лише тут: знімок бази про такий продукт ще не
+     * знає, а рецепт із ним уже міг поїхати у спільноту. Просто підставити
+     * знімок означало б стерти продукт, і рядок рецепта показав би сирий
+     * ключ. Тому зливаємо й дописуємо те, що не долетіло, — так само, як це
+     * робить migrateLocalRecipes для самих рецептів.
+     */
+    const known = new Set(custom.map((d) => d.key));
+    const unsynced = useApp.getState().customIngredients.filter((d) => !known.has(d.key));
+    store.setCustomIngredients([...unsynced, ...custom]);
+    for (const def of unsynced) pushCustomIngredient(def);
+
     store.setCommunity(data);
-    if (custom.length) store.setCustomIngredients(custom);
     return true;
   } catch (error) {
     store.setSyncStatus("error", friendlyError(error));

@@ -4,7 +4,7 @@ import {
   ing,
   knownIngredient,
 } from "@/data/ingredients";
-import { cacheBarcode, fetchCachedBarcode } from "./supabase/api";
+import { cacheBarcode, fetchCachedBarcode, saveBarcodeCard } from "./supabase/api";
 import { parseQty } from "./units";
 import type { IngredientDef, Nutrition, Unit } from "./types";
 
@@ -80,6 +80,37 @@ export async function teachBarcode(
         ingredientKey,
         // Вага пачки й КБЖВ теж: саме через їх відсутність відповідь
         // спільноти досі була біднішою за відповідь Open Food Facts.
+        amount: product.amount,
+        unit: product.unit,
+        nutrition: product.nutrition,
+      },
+      userId,
+    );
+  } catch {
+    /* довідник спільноти — приємний бонус, а не умова роботи */
+  }
+}
+
+/**
+ * Картка, яку людина заповнила руками.
+ *
+ * На відміну від teachBarcode, пише завжди: у довіднику міг лежати бідний
+ * запис із чека — лише назва й продукт, — а тут щойно переписали з пачки
+ * вагу й харчову цінність. Мовчки викинути це було б знущанням.
+ */
+export async function saveProductCard(
+  product: ProductInfo,
+  ingredientKey: string,
+  userId?: string,
+): Promise<void> {
+  try {
+    await saveBarcodeCard(
+      {
+        barcode: product.barcode,
+        name: product.name,
+        brand: product.brand,
+        image: product.image,
+        ingredientKey,
         amount: product.amount,
         unit: product.unit,
         nutrition: product.nutrition,

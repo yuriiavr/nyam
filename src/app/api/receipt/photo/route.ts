@@ -25,13 +25,25 @@ export const maxDuration = 60;
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
-/** Ліміт на одного відвідувача: кожен виклик коштує грошей, на відміну від ДПС. */
+/**
+ * Ліміт на одного користувача: кожен виклик коштує грошей, на відміну від ДПС.
+ *
+ * Лічильник живе в памʼяті інстанса, а їх на Vercel багато й вони недовгі —
+ * тож це заслін від зациклених клієнтів і випадкового натискання, а не від
+ * того, хто справді візьметься витрачати чужий ключ. Справжня стеля має
+ * стояти на боці Google, у налаштуваннях самого ключа.
+ */
 const RATE_LIMIT = 12;
 const RATE_WINDOW_MS = 60 * 60_000;
 const hits = new Map<string, number[]>();
 
-/** Більше за це не пропускаємо: фото чека після стиснення важить пів мегабайта. */
-const MAX_BYTES = 6 * 1024 * 1024;
+/**
+ * Стеля для картинки, у символах base64 (це приблизно на третину більше за
+ * самі байти). Свідомо нижча за межу тіла запиту на Vercel — інакше перевірка
+ * нічого не значила б: платформа відрізала б запит ще до цього коду. Фото
+ * чека після стиснення важить пів мегабайта, тож трьох вистачить із запасом.
+ */
+const MAX_BASE64 = 3 * 1024 * 1024;
 
 const PROMPT = `Це фотографія касового чека з українського магазину.
 
@@ -72,16 +84,30 @@ const SCHEMA = {
   required: ["lines"],
 };
 
-function overRateLimit(request: Request): boolean {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "local";
+/**
+ * Лічильник по користувачу, а не по адресі.
+ *
+ * За адресою виходило двічі неправильно: мобільний інтернет міняє IP і дає
+ * нову квоту з нічого, а двоє вдома за одним роутером ділять дванадцять
+ * спроб на всіх і блокують одне одного. Ідентифікатор ми вже маємо — його
+ * щойно підтвердив Supabase.
+ */
+function overRateLimit(userId: string): boolean {
   const now = Date.now();
-  const recent = (hits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  // Мапа живе в памʼяті інстанса; без стелі забутий рядок сусіда тримав би
+  // її вічно. Той самий заслін, що й у маршруті до податкової.
+  if (hits.size > 5_000) hits.clear();
+  const recent = (hits.get(userId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  hits.set(userId, recent);
+
+  /*
+   * Рахуємо лише пропущені запити. Якби сюди потрапляли й відбиті, кожна
+   * наступна спроба відсувала б кінець блокування на годину вперед — і той,
+   * хто чесно натискає «ще раз», не дочекався б ніколи.
+   */
+  if (recent.length >= RATE_LIMIT) return true;
   recent.push(now);
-  hits.set(ip, recent);
-  return recent.length > RATE_LIMIT;
+  return false;
 }
 
 /**
@@ -91,20 +117,22 @@ function overRateLimit(request: Request): boolean {
  * тож відкритим він бути не може. Перевіряємо токен сесії там же, де його
  * видали, — у Supabase; своїх ключів для цього не треба.
  */
-async function authorized(request: Request): Promise<boolean> {
+async function userFromRequest(request: Request, left: () => number): Promise<string | null> {
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!token || !url || !anon) return false;
+  if (!token || !url || !anon) return null;
 
   try {
     const res = await fetch(`${url}/auth/v1/user`, {
       headers: { apikey: anon, Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(Math.min(8000, left())),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    const user = (await res.json()) as { id?: string };
+    return user.id ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -116,8 +144,18 @@ export async function POST(request: Request) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return fail("nokey");
 
-  if (!(await authorized(request))) return fail("unauthorized", 401);
-  if (overRateLimit(request)) return fail("throttled", 429);
+  /*
+   * Спільний дедлайн на весь маршрут. Інакше повільна перевірка сесії
+   * додавалася б до очікування моделі, разом вони перевалювали б за
+   * клієнтські 55 секунд — і людина бачила б «немає звʼязку» на відповідь,
+   * яка вже прийшла й за яку вже заплачено.
+   */
+  const deadline = Date.now() + 45_000;
+  const left = () => Math.max(1000, deadline - Date.now());
+
+  const userId = await userFromRequest(request, left);
+  if (!userId) return fail("unauthorized", 401);
+  if (overRateLimit(userId)) return fail("throttled", 429);
 
   let image: string;
   try {
@@ -131,13 +169,14 @@ export async function POST(request: Request) {
   const match = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(image);
   const mime = match ? match[1] : "image/jpeg";
   const data = match ? match[2] : image;
-  if (!data || data.length > MAX_BYTES) return fail("unreadable");
+  if (!data) return fail("unreadable");
+  if (data.length > MAX_BASE64) return fail("toobig");
 
   try {
     const res = await fetch(`${ENDPOINT}/${MODEL}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      signal: AbortSignal.timeout(50_000),
+      signal: AbortSignal.timeout(left()),
       body: JSON.stringify({
         contents: [
           {

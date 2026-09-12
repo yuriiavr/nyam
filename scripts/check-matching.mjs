@@ -253,7 +253,10 @@ const { setCustomIngredients, allIngredients, ownKey, knownIngredient } = await 
 // Ключ власного продукту читабельний, але свідомо не такий, як вбудований:
 // збіг означав би, що в чужому рецепті мовчки підмінився продукт.
 check("ключ із префіксом", ownKey("Кокосове борошно").startsWith("own_"), true);
-check("ключ із назви", ownKey("Кокосове борошно"), "own_kokosove_boroshno");
+// Основа читабельна, а хвіст є завжди: каталог спільноти на пристрої може
+// бути неповним, і двоє з однаковою назвою не мають дістати один ключ.
+check("ключ із назви", /^own_kokosove_boroshno_[a-z0-9]{4}$/.test(ownKey("Кокосове борошно")), true);
+check("двічі — різні ключі", ownKey("Кокосове борошно") === ownKey("Кокосове борошно"), false);
 check("порожня назва не ламає ключ", ownKey("🙂").startsWith("own_"), true);
 
 const coconut = {

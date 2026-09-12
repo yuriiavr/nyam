@@ -22,6 +22,7 @@ begin
     'recipes',         -- нові та змінені рецепти у стрічці
     'pantry_items',    -- спільна комора сімʼї
     'shopping_items',  -- спільний список покупок
+    'custom_ingredients', -- продукти, дописані людьми
     'plan_slots',      -- спільний план харчування
     'family_members'   -- склад сімʼї
   ] loop

@@ -588,7 +588,9 @@ export type ReceiptFailure =
   /** Сесія протухла — фото читає платний сервіс, тож лише для своїх. */
   | "unauthorized"
   /** На фото не видно чека. */
-  | "unreadable";
+  | "unreadable"
+  /** Знімок завеликий навіть після стиснення. */
+  | "toobig";
 
 export type ReceiptResult =
   | { ok: true; receipt: Receipt }

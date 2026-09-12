@@ -77,10 +77,27 @@ alter table public.barcode_cache
   add column if not exists taught_by uuid references public.profiles (id) on delete set null;
 
 drop policy if exists "barcodes update own" on public.barcode_cache;
+-- Уточнити картку може її автор — або будь-хто, якщо автора немає. Записи
+-- без автора приходять із чеків: там відома лише назва, і кожен, хто тримає
+-- пачку в руках, знає про неї більше за такий запис.
 create policy "barcodes update own" on public.barcode_cache
   for update
-  using (auth.uid() = taught_by or public.shares_family(taught_by))
-  with check (auth.uid() = taught_by or public.shares_family(taught_by));
+  using (taught_by is null or auth.uid() = taught_by or public.shares_family(taught_by))
+  with check (taught_by is null or auth.uid() = taught_by or public.shares_family(taught_by));
+
+-- Живі оновлення: поки новий продукт не долетів до другого телефона, рецепт
+-- із ним показує там сирий ключ замість назви.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'custom_ingredients'
+  ) then
+    alter publication supabase_realtime add table public.custom_ingredients;
+  end if;
+end $$;
 
 -- PostgREST тримає схему в кеші й про нові колонки сам може не дізнатись.
 notify pgrst, 'reload schema';

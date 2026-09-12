@@ -45,6 +45,12 @@ import { haptic, plural } from "@/lib/utils";
 export default function ShoppingPage() {
   const shopping = useApp((s) => s.shopping);
   const pantry = useApp((s) => s.pantry);
+  /*
+   * Підписка на каталог, дописаний людьми: сам опис лежить у реєстрі модуля,
+   * і без цього рядка екран не дізнався б, що він нарешті приїхав, — власний
+   * продукт показувався б сирим ключем до наступного дотику.
+   */
+  useApp((s) => s.customIngredients);
   const myRecipes = useApp((s) => s.myRecipes);
   const remoteRecipes = useApp((s) => s.remoteRecipes);
   const hydrated = useApp((s) => s.hydrated);
