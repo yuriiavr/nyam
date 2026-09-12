@@ -1,5 +1,5 @@
 import { DRINKS, type DrinkDef, type DrinkKind } from "@/data/drinks";
-import { ing } from "@/data/ingredients";
+import { ing, isSeasoning } from "@/data/ingredients";
 import { servingKcal } from "./nutrition";
 import type { AppState } from "./store";
 import type { Course, Recipe } from "./types";

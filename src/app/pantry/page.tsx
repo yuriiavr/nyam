@@ -397,7 +397,15 @@ export default function PantryPage() {
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {items.map((def) => {
-                    const have = pantryKeys.includes(def.key);
+                    const item = pantry.find((p) => p.key === def.key);
+                    const have = !!item;
+                    /*
+                     * Кількість тут не питаємо, але як що вже відома — з чека
+                     * чи зі сканера, — показуємо. Відколи в базових опинилися
+                     * крупи, це не дрібниця: «2 кг» на пачці рису чек знає, і
+                     * ховати це від людини сенсу немає.
+                     */
+                    const qty = item ? qtyLabel(item) : "";
                     return (
                       <button
                         key={def.key}
@@ -413,6 +421,7 @@ export default function PantryPage() {
                       >
                         <span>{def.emoji}</span>
                         {def.label}
+                        {qty && <span className="text-[11px] font-bold text-brand">{qty}</span>}
                         {have && <Check size={13} className="text-mint" />}
                       </button>
                     );

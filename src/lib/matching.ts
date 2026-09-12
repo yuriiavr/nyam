@@ -1,4 +1,4 @@
-import { CAT_LABEL, ing } from "@/data/ingredients";
+import { CAT_LABEL, ing, isSeasoning } from "@/data/ingredients";
 import type { AppState } from "./store";
 import { allRecipes, daysSinceCooked, effectiveStats } from "./store";
 import { courseOf } from "./pairing";
@@ -153,9 +153,14 @@ export function fridgeMatches(
   return recipes
     .map((r) => matchRecipe(r, have))
     .filter((m) => {
-      // потрібне хоч одне реальне (не базове) співпадіння з коморою
-      const realHit = m.recipe.ingredients.some((i) => have.has(i.key) && !ing(i.key).staple);
-      return realHit && m.pct >= minPct;
+      /*
+       * Потрібне хоч одне співпадіння по суті страви. «У мене є сіль» —
+       * не привід радити рецепт; «у мене є рис» — привід, хоч і те, і те
+       * лежить у базових. Виняток — страва, для якої є геть усе: саме такі
+       * й готують, коли в холодильнику порожньо.
+       */
+      const realHit = m.recipe.ingredients.some((i) => have.has(i.key) && !isSeasoning(i.key));
+      return (realHit || m.pct === 100) && m.pct >= minPct;
     })
     .sort((a, b) => b.pct - a.pct || a.missing.length - b.missing.length);
 }

@@ -169,7 +169,10 @@ check(
 
 console.log("── Базові продукти ──");
 
-const { matchRecipe } = await jiti.import(path.join(root, "src/lib/matching.ts"));
+const { matchRecipe, fridgeMatches } = await jiti.import(
+  path.join(root, "src/lib/matching.ts"),
+);
+const { ing, isSeasoning } = await jiti.import(path.join(root, "src/data/ingredients.ts"));
 
 const withSalt = {
   ingredients: [{ key: "kurka" }, { key: "sil" }],
@@ -193,6 +196,49 @@ check(
   "відсоток збігу теж це враховує",
   matchRecipe(withSalt, new Set(["kurka"])).pct,
   50,
+);
+
+/*
+ * Крупи теж базові: рис і паста лежать у шафі роками, і питання «скільки в
+ * тебе рису» має рівно стільки ж сенсу, скільки «скільки в тебе солі».
+ */
+check("рис — базовий", ing("rys").staple, true);
+check("гречка — базова", ing("grechka").staple, true);
+check("паста — базова", ing("makarony").staple, true);
+check("сочевиця — базова", ing("sochevytsya").staple, true);
+// А от те, що псується, базовим не стає — це перевіряли ще на яйцях.
+check("яйця не базові", ing("yajtsya").staple, false);
+check("курка не базова", ing("kurka").staple, false);
+
+/*
+ * Але «базове» і «присмака» — різні речі. Страва з рису це страва з рису,
+ * а страва з солі — це ніяка не страва.
+ */
+check("сіль — присмака", isSeasoning("sil"), true);
+check("олія — присмака", isSeasoning("oliya"), true);
+check("рис — ні", isSeasoning("rys"), false);
+check("паста — ні", isSeasoning("makarony"), false);
+
+/*
+ * Через це підбір за холодильником не має губити страви, у яких усе базове:
+ * паста з часником і олією — саме те, що готують, коли в холодильнику
+ * порожньо.
+ */
+const pastaGarlic = {
+  id: "r_pasta_garlic",
+  title: "Паста з часником",
+  ingredients: [{ key: "makarony" }, { key: "chasnyk" }, { key: "oliya" }],
+};
+check(
+  "страва, для якої є геть усе, не зникає",
+  fridgeMatches([pastaGarlic], ["makarony", "chasnyk", "oliya"]).length,
+  1,
+);
+// А ось лише присмака приводом не є: інакше до всього радили б усе.
+check(
+  "сама лише олія — не привід",
+  fridgeMatches([pastaGarlic], ["oliya"]).length,
+  0,
 );
 
 console.log("── Що до чого подавати ──");

@@ -49,6 +49,16 @@ interface Extra {
   unit?: Unit;
 }
 
+/**
+ * Категорії, де базове геть усе.
+ *
+ * Крупи, паста й бобові лежать у шафі роками: питання «скільки в тебе рису»
+ * не має сенсу так само, як «скільки в тебе солі» — рис або є, або скінчився.
+ * Тому вони живуть чеклистом базових, а не інвентарем комори, і кожен рядок
+ * окремо цього не повторює.
+ */
+const STAPLE_CATS: IngredientCat[] = ["grain"];
+
 const D = (
   key: string,
   label: string,
@@ -63,7 +73,7 @@ const D = (
   emoji,
   cat,
   aliases,
-  staple: extra.staple ?? false,
+  staple: extra.staple ?? STAPLE_CATS.includes(cat),
   gramsPerPiece: extra.perPiece,
   gramsPerCup: extra.cup,
   defaultUnit: extra.unit ?? (extra.perPiece ? "pcs" : "g"),
@@ -71,6 +81,34 @@ const D = (
     ? { kcal: nut[0], protein: nut[1], fat: nut[2], carbs: nut[3] }
     : undefined,
 });
+
+/**
+ * Присмака, а не складник.
+ *
+ * Це не те саме, що базовий продукт, хоч донедавна збігалося. Базове — про
+ * зберігання: сіль і рис однаково лежать роками, тож обоє в чеклисті. А тут
+ * — про суть страви: страва з рису це страва з рису, а страва з солі — це
+ * ніяка не страва. Саме тому «у мене є сіль» не привід радити рецепт, а
+ * «у мене є рис» — привід; і саме тому гарнір із рису до плову з рису це
+ * повтор, а от сіль в обох стравах — ні.
+ */
+const SEASONINGS = new Set([
+  "tsybulya",
+  "chasnyk",
+  "boroshno",
+  "krokhmal",
+  "krokhmal_kukurudz",
+  "oliya",
+  "olyvkova",
+  "otset",
+  "bulion",
+  "voda",
+]);
+
+export function isSeasoning(key: string): boolean {
+  const def = ing(key);
+  return def.cat === "spice" || SEASONINGS.has(def.key);
+}
 
 export const INGREDIENTS: IngredientDef[] = [
   /* ── Овочі та зелень ─────────────────────────────────────────────────── */
