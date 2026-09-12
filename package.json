@@ -12,7 +12,8 @@
     "check:nutrition": "node scripts/check-nutrition.mjs",
     "check:matching": "node scripts/check-matching.mjs",
     "check:receipt": "node scripts/check-receipt.mjs",
-    "check:shopping": "node scripts/check-shopping.mjs"
+    "check:shopping": "node scripts/check-shopping.mjs",
+    "check:gemini": "node scripts/check-gemini.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

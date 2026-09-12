@@ -1,4 +1,5 @@
 import type { Receipt, ReceiptLine } from "@/lib/receipt";
+import { GEMINI_MODEL, GEMINI_THINKING } from "@/lib/vision";
 
 /**
  * Чек із фотографії.
@@ -22,25 +23,6 @@ export const dynamic = "force-dynamic";
 /** Розпізнавання фото триває довше за запит до податкової. */
 export const maxDuration = 60;
 
-/**
- * Яка модель читає чек.
- *
- * Тут потрібні очі, а не розум: переписати те, що надруковано, і не
- * домислювати. Найдешевша модель, яка це вміє, — flash-lite, і різниця з
- * старшими не в якості розпізнавання, а в ціні роздумів, яких ми тут не
- * просимо.
- *
- * Порядок величин на один чек: саме фото — це десяток плиток 768×768,
- * тобто дві-три тисячі вхідних токенів, плюс підказка й сотень вісім
- * вихідних на готовий JSON. Разом виходить менше десятої частини цента;
- * на старшій моделі з увімкненими роздумами — у півтора десятка разів
- * більше за те саме.
- *
- * У змінних оточення цього свідомо немає: вибір моделі — рішення про те,
- * як застосунок працює, і його місце в коді, поруч із підказкою, під яку
- * він і підібраний.
- */
-const MODEL = "gemini-2.5-flash-lite";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /**
@@ -191,7 +173,7 @@ export async function POST(request: Request) {
   if (data.length > MAX_BASE64) return fail("toobig");
 
   try {
-    const res = await fetch(`${ENDPOINT}/${MODEL}:generateContent`, {
+    const res = await fetch(`${ENDPOINT}/${GEMINI_MODEL}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       signal: AbortSignal.timeout(left()),
@@ -207,13 +189,8 @@ export async function POST(request: Request) {
           temperature: 0,
           responseMimeType: "application/json",
           responseSchema: SCHEMA,
-          /*
-           * Роздуми вимкнені. Вони коштують вихідних токенів — найдорожчого,
-           * що тут є, — а користі не дають: переписати рядок із чека нема над
-           * чим думати. Поле розуміють моделі 2.5; якщо колись поставиш сюди
-           * старішу, цей рядок треба прибрати, інакше запит відхилять.
-           */
-          thinkingConfig: { thinkingBudget: 0 },
+          // Роздуми вимкнені — чому саме так, див. src/lib/vision.ts.
+          thinkingConfig: GEMINI_THINKING,
         },
       }),
     });
