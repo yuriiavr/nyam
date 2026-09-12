@@ -197,7 +197,9 @@ check(
 
 console.log("── Що до чого подавати ──");
 
-const { suggestPairs, courseOf } = await jiti.import(path.join(root, "src/lib/pairing.ts"));
+const { suggestPairs, suggestDrinks, courseOf, WHEEL_COURSES } = await jiti.import(
+  path.join(root, "src/lib/pairing.ts"),
+);
 const { SEED_RECIPES } = await jiti.import(path.join(root, "src/data/seed.ts"));
 
 const byTitle = (t) => SEED_RECIPES.find((r) => r.title.startsWith(t));
@@ -233,6 +235,38 @@ const together = {
   ],
 };
 check("історія готувань важить найбільше", titlesFor(salmon, together)[0], byTitle("Овочеве рагу").title);
+
+console.log("\n── Напої ──");
+
+/* Час доби: та сама страва, різна відповідь. */
+const at = (hour) => new Date(2026, 8, 10, hour, 0, 0);
+const drinksAt = (recipe, hour, state = empty) =>
+  suggestDrinks(state, recipe, 3, at(hour)).map((p) => p.drink.key);
+
+check("кава ввечері не радиться", drinksAt(byTitle("Тірамісу"), 22).includes("kava"), false);
+check("кава зранку радиться", drinksAt(byTitle("Тірамісу"), 9).includes("kava"), true);
+check("вино зранку не радиться", drinksAt(byTitle("Справжня карбонара"), 10).includes("vyno_chervone"), false);
+check("вино ввечері доречне", drinksAt(byTitle("Справжня карбонара"), 19).includes("vyno_chervone"), true);
+
+// Три чаї підряд — це не вибір: з кожного роду щонайбільше один.
+const kinds = suggestDrinks(empty, byTitle("Гречка"), 3, at(13)).map((p) => p.drink.kind);
+check("напої різного роду", new Set(kinds).size, kinds.length);
+
+// Гостре запивають кисломолочним — і саме це й має бути написано причиною.
+const tomYam = suggestDrinks(empty, byTitle("Том ям"), 3, at(19));
+const tamed = tomYam.find((p) => p.drink.kind === "dairy" || p.drink.key === "lymonad");
+check("до гострого — те, що його гасить", tamed?.reason, "гостре стане мʼякшим");
+
+// Те, що вже стоїть у холодильнику, виходить наперед.
+const withKompot = { ...empty, pantry: [{ key: "kompot" }] };
+const first = suggestDrinks(withKompot, byTitle("Гречка"), 3, at(13))[0];
+check("напій із комори — першим", first?.drink.key, "kompot");
+check("і з поясненням", first?.reason, "вже є в коморі");
+
+// У барабан рулетки напої та соуси не потрапляють.
+check("колесо без напоїв", WHEEL_COURSES.includes("drink"), false);
+check("колесо без соусів", WHEEL_COURSES.includes("sauce"), false);
+check("колесо з гарнірами", WHEEL_COURSES.includes("side"), true);
 
 console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
 process.exit(fail ? 1 : 0);

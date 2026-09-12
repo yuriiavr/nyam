@@ -4,7 +4,12 @@ import { SlidersHorizontal } from "lucide-react";
 import { useMemo } from "react";
 import { Button, Chip, Sheet } from "./ui";
 import { allRecipes, useApp } from "@/lib/store";
-import { emptyFilters, POOL_LABEL, type Filters, type Pool } from "@/lib/matching";
+import {
+  emptyFilters,
+  POOL_LABEL,
+  type Filters,
+  type Pool,
+} from "@/lib/matching";
 import type { MealType, Mood } from "@/lib/types";
 import { COURSE_LABEL, COURSE_ORDER } from "@/lib/pairing";
 import { MEAL_LABEL, MOOD_META, haptic } from "@/lib/utils";
@@ -23,7 +28,14 @@ const MOODS: Mood[] = [
   "fresh",
 ];
 const TIMES = [15, 30, 45, 60];
-const POOLS: Pool[] = ["all", "community", "saved", "mine", "following", "wishlist"];
+const POOLS: Pool[] = [
+  "all",
+  "community",
+  "saved",
+  "mine",
+  "following",
+  "wishlist",
+];
 
 export function FilterButton({
   count,
@@ -57,12 +69,15 @@ export function FilterSheet({
   value,
   onChange,
   resultCount,
+  hidePool = false,
 }: {
   open: boolean;
   onClose: () => void;
   value: Filters;
   onChange: (f: Filters) => void;
   resultCount?: number;
+  /** Там, де джерело обирають окремим перемикачем, тут його дублювати нічим. */
+  hidePool?: boolean;
 }) {
   const myRecipes = useApp((s) => s.myRecipes);
   const remoteRecipes = useApp((s) => s.remoteRecipes);
@@ -95,13 +110,19 @@ export function FilterSheet({
         </div>
       }
     >
-      <Group title="Звідки брати">
-        {POOLS.map((p) => (
-          <Chip key={p} active={value.pool === p} onClick={() => onChange({ ...value, pool: p })}>
-            {POOL_LABEL[p]}
-          </Chip>
-        ))}
-      </Group>
+      {!hidePool && (
+        <Group title="Звідки брати">
+          {POOLS.map((p) => (
+            <Chip
+              key={p}
+              active={value.pool === p}
+              onClick={() => onChange({ ...value, pool: p })}
+            >
+              {POOL_LABEL[p]}
+            </Chip>
+          ))}
+        </Group>
+      )}
 
       {/* Частина прийому їжі: гарнір окремо від основної страви. */}
       <Group title="Частина страви">
@@ -109,7 +130,9 @@ export function FilterSheet({
           <Chip
             key={c}
             active={value.courses.includes(c)}
-            onClick={() => onChange({ ...value, courses: toggle(value.courses, c) })}
+            onClick={() =>
+              onChange({ ...value, courses: toggle(value.courses, c) })
+            }
           >
             {COURSE_LABEL[c]}
           </Chip>
@@ -121,7 +144,9 @@ export function FilterSheet({
           <Chip
             key={m}
             active={value.meals.includes(m)}
-            onClick={() => onChange({ ...value, meals: toggle(value.meals, m) })}
+            onClick={() =>
+              onChange({ ...value, meals: toggle(value.meals, m) })
+            }
           >
             {MEAL_LABEL[m]}
           </Chip>
@@ -133,7 +158,9 @@ export function FilterSheet({
           <Chip
             key={m}
             active={value.moods.includes(m)}
-            onClick={() => onChange({ ...value, moods: toggle(value.moods, m) })}
+            onClick={() =>
+              onChange({ ...value, moods: toggle(value.moods, m) })
+            }
           >
             <span>{MOOD_META[m].emoji}</span>
             {MOOD_META[m].label}
@@ -146,7 +173,9 @@ export function FilterSheet({
           <Chip
             key={t}
             active={value.maxTime === t}
-            onClick={() => onChange({ ...value, maxTime: value.maxTime === t ? null : t })}
+            onClick={() =>
+              onChange({ ...value, maxTime: value.maxTime === t ? null : t })
+            }
           >
             до {t} хв
           </Chip>
@@ -159,7 +188,10 @@ export function FilterSheet({
             key={d}
             active={value.maxDifficulty === d}
             onClick={() =>
-              onChange({ ...value, maxDifficulty: value.maxDifficulty === d ? null : d })
+              onChange({
+                ...value,
+                maxDifficulty: value.maxDifficulty === d ? null : d,
+              })
             }
           >
             {["", "Просто", "До середньої", "Будь-яка"][d]}
@@ -172,7 +204,9 @@ export function FilterSheet({
           <Chip
             key={c}
             active={value.maxCost === c}
-            onClick={() => onChange({ ...value, maxCost: value.maxCost === c ? null : c })}
+            onClick={() =>
+              onChange({ ...value, maxCost: value.maxCost === c ? null : c })
+            }
           >
             {"₴".repeat(c)}
           </Chip>
@@ -184,7 +218,9 @@ export function FilterSheet({
           <Chip
             key={c}
             active={value.cuisines.includes(c)}
-            onClick={() => onChange({ ...value, cuisines: toggle(value.cuisines, c) })}
+            onClick={() =>
+              onChange({ ...value, cuisines: toggle(value.cuisines, c) })
+            }
           >
             {c}
           </Chip>
@@ -197,7 +233,10 @@ export function FilterSheet({
             key={d}
             active={value.avoidRecentDays === d}
             onClick={() =>
-              onChange({ ...value, avoidRecentDays: value.avoidRecentDays === d ? null : d })
+              onChange({
+                ...value,
+                avoidRecentDays: value.avoidRecentDays === d ? null : d,
+              })
             }
           >
             не готував {d} дн.
@@ -210,10 +249,18 @@ export function FilterSheet({
   );
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="py-3">
-      <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">{title}</h3>
+      <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">
+        {title}
+      </h3>
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );

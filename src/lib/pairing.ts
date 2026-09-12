@@ -1,3 +1,4 @@
+import { DRINKS, type DrinkDef, type DrinkKind } from "@/data/drinks";
 import { ing } from "@/data/ingredients";
 import { servingKcal } from "./nutrition";
 import type { AppState } from "./store";
@@ -30,6 +31,25 @@ export const COURSE_LABEL: Record<Course, string> = {
   dessert: "Десерт",
   drink: "Напій",
 };
+
+/**
+ * Що має сенс крутити в рулетці.
+ *
+ * Колесо відповідає на питання «що готувати», тож туди йдуть і самодостатні
+ * страви, і основні, і гарніри: гарнір, що випав сам, — це не помилка, до
+ * нього просто підкажемо пару. А соус і напій стравою не є: випав соус —
+ * і вечері в тебе немає.
+ *
+ * Правило діє, лише поки ти сам не обрав частину страви у фільтрах. Обрав
+ * «десерт» — крутиться десерт: явне прохання сильніше за замовчування.
+ */
+export const WHEEL_COURSES: Course[] = [
+  "whole",
+  "main",
+  "side",
+  "soup",
+  "salad",
+];
 
 /** Порядок для фільтрів і форми — від найчастішого до рідкісного. */
 export const COURSE_ORDER: Course[] = [
@@ -100,7 +120,9 @@ export interface Pairing {
 /** Непусті, небазові інгредієнти: саме за ними видно повтор у парі. */
 function coreKeys(recipe: Recipe): Set<string> {
   return new Set(
-    recipe.ingredients.filter((i) => !i.optional && !ing(i.key).staple).map((i) => i.key),
+    recipe.ingredients
+      .filter((i) => !i.optional && !ing(i.key).staple)
+      .map((i) => i.key),
   );
 }
 
@@ -110,7 +132,11 @@ function coreKeys(recipe: Recipe): Set<string> {
  * Це найсильніший сигнал з усіх: він не здогадка, а те, що в цьому домі
  * справді їли разом.
  */
-function cookedTogether(cooked: AppState["cooked"], a: string, b: string): number {
+function cookedTogether(
+  cooked: AppState["cooked"],
+  a: string,
+  b: string,
+): number {
   const byDay = new Map<string, Set<string>>();
   for (const event of cooked) {
     const day = dateKey(new Date(event.at));
@@ -131,7 +157,12 @@ function cookedTogether(cooked: AppState["cooked"], a: string, b: string): numbe
  * далі те, що просто пасує, і аж потім те, що популярне. Популярність тут
  * остання навмисно — інакше до всього радили б борщ.
  */
-export function suggestPairs(state: AppState, recipe: Recipe, pool: Recipe[], limit = 3): Pairing[] {
+export function suggestPairs(
+  state: AppState,
+  recipe: Recipe,
+  pool: Recipe[],
+  limit = 3,
+): Pairing[] {
   const wanted = GOES_WITH[courseOf(recipe)];
   if (!wanted) return [];
 
@@ -174,13 +205,19 @@ export function suggestPairs(state: AppState, recipe: Recipe, pool: Recipe[], li
     // 3. Та сама кухня.
     if (candidate.cuisine === recipe.cuisine) {
       score += 20;
-      reasons.push({ weight: 60, text: `та сама кухня — ${candidate.cuisine.toLowerCase()}` });
+      reasons.push({
+        weight: 60,
+        text: `та сама кухня — ${candidate.cuisine.toLowerCase()}`,
+      });
     }
 
     // 4. Пара не має готуватись довше за головну страву.
     if (candidate.timeMin <= recipe.timeMin) {
       score += 15;
-      reasons.push({ weight: 20, text: `готується за ${candidate.timeMin} хв` });
+      reasons.push({
+        weight: 20,
+        text: `готується за ${candidate.timeMin} хв`,
+      });
     } else {
       score -= Math.min(20, candidate.timeMin - recipe.timeMin);
     }
@@ -191,7 +228,10 @@ export function suggestPairs(state: AppState, recipe: Recipe, pool: Recipe[], li
       const light = theirKcal < 300;
       if (heavy === light) {
         score += 12;
-        reasons.push({ weight: 40, text: heavy ? "легше до ситного" : "додає ситності" });
+        reasons.push({
+          weight: 40,
+          text: heavy ? "легше до ситного" : "додає ситності",
+        });
       }
     }
 
@@ -205,10 +245,127 @@ export function suggestPairs(state: AppState, recipe: Recipe, pool: Recipe[], li
     // 7. Популярність — лише щоб розвести однакові.
     score += Math.min(8, candidate.stats.cooks / 25);
 
-    const reason = reasons.sort((a, b) => b.weight - a.weight)[0]?.text ?? "пасує за складом";
+    const reason =
+      reasons.sort((a, b) => b.weight - a.weight)[0]?.text ??
+      "пасує за складом";
 
-    scored.push({ recipe: candidate, reason: reason || "пасує за складом", score });
+    scored.push({
+      recipe: candidate,
+      reason: reason || "пасує за складом",
+      score,
+    });
   }
 
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+/* ── Напої ────────────────────────────────────────────────────────────── */
+
+export interface DrinkPick {
+  drink: DrinkDef;
+  /** Чому саме цей напій — рядок під назвою. */
+  reason: string;
+  /** Чи стоїть він уже в коморі. */
+  home: boolean;
+  score: number;
+}
+
+/**
+ * Що до цієї страви випити.
+ *
+ * Працює за тими самими правилами, що й пари страв, з однією поправкою на
+ * природу напою: він залежить від години. Кава о десятій вечора й вино о
+ * дев'ятій ранку — це не поради, а знущання, тож час доби тут такий самий
+ * сигнал, як кухня чи склад.
+ *
+ * З кожного роду беремо щонайбільше один: три чаї підряд — це не вибір.
+ */
+export function suggestDrinks(
+  state: AppState,
+  recipe: Recipe,
+  limit = 3,
+  now: Date = new Date(),
+): DrinkPick[] {
+  const course = courseOf(recipe);
+  const hour = now.getHours();
+  const pantry = new Set(state.pantry.map((p) => p.key));
+  const kcal = servingKcal(recipe);
+  const heavy = (kcal != null && kcal > 500) || recipe.moods.includes("hearty");
+  const cuisine = recipe.cuisine.toLowerCase();
+
+  const picks: Array<DrinkPick & { order: number }> = [];
+
+  for (const [order, drink] of DRINKS.entries()) {
+    if (!drink.courses.includes(course)) continue;
+
+    let score = 20;
+    const reasons: Array<{ weight: number; text: string }> = [];
+
+    // Те, що вже стоїть у холодильнику, краще за те, по що треба йти.
+    const home = drink.ingredient ? pantry.has(drink.ingredient) : false;
+    if (home) {
+      score += 30;
+      reasons.push({ weight: 90, text: "вже є в коморі" });
+    }
+
+    // Гостре з кефіром пече менше — це не про смак, а про те, як воно їсться.
+    const tamed = drink.tames?.find((m) => recipe.moods.includes(m));
+    if (tamed === "spicy") {
+      score += 35;
+      reasons.push({ weight: 80, text: "гостре стане мʼякшим" });
+    }
+
+    if (drink.cuisines?.some((c) => cuisine.includes(c))) {
+      score += 30;
+      // Називний відмінок навмисно: кухні в рецептах — вільний текст, і
+      // «до італійської» з «до здорове» одним правилом не зробиш.
+      reasons.push({ weight: 70, text: `${cuisine} кухня` });
+    }
+
+    if (heavy && drink.light) {
+      score += 22;
+      reasons.push({ weight: 60, text: "не обтяжує після ситного" });
+    }
+
+    // Година. Кофеїн увечері й алкоголь до вечері вимикаємо повністю:
+    // від'ємний рахунок не показуємо взагалі.
+    if (drink.caffeine) {
+      if (hour >= 17) score -= 60;
+      else if (hour < 11) {
+        score += 22;
+        reasons.push({ weight: 50, text: "саме на ранок" });
+      }
+    }
+    if (drink.alcohol) {
+      if (hour < 16) score -= 90;
+      else {
+        score += 14;
+        reasons.push({ weight: 45, text: "під вечерю" });
+      }
+    }
+
+    if (score <= 0) continue;
+
+    picks.push({
+      drink,
+      order,
+      home,
+      reason:
+        reasons.sort((a, b) => b.weight - a.weight)[0]?.text ?? "просто пасує",
+      score,
+    });
+  }
+
+  // За рівного рахунку виграє той, хто в списку вище: він там не випадково.
+  picks.sort((a, b) => b.score - a.score || a.order - b.order);
+
+  const out: DrinkPick[] = [];
+  const kinds = new Set<DrinkKind>();
+  for (const pick of picks) {
+    if (kinds.has(pick.drink.kind)) continue;
+    kinds.add(pick.drink.kind);
+    out.push(pick);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
