@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { SEED_PROFILES, SEED_RECIPES } from "@/data/seed";
+import { setCustomIngredients as registerCustomIngredients } from "@/data/ingredients";
 import { consumeForRecipe, mergePantryItem, type Consumed } from "./pantry";
 import { mergeShoppingItem, shoppingIdentity } from "./shopping";
 import * as sync from "./sync";
@@ -14,6 +15,7 @@ import type {
   PantryItem,
   PlanSlot,
   Profile,
+  IngredientDef,
   Recipe,
   RecipeStats,
   ShoppingItem,
@@ -63,6 +65,11 @@ export interface AppState {
   pantry: PantryItem[];
   /** Список покупок: те, по що йдуть у магазин. */
   shopping: ShoppingItem[];
+  /**
+   * Продукти, дописані людьми. Спільні на всю спільноту, бо стоять у
+   * публічних рецептах; зберігаються локально, щоб працювати офлайн.
+   */
+  customIngredients: IngredientDef[];
   following: string[];
   plan: WeekPlan;
   theme: "dark" | "light";
@@ -126,6 +133,11 @@ export interface AppState {
    * кнопки «додати те, чого бракує» мають сказати людині, що саме сталось.
    * Без цього поділу долиті кількості виглядали б як ненатиснута кнопка.
    */
+  /** Приймає каталог, дописаний людьми, — з бази або з локального сховища. */
+  setCustomIngredients: (list: IngredientDef[]) => void;
+  /** Створює власний продукт: одразу в каталог, далі в базу. */
+  addCustomIngredient: (def: IngredientDef) => void;
+
   addShopping: (items: ShoppingItem[]) => { fresh: number; merged: number };
   toggleShopping: (id: string) => void;
   updateShopping: (id: string, patch: Partial<ShoppingItem>) => void;
@@ -231,6 +243,7 @@ export const useApp = create<AppState>()(
       ratings: {},
       cooked: [],
       shopping: [],
+      customIngredients: [],
       pantry: [],
       following: [],
       plan: {},
@@ -423,6 +436,20 @@ export const useApp = create<AppState>()(
        * закрите питання; якщо його треба ще, це новий рядок, а не воскресіння
        * старого зі знятою галочкою.
        */
+      setCustomIngredients: (list) => {
+        // Реєстр у модулі каталогу — для коду, який про React не знає:
+        // калорії, міри, розбір чека. Стан — щоб екрани перемалювались.
+        registerCustomIngredients(list);
+        set({ customIngredients: list });
+      },
+
+      addCustomIngredient: (def) => {
+        const next = [def, ...get().customIngredients.filter((d) => d.key !== def.key)];
+        registerCustomIngredients(next);
+        set({ customIngredients: next });
+        sync.pushCustomIngredient(def);
+      },
+
       addShopping: (items) => {
         if (items.length === 0) return { fresh: 0, merged: 0 };
 
@@ -611,7 +638,16 @@ export const useApp = create<AppState>()(
        * з серверним, контент видно одразу, а особисті дані підтягуються слідом.
        */
       skipHydration: true,
-      onRehydrateStorage: () => (state) => state?.setHydrated(true),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        /*
+         * Дописані продукти лежать і в локальному сховищі: без мережі рецепт
+         * із власним продуктом має читатись так само, як із вбудованим.
+         * Реєстр каталогу наповнюємо ще до першого малювання.
+         */
+        registerCustomIngredients(state.customIngredients);
+        state.setHydrated(true);
+      },
     },
   ),
 );

@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import {
   CAT_LABEL,
   CAT_ORDER,
-  INGREDIENTS,
+  allIngredients,
   searchIngredients,
 } from "@/data/ingredients";
 import type { IngredientCat, IngredientDef } from "@/lib/types";
@@ -28,6 +28,7 @@ export function IngredientPicker({
   title,
   onPick,
   onFree,
+  onCreate,
   freeHint = "Додати як є",
   exclude = [],
   query: controlledQuery,
@@ -40,6 +41,8 @@ export function IngredientPicker({
   onPick: (def: IngredientDef) => void;
   /** Дозволяє дописати те, чого в каталозі немає. Немає — рядок не показуємо. */
   onFree?: (text: string) => void;
+  /** Дозволяє створити повноцінний продукт у каталозі. */
+  onCreate?: (name: string) => void;
   freeHint?: string;
   exclude?: string[];
   query?: string;
@@ -51,7 +54,7 @@ export function IngredientPicker({
   const setQ = onQueryChange ?? setLocalQuery;
 
   const list = useMemo(() => {
-    const found = q.trim() ? (results ?? searchIngredients(q)) : INGREDIENTS;
+    const found = q.trim() ? (results ?? searchIngredients(q)) : allIngredients();
     return found.filter((d) => !exclude.includes(d.key));
   }, [q, results, exclude]);
 
@@ -104,10 +107,30 @@ export function IngredientPicker({
         </button>
       )}
 
+      {onCreate && typed && (
+        <button
+          onClick={() => {
+            onCreate(typed);
+            setQ("");
+            onClose();
+          }}
+          className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-line bg-surface px-3.5 py-3 text-left"
+        >
+          <span className="text-lg">📦</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-bold">Створити «{typed}»</span>
+            <span className="block text-[11.5px] text-muted">
+              Свій продукт у каталозі — з мірою й калоріями
+            </span>
+          </span>
+          <Plus size={16} className="shrink-0 text-brand" />
+        </button>
+      )}
+
       {list.length === 0 ? (
         <p className="py-8 text-center text-[13px] text-muted">
-          {onFree
-            ? "У довіднику такого немає — можна додати рядком вище."
+          {onFree || onCreate
+            ? "У довіднику такого немає — але його можна створити рядком вище."
             : "Нічого не знайшлось. Спробуй іншу назву."}
         </p>
       ) : (

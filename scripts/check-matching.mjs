@@ -172,7 +172,10 @@ console.log("── Базові продукти ──");
 const { matchRecipe, fridgeMatches } = await jiti.import(
   path.join(root, "src/lib/matching.ts"),
 );
-const { ing, isSeasoning } = await jiti.import(path.join(root, "src/data/ingredients.ts"));
+const { ing, isSeasoning, INGREDIENTS } = await jiti.import(
+  path.join(root, "src/data/ingredients.ts"),
+);
+const INGREDIENT_COUNT = INGREDIENTS.length;
 
 const withSalt = {
   ingredients: [{ key: "kurka" }, { key: "sil" }],
@@ -240,6 +243,45 @@ check(
   fridgeMatches([pastaGarlic], ["oliya"]).length,
   0,
 );
+
+console.log("── Дописані продукти ──");
+
+const { setCustomIngredients, allIngredients, ownKey, knownIngredient } = await jiti.import(
+  path.join(root, "src/data/ingredients.ts"),
+);
+
+// Ключ власного продукту читабельний, але свідомо не такий, як вбудований:
+// збіг означав би, що в чужому рецепті мовчки підмінився продукт.
+check("ключ із префіксом", ownKey("Кокосове борошно").startsWith("own_"), true);
+check("ключ із назви", ownKey("Кокосове борошно"), "own_kokosove_boroshno");
+check("порожня назва не ламає ключ", ownKey("🙂").startsWith("own_"), true);
+
+const coconut = {
+  key: "own_kokosove_boroshno",
+  label: "Кокосове борошно",
+  emoji: "🥥",
+  cat: "grain",
+  aliases: ["кокосове борошно"],
+  defaultUnit: "g",
+  nutrition: { kcal: 400, protein: 20, fat: 14, carbs: 60 },
+};
+
+check("доки не додали — невідоме", knownIngredient(coconut.key), false);
+check("і в назві не впізнається", findIngredient("Кокосове борошно")?.key ?? null, "boroshno");
+
+setCustomIngredients([coconut]);
+
+check("після додавання — відоме", knownIngredient(coconut.key), true);
+check("є в спільному переліку", allIngredients().some((d) => d.key === coconut.key), true);
+check("вбудовані не зникли", allIngredients().length > INGREDIENT_COUNT, true);
+// Найголовніше: власний продукт упізнається в назві з чека й етикетки —
+// інакше він живе лише в пошуку, а це половина користі.
+check("впізнається в назві", findIngredient("Кокосове борошно 500 г")?.key ?? null, coconut.key);
+// І не перебиває вбудований там, де йдеться про звичайне борошно.
+check("звичайне борошно лишається собою", findIngredient("Борошно пшеничне")?.key ?? null, "boroshno");
+
+setCustomIngredients([]);
+check("прибрали — знову невідоме", knownIngredient(coconut.key), false);
 
 console.log("── Що до чого подавати ──");
 

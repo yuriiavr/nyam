@@ -6,6 +6,8 @@ import type {
   CookEvent,
   Family,
   FamilyMember,
+  IngredientDef,
+  Nutrition,
   PantryItem,
   PlanSlot,
   Profile,
@@ -14,6 +16,7 @@ import type {
   RecipeIngredient,
   RecipeStep,
   ShoppingItem,
+  Unit,
   WeekPlan,
 } from "@/lib/types";
 
@@ -924,6 +927,103 @@ export async function fetchProfilesByIds(ids: string[]): Promise<Profile[]> {
   return (data as unknown as ProfileRow[]).map(rowToProfile);
 }
 
+/* ── Продукти, дописані людьми ────────────────────────────────────────── */
+
+interface CustomIngredientRow {
+  key: string;
+  label: string;
+  emoji: string;
+  cat: string;
+  aliases: string[] | null;
+  staple: boolean;
+  grams_per_piece: number | string | null;
+  grams_per_cup: number | string | null;
+  default_unit: string;
+  kcal: number | string | null;
+  protein: number | string | null;
+  fat: number | string | null;
+  carbs: number | string | null;
+}
+
+const CUSTOM_INGREDIENT_COLUMNS = {
+  key: true,
+  label: true,
+  emoji: true,
+  cat: true,
+  aliases: true,
+  staple: true,
+  grams_per_piece: true,
+  grams_per_cup: true,
+  default_unit: true,
+  kcal: true,
+  protein: true,
+  fat: true,
+  carbs: true,
+} satisfies Record<keyof CustomIngredientRow, true>;
+
+const CUSTOM_INGREDIENT_SELECT = Object.keys(CUSTOM_INGREDIENT_COLUMNS).join(",");
+
+function rowToIngredient(row: CustomIngredientRow): IngredientDef {
+  const kcal = numberOrUndefined(row.kcal);
+  return {
+    key: row.key,
+    label: row.label,
+    emoji: row.emoji,
+    cat: row.cat as IngredientDef["cat"],
+    aliases: row.aliases ?? [],
+    staple: row.staple,
+    gramsPerPiece: numberOrUndefined(row.grams_per_piece),
+    gramsPerCup: numberOrUndefined(row.grams_per_cup),
+    defaultUnit: row.default_unit as Unit,
+    nutrition:
+      kcal != null
+        ? {
+            kcal,
+            protein: numberOrUndefined(row.protein) ?? 0,
+            fat: numberOrUndefined(row.fat) ?? 0,
+            carbs: numberOrUndefined(row.carbs) ?? 0,
+          }
+        : undefined,
+  };
+}
+
+/**
+ * Продукти, дописані людьми.
+ *
+ * Читаються всі, а не лише свої: власний продукт може стояти в рецепті, який
+ * видно всій спільноті, і без цього чужа страва показувала б сирий ключ
+ * замість назви.
+ */
+export async function fetchCustomIngredients(): Promise<IngredientDef[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb.from("custom_ingredients").select(CUSTOM_INGREDIENT_SELECT);
+  if (error) throw error;
+  return ((data ?? []) as unknown as CustomIngredientRow[]).map(rowToIngredient);
+}
+
+export async function upsertCustomIngredient(def: IngredientDef, userId: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const { error } = await sb.from("custom_ingredients").upsert({
+    key: def.key,
+    label: def.label,
+    emoji: def.emoji,
+    cat: def.cat,
+    aliases: def.aliases ?? [],
+    staple: def.staple ?? false,
+    grams_per_piece: def.gramsPerPiece ?? null,
+    grams_per_cup: def.gramsPerCup ?? null,
+    default_unit: def.defaultUnit ?? "g",
+    kcal: def.nutrition?.kcal ?? null,
+    protein: def.nutrition?.protein ?? null,
+    fat: def.nutrition?.fat ?? null,
+    carbs: def.nutrition?.carbs ?? null,
+    created_by: userId,
+  });
+  if (error) throw error;
+}
+
 /* ── Спільний довідник штрихкодів ─────────────────────────────────────── */
 
 export interface CachedBarcode {
@@ -932,6 +1032,11 @@ export interface CachedBarcode {
   brand?: string;
   image?: string;
   ingredientKey: string;
+  /** Вага або обʼєм упаковки — те, що написано на пачці. */
+  amount?: number;
+  unit?: Unit;
+  /** Харчова цінність на 100 г з етикетки саме цього товару. */
+  nutrition?: Nutrition;
 }
 
 /**
@@ -947,7 +1052,7 @@ export async function fetchCachedBarcode(barcode: string): Promise<CachedBarcode
 
   const { data, error } = await sb
     .from("barcode_cache")
-    .select("barcode,name,brand,image_url,ingredient_key")
+    .select("barcode,name,brand,image_url,ingredient_key,amount,unit,kcal,protein,fat,carbs")
     .eq("barcode", barcode)
     .not("ingredient_key", "is", null)
     .maybeSingle();
@@ -959,13 +1064,34 @@ export async function fetchCachedBarcode(barcode: string): Promise<CachedBarcode
     brand: string | null;
     image_url: string | null;
     ingredient_key: string;
+    amount: number | string | null;
+    unit: string | null;
+    kcal: number | string | null;
+    protein: number | string | null;
+    fat: number | string | null;
+    carbs: number | string | null;
   };
+
+  const kcal = numberOrUndefined(row.kcal);
   return {
     barcode: row.barcode,
     name: row.name,
     brand: row.brand ?? undefined,
     image: row.image_url ?? undefined,
     ingredientKey: row.ingredient_key,
+    amount: numberOrUndefined(row.amount),
+    unit: (row.unit as Unit) ?? undefined,
+    // Калорійність — те, з чого починається харчова цінність: без неї решта
+    // чисел ні про що не каже, тож і не збираємо їх наполовину.
+    nutrition:
+      kcal != null
+        ? {
+            kcal,
+            protein: numberOrUndefined(row.protein) ?? 0,
+            fat: numberOrUndefined(row.fat) ?? 0,
+            carbs: numberOrUndefined(row.carbs) ?? 0,
+          }
+        : undefined,
   };
 }
 
@@ -1081,7 +1207,7 @@ export async function deleteComment(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function cacheBarcode(item: CachedBarcode): Promise<void> {
+export async function cacheBarcode(item: CachedBarcode, userId?: string): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
 
@@ -1091,7 +1217,16 @@ export async function cacheBarcode(item: CachedBarcode): Promise<void> {
     brand: item.brand ?? null,
     image_url: item.image ?? null,
     ingredient_key: item.ingredientKey,
+    amount: item.amount ?? null,
+    unit: item.unit ?? null,
+    kcal: item.nutrition?.kcal ?? null,
+    protein: item.nutrition?.protein ?? null,
+    fat: item.nutrition?.fat ?? null,
+    carbs: item.nutrition?.carbs ?? null,
+    taught_by: userId ?? null,
   });
 
+  // 23505 — код уже в довіднику. Це не помилка: хтось устиг раніше, і його
+  // відповідь не гірша за нашу.
   if (error && error.code !== "23505") throw error;
 }

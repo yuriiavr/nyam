@@ -5,7 +5,7 @@ import { friendlyError, getSupabase, isSupabaseConfigured } from "./supabase/cli
 import { useApp } from "./store";
 import { subscribeRealtime, unsubscribeRealtime } from "./realtime";
 import { setSyncFamily, setSyncUser } from "./sync";
-import type { Recipe } from "./types";
+import type { IngredientDef, Recipe } from "./types";
 import { newId } from "./utils";
 
 /**
@@ -22,8 +22,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 async function loadCommunity(myId: string | null) {
   const store = useApp.getState();
   try {
-    const data = await api.fetchCommunity(myId);
+    /*
+     * Каталог, дописаний людьми, приїжджає разом зі спільнотою, а не з
+     * особистими даними: чужий рецепт може посилатись на чужий продукт, і
+     * без нього в стрічці замість назви був би сирий ключ.
+     */
+    const [data, custom] = await Promise.all([
+      api.fetchCommunity(myId),
+      api.fetchCustomIngredients().catch(() => [] as IngredientDef[]),
+    ]);
     store.setCommunity(data);
+    if (custom.length) store.setCustomIngredients(custom);
     return true;
   } catch (error) {
     store.setSyncStatus("error", friendlyError(error));

@@ -1,4 +1,9 @@
-import { findIngredient, findIngredientByCategory, ING_BY_KEY } from "@/data/ingredients";
+import {
+  findIngredient,
+  findIngredientByCategory,
+  ing,
+  knownIngredient,
+} from "@/data/ingredients";
 import { cacheBarcode, fetchCachedBarcode } from "./supabase/api";
 import { parseQty } from "./units";
 import type { IngredientDef, Nutrition, Unit } from "./types";
@@ -29,7 +34,12 @@ export interface ProductInfo {
  */
 export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
   const known = await fetchCachedBarcode(barcode).catch(() => null);
-  const ingredient = known ? ING_BY_KEY.get(known.ingredientKey) ?? null : null;
+  /*
+   * Через ing(), а не ING_BY_KEY: картку могли завести на продукт, дописаний
+   * людьми. Той лежить в окремому реєстрі, і пошук лише по вбудованих робив
+   * би власний продукт невидимим саме для того, хто його й створив.
+   */
+  const ingredient = known && knownIngredient(known.ingredientKey) ? ing(known.ingredientKey) : null;
   if (known && ingredient) {
     return {
       barcode,
@@ -37,6 +47,10 @@ export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
       brand: known.brand,
       image: known.image,
       ingredient,
+      // Те, що хтось уже вписав з етикетки: вага пачки й харчова цінність.
+      nutrition: known.nutrition,
+      amount: known.amount,
+      unit: known.unit,
       source: "community",
     };
   }
@@ -53,16 +67,25 @@ export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
 export async function teachBarcode(
   product: ProductInfo,
   ingredientKey: string,
+  userId?: string,
 ): Promise<void> {
   if (product.source === "community") return;
   try {
-    await cacheBarcode({
-      barcode: product.barcode,
-      name: product.name,
-      brand: product.brand,
-      image: product.image,
-      ingredientKey,
-    });
+    await cacheBarcode(
+      {
+        barcode: product.barcode,
+        name: product.name,
+        brand: product.brand,
+        image: product.image,
+        ingredientKey,
+        // Вага пачки й КБЖВ теж: саме через їх відсутність відповідь
+        // спільноти досі була біднішою за відповідь Open Food Facts.
+        amount: product.amount,
+        unit: product.unit,
+        nutrition: product.nutrition,
+      },
+      userId,
+    );
   } catch {
     /* довідник спільноти — приємний бонус, а не умова роботи */
   }

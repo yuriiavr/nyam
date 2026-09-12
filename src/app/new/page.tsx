@@ -18,39 +18,30 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Button, Card, Chip, QuantityInput, Sheet, useToast } from "@/components/ui";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
-import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
+import {
+  CAT_LABEL,
+  CAT_ORDER,
+  allIngredients,
+  ing,
+  searchIngredients,
+} from "@/data/ingredients";
 import { lookupBarcode } from "@/lib/barcode";
 import { recipeById, useApp } from "@/lib/store";
 import type {
   Course,
   IngredientCat,
+  IngredientDef,
   MealType,
   Mood,
   Recipe,
   RecipeIngredient,
   RecipeStep,
 } from "@/lib/types";
+import { NewIngredientSheet } from "@/components/NewIngredientSheet";
+import { FOOD_EMOJI } from "@/data/emoji";
 import { COURSE_LABEL, COURSE_ORDER, courseOf } from "@/lib/pairing";
 import { compressImage, haptic, MEAL_LABEL, MOOD_META, newId } from "@/lib/utils";
 
-const EMOJIS = [
-  // Гаряче й основне
-  "🍲", "🍝", "🍜", "🍛", "🥘", "🫕", "🍚", "🥣", "🍢", "🍥",
-  // Мʼясо й риба
-  "🥩", "🍗", "🍖", "🥓", "🌭", "🍤", "🦐", "🐟", "🦑", "🦞",
-  // Тісто й вулична їжа
-  "🍕", "🍔", "🌮", "🌯", "🥙", "🥪", "🌭", "🥟", "🫓", "🥐",
-  // Сніданки
-  "🍳", "🥞", "🧇", "🥚", "🧀", "🥯", "🍞", "🥖", "🫓", "🥛",
-  // Овочі, салати, зелень
-  "🥗", "🥦", "🥕", "🌽", "🍅", "🥒", "🫑", "🍆", "🥔", "🧄",
-  // Фрукти й ягоди
-  "🍎", "🍌", "🍓", "🍇", "🍋", "🍑", "🍐", "🥝", "🍉", "🥑",
-  // Солодке
-  "🍰", "🧁", "🥧", "🍪", "🍫", "🍩", "🍮", "🍦", "🍯", "🥮",
-  // Напої
-  "🍵", "☕", "🥤", "🧃", "🍷", "🍺", "🥂", "🧋", "🫖", "🍹",
-];
 
 /** Міри таймера. Зберігаємо в секундах, показуємо в зручній. */
 type TimerUnit = "sec" | "min" | "hour";
@@ -95,7 +86,7 @@ function RecipeForm() {
   const [loaded, setLoaded] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [emoji, setEmoji] = useState(EMOJIS[0]);
+  const [emoji, setEmoji] = useState(FOOD_EMOJI[0]);
   const [gradient, setGradient] = useState<[string, string]>(GRADIENTS[0]);
   const [image, setImage] = useState<string | null>(null);
   const [cuisine, setCuisine] = useState("Домашня");
@@ -116,6 +107,8 @@ function RecipeForm() {
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+  /** Назва для картки власного продукту; null — картка закрита. */
+  const [creating, setCreating] = useState<string | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -679,7 +672,7 @@ function RecipeForm() {
         <div className="pb-4">
           <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">Емодзі</h3>
           <div className="grid grid-cols-8 gap-2">
-            {EMOJIS.map((e) => (
+            {FOOD_EMOJI.map((e) => (
               <button
                 key={e}
                 onClick={() => {
@@ -737,6 +730,22 @@ function RecipeForm() {
           // Одиниця за замовчуванням залежить від продукту: молоко в мл,
           // яйця в штуках, борошно в грамах — щоб не перемикати щоразу.
           setIngredients((p) => [...p, { key, unit: ing(key).defaultUnit ?? "g" }]);
+        }}
+        onCreate={(name) => {
+          setPickerOpen(false);
+          setPickerQuery("");
+          setCreating(name);
+        }}
+      />
+
+      {/* Продукт, якого в каталозі не було */}
+      <NewIngredientSheet
+        open={creating !== null}
+        initialName={creating ?? ""}
+        onClose={() => setCreating(null)}
+        onCreated={(def) => {
+          setIngredients((p) => [...p, { key: def.key, unit: def.defaultUnit ?? "g" }]);
+          toast(`«${def.label}» тепер у каталозі`, "📦");
         }}
       />
     </div>
@@ -868,6 +877,7 @@ function IngredientPicker({
   open,
   onClose,
   onPick,
+  onCreate,
   exclude,
   query,
   onQueryChange,
@@ -875,17 +885,19 @@ function IngredientPicker({
   open: boolean;
   onClose: () => void;
   onPick: (key: string) => void;
+  /** Створити продукт, якого в каталозі немає. */
+  onCreate: (name: string) => void;
   exclude: string[];
   query: string;
   onQueryChange: (v: string) => void;
 }) {
   const list = useMemo(() => {
-    const base = query.trim() ? searchIngredients(query) : INGREDIENTS;
+    const base = query.trim() ? searchIngredients(query) : allIngredients();
     return base.filter((d) => !exclude.includes(d.key));
   }, [query, exclude]);
 
   const grouped = useMemo(() => {
-    const map = new Map<IngredientCat, typeof INGREDIENTS>();
+    const map = new Map<IngredientCat, IngredientDef[]>();
     for (const d of list) map.set(d.cat, [...(map.get(d.cat) ?? []), d]);
     return CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const);
   }, [list]);
@@ -904,8 +916,32 @@ function IngredientPicker({
         </div>
       </div>
 
+      {query.trim() && (
+        <button
+          onClick={() => {
+            onCreate(query.trim());
+            onQueryChange("");
+            onClose();
+          }}
+          className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-line bg-surface px-3.5 py-3 text-left"
+        >
+          <span className="text-lg">📦</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-bold">
+              Створити «{query.trim()}»
+            </span>
+            <span className="block text-[11.5px] text-muted">
+              Свій продукт — з мірою й калоріями
+            </span>
+          </span>
+          <Plus size={16} className="shrink-0 text-brand" />
+        </button>
+      )}
+
       {list.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-muted">Нічого не знайшлось</p>
+        <p className="py-8 text-center text-[13px] text-muted">
+          Нічого не знайшлось — але продукт можна створити рядком вище
+        </p>
       ) : (
         <div className="flex flex-col gap-4 pb-4">
           {grouped.map(([cat, items]) => (

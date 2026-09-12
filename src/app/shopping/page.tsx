@@ -5,6 +5,7 @@ import { Check, Plus, Refrigerator, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { IngredientPicker } from "@/components/IngredientPicker";
+import { NewIngredientSheet } from "@/components/NewIngredientSheet";
 import { TopBar } from "@/components/TopBar";
 import {
   Button,
@@ -13,7 +14,7 @@ import {
   Sheet,
   useToast,
 } from "@/components/ui";
-import { INGREDIENTS, ing } from "@/data/ingredients";
+import { allIngredients, ing } from "@/data/ingredients";
 import { byAisle, shoppingSuggestions } from "@/lib/matching";
 import {
   catalogItem,
@@ -55,6 +56,8 @@ export default function ShoppingPage() {
   const toast = useToast();
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** Назва для картки власного продукту; null — картка закрита. */
+  const [creating, setCreating] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
 
   const done = shopping.filter((x) => x.done);
@@ -88,7 +91,7 @@ export default function ShoppingPage() {
     );
 
     const unlocking = shoppingSuggestions(allRecipes(state), have, 8);
-    const staples = INGREDIENTS.filter(
+    const staples = allIngredients().filter(
       (d) => d.staple && !have.includes(d.key),
     ).map((d) => ({
       key: d.key,
@@ -290,7 +293,19 @@ export default function ShoppingPage() {
         title="Що купити"
         onPick={(def) => addOne(catalogItem(def.key), def.label)}
         onFree={(text) => addOne(freeItem(text), text)}
-        freeHint="Додати в список як є — це не продукт із довідника"
+        freeHint="Просто рядок у списку: батарейки, вода коту, щось до чаю"
+        onCreate={(name) => {
+          setPickerOpen(false);
+          setCreating(name);
+        }}
+      />
+
+      {/* Продукт, якого в каталозі не було */}
+      <NewIngredientSheet
+        open={creating !== null}
+        initialName={creating ?? ""}
+        onClose={() => setCreating(null)}
+        onCreated={(def) => addOne(catalogItem(def.key), def.label)}
       />
 
       <ItemSheet

@@ -577,7 +577,18 @@ export function receiptDrafts(lines: ReceiptLine[]): ReceiptDraft[] {
 
 /* ── Запит до нашого проксі ───────────────────────────────────────────── */
 
-export type ReceiptFailure = "notfound" | "noitems" | "upstream" | "offline" | "throttled";
+export type ReceiptFailure =
+  | "notfound"
+  | "noitems"
+  | "upstream"
+  | "offline"
+  | "throttled"
+  /** Розпізнавання фото не налаштоване: немає ключа Gemini. */
+  | "nokey"
+  /** Сесія протухла — фото читає платний сервіс, тож лише для своїх. */
+  | "unauthorized"
+  /** На фото не видно чека. */
+  | "unreadable";
 
 export type ReceiptResult =
   | { ok: true; receipt: Receipt }
@@ -591,6 +602,38 @@ export type ReceiptResult =
  * ендпоїнт публічний, а доступ до чека дає сам чек: без точної суми,
  * хвилини й номера каси нічого не знайдеться.
  */
+/**
+ * Чек із фотографії — коли QR немає або він не читається.
+ *
+ * Повертає рівно те саме, що й пошук за QR, тож далі працює той самий код:
+ * зіставлення касових назв, підтвердження людиною, запис у комору. Модель
+ * лише замінює очі там, де в чека немає машинного коду.
+ */
+export async function readReceiptPhoto(
+  image: string,
+  token: string | null,
+): Promise<ReceiptResult> {
+  try {
+    const res = await fetch("/api/receipt/photo", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ image }),
+      // Фото читається довше за запит до податкової: модель дивиться на
+      // картинку, а не дістає готовий рядок із бази.
+      signal: AbortSignal.timeout(55_000),
+    });
+    const json = (await res.json()) as ReceiptResult;
+    if (!res.ok && !("reason" in json)) return { ok: false, reason: "upstream" };
+    return json;
+  } catch {
+    return { ok: false, reason: "offline" };
+  }
+}
+
 export async function fetchReceipt(query: ReceiptQuery): Promise<ReceiptResult> {
   const params = new URLSearchParams(query as unknown as Record<string, string>);
 

@@ -219,7 +219,39 @@ create table if not exists public.barcode_cache (
   brand          text,
   image_url      text,
   ingredient_key text,
+  -- Те, що знає етикетка: вага пачки та харчова цінність на 100 г. З ними
+  -- знайомий товар додається в комору одним дотиком, з вагою й калоріями.
+  amount         numeric(10, 2),
+  unit           text,
+  kcal           numeric(10, 2),
+  protein        numeric(10, 2),
+  fat            numeric(10, 2),
+  carbs          numeric(10, 2),
+  -- Хто заповнив картку: довідник кодів спільний, і виправляти запис має
+  -- право той, хто його зробив, а не будь-хто.
+  taught_by      uuid references public.profiles (id) on delete set null,
   updated_at     timestamptz not null default now()
+);
+
+-- ── Продукти, дописані людьми ──────────────────────────────────────────────
+-- Вбудований каталог покриває звичайну кухню, але не кожну. Дописане живе
+-- тут: ключ із префіксом own_, щоб ніколи не збігтися з вбудованим.
+create table if not exists public.custom_ingredients (
+  key             text primary key check (key ~ '^own_[a-z0-9_]+$'),
+  label           text not null check (length(btrim(label)) > 0),
+  emoji           text not null default '🍽️',
+  cat             text not null default 'other',
+  aliases         text[] not null default '{}',
+  staple          boolean not null default false,
+  grams_per_piece numeric(10, 2),
+  grams_per_cup   numeric(10, 2),
+  default_unit    text not null default 'g',
+  kcal            numeric(10, 2),
+  protein         numeric(10, 2),
+  fat             numeric(10, 2),
+  carbs           numeric(10, 2),
+  created_by      uuid references public.profiles (id) on delete set null,
+  created_at      timestamptz not null default now()
 );
 
 -- ── Агрегована статистика ──────────────────────────────────────────────────
@@ -331,6 +363,7 @@ alter table public.shopping_items enable row level security;
 alter table public.plan_slots   enable row level security;
 alter table public.dismissed    enable row level security;
 alter table public.barcode_cache enable row level security;
+alter table public.custom_ingredients enable row level security;
 
 -- Профілі: читає будь-хто, редагує лише власник.
 drop policy if exists "profiles readable"  on public.profiles;
@@ -391,6 +424,21 @@ drop policy if exists "barcodes insert"   on public.barcode_cache;
 create policy "barcodes readable" on public.barcode_cache for select using (true);
 create policy "barcodes insert" on public.barcode_cache
   for insert with check (auth.uid() is not null);
+drop policy if exists "barcodes update own" on public.barcode_cache;
+create policy "barcodes update own" on public.barcode_cache
+  for update using (auth.uid() = taught_by) with check (auth.uid() = taught_by);
+
+-- Власні продукти: бачать усі (вони стоять у публічних рецептах), додає
+-- кожен лише від свого імені, править автор.
+drop policy if exists "custom ingredients readable"   on public.custom_ingredients;
+drop policy if exists "custom ingredients insert own" on public.custom_ingredients;
+drop policy if exists "custom ingredients update own" on public.custom_ingredients;
+create policy "custom ingredients readable" on public.custom_ingredients
+  for select using (true);
+create policy "custom ingredients insert own" on public.custom_ingredients
+  for insert with check (auth.uid() = created_by);
+create policy "custom ingredients update own" on public.custom_ingredients
+  for update using (auth.uid() = created_by) with check (auth.uid() = created_by);
 
 -- ── Storage: фото страв ────────────────────────────────────────────────────
 insert into storage.buckets (id, name, public)

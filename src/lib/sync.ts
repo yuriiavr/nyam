@@ -2,7 +2,14 @@
 
 import * as api from "./supabase/api";
 import { friendlyError, isSupabaseConfigured } from "./supabase/client";
-import type { PantryItem, PlanSlot, Profile, Recipe, ShoppingItem } from "./types";
+import type {
+  IngredientDef,
+  PantryItem,
+  PlanSlot,
+  Profile,
+  Recipe,
+  ShoppingItem,
+} from "./types";
 
 /**
  * Тонкий шар між сховищем стану і базою.
@@ -312,6 +319,10 @@ export const pushPlanSlot = (day: string, slot: PlanSlot, recipeId: string | nul
 
 export const pushProfile = (patch: Partial<Profile>) =>
   fire("профіль", (uid) => api.updateProfile(uid, patch));
+
+/** Власний продукт: у спільний каталог, щоб його бачили і в чужих рецептах. */
+export const pushCustomIngredient = (def: IngredientDef) =>
+  fire("власний продукт", (uid) => api.upsertCustomIngredient(def, uid));
 
 /* ── Рецепти ──────────────────────────────────────────────────────────── */
 

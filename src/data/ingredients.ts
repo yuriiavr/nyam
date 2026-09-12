@@ -396,9 +396,84 @@ export const ING_BY_KEY: Map<string, IngredientDef> = new Map(
   INGREDIENTS.map((i) => [i.key, i]),
 );
 
+/* ── Продукти, яких ми не передбачили ─────────────────────────────────── */
+
+/**
+ * Каталог, дописаний людьми.
+ *
+ * Сотня вбудованих продуктів покриває звичайну кухню, але не кожну: комусь
+ * потрібне кокосове борошно, комусь — бабусина домашня ковбаса. Раніше такий
+ * продукт було нікуди подіти, і рецепт просто не вдавалось дописати.
+ *
+ * Живе не в цьому файлі, а в базі, і сюди потрапляє при завантаженні. Тримаємо
+ * саме реєстром модуля, а не в сховищі стану: `ing()` викликають і калорії, і
+ * міри, і розбір чека — тобто код, який про React не знає й знати не мусить.
+ * Сховище стану тримає той самий список окремо, щоб екрани перемальовувались,
+ * коли він приїде.
+ */
+let CUSTOM: Map<string, IngredientDef> = new Map();
+
+export function setCustomIngredients(list: IngredientDef[]) {
+  CUSTOM = new Map(list.map((def) => [def.key, def]));
+}
+
+/** Усе, з чого можна обирати: вбудоване плюс дописане. */
+export function allIngredients(): IngredientDef[] {
+  return CUSTOM.size ? [...INGREDIENTS, ...CUSTOM.values()] : INGREDIENTS;
+}
+
+/**
+ * Префікс ключів, дописаних людьми.
+ *
+ * Вбудовані ключі — просто слова («moloko»), тож власні мають бути свідомо
+ * іншими: рецепт із таким ключем бачить уся спільнота, і збіг означав би, що
+ * в чужій страві мовчки підмінився продукт.
+ */
+export const OWN_PREFIX = "own_";
+
+export const isOwnKey = (key: string) => key.startsWith(OWN_PREFIX);
+
+/** Українські літери → латиниця, щоб із назви вийшов читабельний ключ. */
+const TRANSLIT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "h", ґ: "g", д: "d", е: "e", є: "ye", ж: "zh",
+  з: "z", и: "y", і: "i", ї: "yi", й: "j", к: "k", л: "l", м: "m", н: "n",
+  о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts",
+  ч: "ch", ш: "sh", щ: "shch", ь: "", ю: "yu", я: "ya", "'": "", "ʼ": "",
+};
+
+/**
+ * Ключ для продукту, дописаного людиною.
+ *
+ * Читабельний, бо він потрапляє в рецепти й у базу, і колись хтось на нього
+ * дивитиметься. Унікальний, бо «Домашній сир» можуть створити двоє — тож до
+ * основи додається короткий хвіст. Префікс own_ лишає вбудовані ключі
+ * недоторканими назавжди.
+ */
+export function ownKey(label: string, taken: (key: string) => boolean = () => false): string {
+  const base =
+    [...label.toLowerCase()]
+      .map((ch) => TRANSLIT[ch] ?? ch)
+      .join("")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 32) || "produkt";
+
+  for (let i = 0; i < 50; i++) {
+    // Перша спроба без хвоста: «own_domashnij_syr» читається краще за
+    // «own_domashnij_syr_k3f», і найчастіше збігу немає.
+    const suffix = i === 0 ? "" : `_${Math.random().toString(36).slice(2, 6)}`;
+    const key = `${OWN_PREFIX}${base}${suffix}`;
+    if (!ING_BY_KEY.has(key) && !CUSTOM.has(key) && !taken(key)) return key;
+  }
+  return `${OWN_PREFIX}${base}_${Date.now().toString(36)}`;
+}
+
+/** Чи знаємо ми такий продукт насправді — чи це буде вигаданий фолбек. */
+export const knownIngredient = (key: string) => ING_BY_KEY.has(key) || CUSTOM.has(key);
+
 /** Опис інгредієнта за ключем; для невідомих ключів повертає безпечний фолбек. */
 export function ing(key: string): IngredientDef {
-  const found = ING_BY_KEY.get(key);
+  const found = ING_BY_KEY.get(key) ?? CUSTOM.get(key);
   if (found) return found;
   return { key, label: key, emoji: "🍽️", cat: "other", aliases: [], defaultUnit: "g" };
 }
@@ -563,7 +638,13 @@ export function findIngredient(text: string): IngredientDef | null {
 
   let best: { def: IngredientDef; score: number } | null = null;
 
-  for (const def of INGREDIENTS) {
+  /*
+   * Дописані людьми йдуть у тому ж переліку, за вбудованими: вони мають
+   * впізнаватись і в назві з чека, і в етикетці зі сканера — інакше власний
+   * продукт існує лише в пошуку, а це половина користі. Порядок не байдужий:
+   * за однакового рахунку перемагає вбудований, бо він перевірений.
+   */
+  for (const def of allIngredients()) {
     for (const raw of [def.label, ...(def.aliases ?? [])]) {
       const phrase = words(raw);
       if (phrase.length === 0 || !phraseIn(phrase, target)) continue;
@@ -584,9 +665,9 @@ export function findIngredient(text: string): IngredientDef | null {
 export function searchIngredients(query: string, limit = 30): IngredientDef[] {
   const q = normalize(query);
   if (!q) return [];
-  return INGREDIENTS.filter((def) =>
-    [def.label, ...(def.aliases ?? [])].some((h) => normalize(h).includes(q)),
-  ).slice(0, limit);
+  return allIngredients()
+    .filter((def) => [def.label, ...(def.aliases ?? [])].some((h) => normalize(h).includes(q)))
+    .slice(0, limit);
 }
 
 /**
@@ -608,6 +689,12 @@ export function findIngredientByCategory(tags: string[]): IngredientDef | null {
     const need = Math.ceil(tagWords.length / 2);
 
     let best: { def: IngredientDef; score: number } | null = null;
+    /*
+     * Тут свідомо лише вбудовані. Категорії Open Food Facts англійські, а
+     * дописані людьми продукти називаються українською — збіг між ними був би
+     * випадковим, і саме випадковим шкідливим: «Сир від сусідки» не має
+     * ставати відповіддю на тег "en:cheeses".
+     */
     for (const def of INGREDIENTS) {
       for (const raw of [def.label, ...(def.aliases ?? [])]) {
         const phrase = words(raw);

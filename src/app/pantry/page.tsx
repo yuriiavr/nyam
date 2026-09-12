@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
   Plus,
+  Camera,
   ReceiptText,
   ScanBarcode,
   ShoppingBasket,
@@ -11,9 +12,11 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { IngredientPicker } from "@/components/IngredientPicker";
+import { NewIngredientSheet } from "@/components/NewIngredientSheet";
+import { ProductCardSheet } from "@/components/ProductCardSheet";
 import { TopBar } from "@/components/TopBar";
 import {
   Button,
@@ -25,7 +28,13 @@ import {
   Spinner,
   useToast,
 } from "@/components/ui";
-import { CAT_LABEL, CAT_ORDER, INGREDIENTS, ing, searchIngredients } from "@/data/ingredients";
+import {
+  CAT_LABEL,
+  CAT_ORDER,
+  allIngredients,
+  ing,
+  searchIngredients,
+} from "@/data/ingredients";
 import {
   RECEIPT_FORMATS,
   lookupBarcode,
@@ -39,6 +48,7 @@ import {
   lineQuantity,
   lookupableBarcode,
   parseReceiptQr,
+  readReceiptPhoto,
   receiptDrafts,
   type ReceiptDraft,
   type ReceiptFailure,
@@ -46,7 +56,8 @@ import {
 import { useApp } from "@/lib/store";
 import type { IngredientCat, IngredientDef, PantryItem, Unit } from "@/lib/types";
 import { formatNumber, ingredientQtyLabel } from "@/lib/units";
-import { expiryInfo, haptic, plural } from "@/lib/utils";
+import { compressImage, expiryInfo, haptic, plural } from "@/lib/utils";
+import { getSupabase } from "@/lib/supabase/client";
 
 export default function PantryPage() {
   /*
@@ -55,6 +66,7 @@ export default function PantryPage() {
    */
   const pantry = useApp((s) => s.pantry);
   const shopping = useApp((s) => s.shopping);
+  const account = useApp((s) => s.account);
   const addPantry = useApp((s) => s.addPantry);
   const importPantry = useApp((s) => s.importPantry);
   const removePantry = useApp((s) => s.removePantry);
@@ -65,16 +77,24 @@ export default function PantryPage() {
   const [addSheet, setAddSheet] = useState(false);
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  /** Назва для картки власного продукту; null — картка закрита. */
+  const [creating, setCreating] = useState<string | null>(null);
+  /** Товар, для якого зараз заповнюють картку. */
+  const [carding, setCarding] = useState<ProductInfo | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanned, setScanned] = useState<ProductInfo | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [pickFor, setPickFor] = useState<ProductInfo | null>(null);
   /** Ключ продукту, картку якого зараз відкрито: кількість і строк придатності. */
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  /** Прихований вибір файлу: камера для фотографії чека. */
+  const photoInput = useRef<HTMLInputElement>(null);
 
   /* Чек: сканер QR → очікування відповіді податкової → список позицій. */
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptBusy, setReceiptBusy] = useState(false);
+  /** Звідки читаємо чек — від цього залежить, що чесно написати в очікуванні. */
+  const [receiptFrom, setReceiptFrom] = useState<"qr" | "photo">("qr");
   const [receipt, setReceipt] = useState<{ store?: string; drafts: ReceiptDraft[] } | null>(null);
   /** Позиції, які підуть у комору. Решту людина зняла галочкою. */
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -98,14 +118,14 @@ export default function PantryPage() {
 
   const basics = useMemo(() => {
     const map = new Map<IngredientCat, IngredientDef[]>();
-    for (const def of INGREDIENTS) {
+    for (const def of allIngredients()) {
       if (!def.staple) continue;
       map.set(def.cat, [...(map.get(def.cat) ?? []), def]);
     }
     return CAT_ORDER.filter((c) => map.has(c)).map((c) => [c, map.get(c)!] as const);
   }, []);
 
-  const basicsHave = INGREDIENTS.filter((d) => d.staple && pantryKeys.includes(d.key)).length;
+  const basicsHave = allIngredients().filter((d) => d.staple && pantryKeys.includes(d.key)).length;
 
   /*
    * Прострочене виносимо з категорій у власну групу на самому верху.
@@ -156,6 +176,41 @@ export default function PantryPage() {
     addPantry({ key, addedAt: new Date().toISOString(), ...extra });
   };
 
+  /**
+   * Чек із фотографії.
+   *
+   * Той самий шлях, що й для QR: розпізнане стає списком на підтвердження, у
+   * комору мовчки не лягає нічого. Різниця лише в джерелі — там машинний код
+   * із податкової, тут те, що видно на папірці.
+   */
+  const handleReceiptPhoto = async (file: File) => {
+    setReceiptFrom("photo");
+    setReceiptBusy(true);
+    try {
+      const image = await compressImage(file, 1600, 0.8);
+      const token = (await getSupabase()?.auth.getSession())?.data.session?.access_token ?? null;
+      const result = await readReceiptPhoto(image, token);
+
+      if (!result.ok) {
+        setReceiptBusy(false);
+        setReceiptError({ message: RECEIPT_FAILURE[result.reason], scanned: "фото чека" });
+        return;
+      }
+
+      const drafts = await enrichByBarcode(receiptDrafts(result.receipt.lines));
+      setReceiptBusy(false);
+      setReceipt({ store: result.receipt.store, drafts });
+      setChosen(new Set(drafts.filter((d) => d.ingredient).map((d) => d.id)));
+      haptic(14);
+    } catch {
+      setReceiptBusy(false);
+      setReceiptError({
+        message: "Не вдалося прочитати фото. Спробуй ще раз",
+        scanned: "фото чека",
+      });
+    }
+  };
+
   const handleDetect = async (code: string) => {
     setScanOpen(false);
     setScanLoading(true);
@@ -198,6 +253,7 @@ export default function PantryPage() {
       return;
     }
 
+    setReceiptFrom("qr");
     setReceiptBusy(true);
     const result = await fetchReceipt(query);
     if (!result.ok) {
@@ -433,6 +489,19 @@ export default function PantryPage() {
         </section>
       )}
 
+      {/* Фото чека: камера на телефоні, галерея на столі */}
+      <input
+        ref={photoInput}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void handleReceiptPhoto(file);
+        }}
+      />
+
       {/* Як додати продукт */}
       <Sheet open={addSheet} onClose={() => setAddSheet(false)} title="Додати продукт">
         <div className="flex flex-col gap-2 pb-4">
@@ -452,6 +521,15 @@ export default function PantryPage() {
             onClick={() => {
               setAddSheet(false);
               setReceiptOpen(true);
+            }}
+          />
+          <AddWay
+            icon={<Camera size={19} />}
+            title="Сфотографувати чек"
+            note="Коли QR немає або він стерся — прочитаємо з фото"
+            onClick={() => {
+              setAddSheet(false);
+              photoInput.current?.click();
             }}
           />
           <AddWay
@@ -493,7 +571,9 @@ export default function PantryPage() {
         <div className="flex items-center gap-3 py-6">
           <Spinner />
           <p className="text-[14px] text-muted">
-            Питаю податкову, що саме було в цьому чеку…
+            {receiptFrom === "photo"
+              ? "Розбираю фото: назви, кількості, ціни…"
+              : "Питаю податкову, що саме було в цьому чеку…"}
           </p>
         </div>
       </Sheet>
@@ -555,10 +635,15 @@ export default function PantryPage() {
       >
         {receipt && (
           <div className="pb-2">
-            <p className="mb-3 text-[12px] text-muted">
+            <p className="mb-3 text-[12px] leading-snug text-muted">
               {receipt.store ? `${receipt.store} · ` : ""}
               {receipt.drafts.length} {plural(receipt.drafts.length, "рядок", "рядки", "рядків")}.
               Познач, що несемо в комору.
+              {receiptFrom === "photo" && (
+                <span className="mt-1 block text-faint">
+                  Прочитано з фото — перевір назви й кількості, перш ніж додавати.
+                </span>
+              )}
             </p>
 
             <div className="flex flex-col gap-2">
@@ -663,7 +748,7 @@ export default function PantryPage() {
                   className="mt-2.5"
                   onClick={() => {
                     removePantry(scanned.ingredient!.key);
-                    setPickFor(scanned);
+                    setCarding(scanned);
                     setScanned(null);
                   }}
                 >
@@ -678,20 +763,31 @@ export default function PantryPage() {
                     : "Не вдалося визначити продукт"}
                 </p>
                 <p className="mt-1 text-[12px] text-muted">
-                  {scanned.source === "unknown"
-                    ? "Open Food Facts мало знає про українські товари. Обери зі списку, чим це є — і наступний, хто відсканує цей код, побачить готову відповідь."
-                    : "Обери зі списку, чим це є — і наступний, хто відсканує цей код, побачить готову відповідь."}
+                  Open Food Facts мало знає про українські товари. Заповни картку —
+                  назву з пачки, вагу, калорії — і наступного разу цей код
+                  впізнається сам, у тебе й у всіх.
                 </p>
-                <Button
-                  size="sm"
-                  className="mt-2.5"
-                  onClick={() => {
-                    setPickFor(scanned);
-                    setScanned(null);
-                  }}
-                >
-                  Обрати продукт
-                </Button>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setCarding(scanned);
+                      setScanned(null);
+                    }}
+                  >
+                    Заповнити картку
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setPickFor(scanned);
+                      setScanned(null);
+                    }}
+                  >
+                    Просто обрати продукт
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -719,6 +815,11 @@ export default function PantryPage() {
         open={!!pickFor}
         onClose={() => setPickFor(null)}
         title="Що це за продукт?"
+        onCreate={(name) => {
+          const product = pickFor;
+          setPickFor(null);
+          setCreating(name || product?.name || "");
+        }}
         exclude={pantryKeys}
         onPick={(def) => {
           add(def.key, {
@@ -728,13 +829,43 @@ export default function PantryPage() {
             unit: pickFor?.unit,
           });
           // Наступному, хто відсканує цей код, вгадувати вже не доведеться.
-          if (pickFor) void teachBarcode(pickFor, def.key);
+          if (pickFor) void teachBarcode(pickFor, def.key, account?.id);
           setPickFor(null);
           setDetailsFor(def.key);
         }}
       />
 
       {/* Додавання вручну */}
+      {/* Повна картка невідомого товару */}
+      <ProductCardSheet
+        product={carding}
+        open={!!carding}
+        onClose={() => setCarding(null)}
+        onSave={(filled, def) => {
+          add(def.key, {
+            label: filled.name,
+            barcode: filled.barcode,
+            amount: filled.amount,
+            unit: filled.unit,
+          });
+          // Наступному, хто відсканує цей код, вгадувати вже не доведеться —
+          // і він побачить не лише «це молоко», а й вагу пачки з калоріями.
+          void teachBarcode(filled, def.key, account?.id);
+          toast(`«${filled.name}» у коморі`, "📦");
+          setDetailsFor(def.key);
+        }}
+      />
+
+      <NewIngredientSheet
+        open={creating !== null}
+        initialName={creating ?? ""}
+        onClose={() => setCreating(null)}
+        onCreated={(def) => {
+          add(def.key);
+          toast(`«${def.label}» у каталозі й у коморі`, "📦");
+        }}
+      />
+
       <IngredientPicker
         open={addOpen}
         onClose={() => {
@@ -753,6 +884,11 @@ export default function PantryPage() {
           // ставити тоді, коли продукт щойно в руках, а не колись потім.
           setDetailsFor(def.key);
         }}
+        onCreate={(name) => {
+          setAddOpen(false);
+          setQuery("");
+          setCreating(name);
+        }}
       />
     </div>
   );
@@ -766,6 +902,9 @@ const RECEIPT_FAILURE: Record<ReceiptFailure, string> = {
   upstream: "Податкова не відповідає — спробуй пізніше",
   offline: "Немає звʼязку — чек читається тільки онлайн",
   throttled: "Забагато спроб поспіль. Спробуй за хвилину",
+  nokey: "Розпізнавання фото ще не налаштоване — немає ключа Gemini",
+  unauthorized: "Схоже, сесія застаріла. Онови сторінку й спробуй ще раз",
+  unreadable: "На фото не видно чека. Спробуй зняти рівніше й ближче",
 };
 
 /**
@@ -1006,6 +1145,7 @@ function PantryChip({
 function ScannedQuantity({ itemKey }: { itemKey: string }) {
   const pantry = useApp((s) => s.pantry);
   const shopping = useApp((s) => s.shopping);
+  const account = useApp((s) => s.account);
   const addPantry = useApp((s) => s.addPantry);
   const item = pantry.find((p) => p.key === itemKey);
   const def = ing(itemKey);
@@ -1052,6 +1192,7 @@ function ItemSheet({
 }) {
   const pantry = useApp((s) => s.pantry);
   const shopping = useApp((s) => s.shopping);
+  const account = useApp((s) => s.account);
   const addPantry = useApp((s) => s.addPantry);
   const removePantry = useApp((s) => s.removePantry);
   const item = pantry.find((p) => p.key === itemKey);
