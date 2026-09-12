@@ -36,6 +36,53 @@ self.addEventListener("activate", (event) => {
  * Показ повідомлення. Приходить від сервера як JSON; якщо тіло зіпсоване,
  * показуємо бодай щось — мовчазний пуш виглядав би як збій пристрою.
  */
+/**
+ * Підписка змінила адресу.
+ *
+ * Браузер робить це сам — раз на кілька місяців або після оновлення, — і зі
+ * старою адресою сповіщення просто перестають приходити. Мовчки: ніхто
+ * нікого не попереджає, крім оцієї події.
+ *
+ * Підписуємось наново тим самим ключем (беремо з сервера, бо в події
+ * `oldSubscription.options` сучасний Chrome лишає порожнім) і кажемо серверу
+ * обидві адреси — щоб він переписав свій рядок, а не завів другий.
+ */
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const res = await fetch("/api/push/key", { headers: { Accept: "application/json" } });
+        const { key } = await res.json();
+        if (!key) return;
+
+        const padding = "=".repeat((4 - (key.length % 4)) % 4);
+        const raw = atob((key + padding).replace(/-/g, "+").replace(/_/g, "/"));
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+
+        const fresh = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: bytes,
+        });
+
+        const json = fresh.toJSON();
+        await fetch("/api/push/rotate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            old: event.oldSubscription?.endpoint,
+            endpoint: json.endpoint,
+            p256dh: json.keys?.p256dh,
+            auth: json.keys?.auth,
+          }),
+        });
+      } catch {
+        /* наступний запуск застосунку перепише підписку сам */
+      }
+    })(),
+  );
+});
+
 self.addEventListener("push", (event) => {
   let payload = {};
   try {

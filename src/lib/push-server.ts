@@ -80,7 +80,12 @@ export async function sendPush(
 ): Promise<{ sent: number; pruned: number }> {
   if (!pushConfigured || userIds.length === 0) return { sent: 0, pruned: 0 };
 
-  webpush.setVapidDetails("mailto:nyam@example.com", VAPID_PUBLIC, VAPID_PRIVATE);
+  /*
+   * Адреса в підписі має бути справжньою. Служба пуша Apple перевіряє її і
+   * відповідає 403 на вигадану — тобто з «mailto:nyam@example.com» усі
+   * сповіщення на iPhone падали б, а виглядало б це як «нікому надсилати».
+   */
+  webpush.setVapidDetails("https://nyam-eight-plum.vercel.app", VAPID_PUBLIC, VAPID_PRIVATE);
 
   const sb = admin();
   const { data, error } = await sb
@@ -100,11 +105,33 @@ export async function sendPush(
         await webpush.sendNotification(
           { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
           payload,
+          {
+            /*
+             * Високий пріоритет — щоб Android не притримав сповіщення до
+             * ранку: у режимі сну він відкладає все, крім термінового.
+             *
+             * Доба життя: нагадування про строк придатності на післязавтра
+             * нікому не потрібне, а лайк тим паче.
+             */
+            urgency: "high",
+            TTL: 86_400,
+            // Тема склеює однакові поки телефон офлайн — так само, як тег
+            // склеює їх уже на екрані.
+            topic: message.tag ? message.tag.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) : undefined,
+          },
         );
         sent += 1;
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) dead.push(row.endpoint);
+        else {
+          /*
+           * 403 — це відмова служби пуша, а не мертва підписка: найчастіше
+           * підпис не зійшовся. Без цього рядка така помилка виглядала б у
+           * точності як «ніхто не підписаний».
+           */
+          console.warn(`[push] ${status ?? "?"} для ${row.endpoint.slice(0, 60)}…`);
+        }
       }
     }),
   );

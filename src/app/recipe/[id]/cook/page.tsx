@@ -110,15 +110,33 @@ export default function CookPage() {
     haptic([200, 100, 200, 100, 300]);
     toast("Час вийшов!", "⏰");
 
-    // Якщо застосунок згорнули — систему сповіщень просимо докласти голосу.
-    // Без дозволу просто мовчимо: набридати запитом посеред готування не варто.
-    try {
-      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-        new Notification("Ням", { body: "Час вийшов — перевір страву", tag: "nyam-timer" });
+    /*
+     * Якщо застосунок згорнули — просимо систему докласти голосу.
+     *
+     * Через service worker, а не `new Notification()`: на телефоні той
+     * конструктор заборонений і кидає помилку, тобто цей будильник не дзвонив
+     * саме там, де він потрібен, — коли екран згас і застосунок у фоні.
+     *
+     * Без дозволу просто мовчимо: набридати запитом посеред готування не варто.
+     */
+    void (async () => {
+      try {
+        if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+        const reg = await navigator.serviceWorker?.getRegistration();
+        await reg?.showNotification("Ням", {
+          body: "Час вийшов — перевір страву",
+          icon: "/api/icon?size=192",
+          badge: "/api/icon?size=192",
+          tag: "nyam-timer",
+          requireInteraction: true,
+          // Вібрація в кишені важить більше за звук: на кухні шумно.
+          vibrate: [200, 100, 200, 100, 300],
+          data: { url: window.location.pathname },
+        } as NotificationOptions);
+      } catch {
+        /* не критично: тост і вібрація вже спрацювали */
       }
-    } catch {
-      /* не критично */
-    }
+    })();
   }, [toast]);
 
   /* Один тік: перерахунок від дедлайну. Частота 250 мс, щоб число не «стрибало»

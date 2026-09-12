@@ -1135,9 +1135,26 @@ export interface PushSubscriptionRow {
  * перевстановлення застосунку, і другий рядок про той самий пристрій означав
  * би два однакові сповіщення.
  */
+/** Чи знає база про цю підписку. Питає рядок саме цього пристрою. */
+export async function hasPushSubscription(endpoint: string): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const { data, error } = await sb
+    .from("push_subscriptions")
+    .select("endpoint")
+    .eq("endpoint", endpoint)
+    .maybeSingle();
+  return !error && Boolean(data);
+}
+
 export async function savePushSubscription(sub: PushSubscriptionRow): Promise<void> {
   const sb = getSupabase();
-  if (!sb) return;
+  /*
+   * Мовчки не виходимо: підписка без запису в базі — це телефон, який
+   * показує «увімкнено», тоді як надсилати нема кому. Хай краще увімкнення
+   * чесно провалиться.
+   */
+  if (!sb) throw new Error("база не налаштована");
 
   const { error } = await sb.from("push_subscriptions").upsert(
     {

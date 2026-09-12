@@ -6,19 +6,37 @@ import { useApp } from "@/lib/store";
 import { initSession } from "@/lib/session";
 import { onSyncError } from "@/lib/sync";
 import { initInstallPrompt } from "@/lib/pwa";
+import { syncPushSubscription } from "@/lib/push";
 
-/** Реєстрація service worker — тільки в проді, щоб не ламати HMR. */
+/**
+ * Реєстрація service worker — тільки в проді, щоб не ламати HMR.
+ *
+ * Раніше реєстрація чекала на подію `load`, і це коштувало нам усіх
+ * пуш-сповіщень. Ефекти React виконуються після гідратації, а на телефоні
+ * вона часто закінчується вже ПІСЛЯ `load`: подія минула, слухач чекає на
+ * неї вічно, service worker не реєструється — а разом із ним мовчки зникають
+ * і офлайн, і пуш, бо `serviceWorker.ready` тоді не настає ніколи.
+ *
+ * Тому дивимось на стан сторінки, а не на подію: якщо вона вже завантажена,
+ * реєструємо одразу.
+ */
 function useServiceWorker() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
-    const onLoad = () => {
+
+    const register = () => {
       navigator.serviceWorker.register("/sw.js").catch(() => {
         /* офлайн-режим просто не увімкнеться */
       });
     };
-    window.addEventListener("load", onLoad);
-    return () => window.removeEventListener("load", onLoad);
+
+    if (document.readyState === "complete") {
+      register();
+      return;
+    }
+    window.addEventListener("load", register);
+    return () => window.removeEventListener("load", register);
   }, []);
 }
 
@@ -92,11 +110,30 @@ function useBackend() {
   useEffect(() => onSyncError((message) => toast(message, "⚠️")), [toast]);
 }
 
+/**
+ * Тихо перезаписує підписку на сповіщення при кожному запуску.
+ *
+ * Адреса підписки з часом змінюється сама, і тоді сервер шле в нікуди. Chrome
+ * попереджає про це подією, а Safari — ні: там про заміну не дізнається ніхто,
+ * і єдиний спосіб полагодити — щоразу звіряти те, що є в браузері, з тим, що
+ * записано в базі. Коштує це один запит і рятує від найпідступнішого стану:
+ * телефон показує «сповіщення увімкнено», а їх уже місяць немає.
+ */
+function usePushRepair() {
+  const accountId = useApp((s) => s.account?.id);
+
+  useEffect(() => {
+    if (!accountId) return;
+    void syncPushSubscription(accountId);
+  }, [accountId]);
+}
+
 function Boot({ children }: { children: React.ReactNode }) {
   useRehydrate();
   useServiceWorker();
   useTheme();
   useBackend();
+  usePushRepair();
   useEffect(() => initInstallPrompt(), []);
   return <>{children}</>;
 }

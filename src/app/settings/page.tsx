@@ -21,10 +21,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Avatar, Button, Card, useToast } from "@/components/ui";
-import { disablePush, enablePush, pushActive, pushConfigured, pushSupported } from "@/lib/push";
+import { disablePush, enablePush, pushConfigured, pushState, pushSupported } from "@/lib/push";
 import { signOut } from "@/lib/session";
 import { useApp } from "@/lib/store";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   canInstall,
   isIos,
@@ -323,12 +323,17 @@ function PushCard() {
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [testing, setTesting] = useState(false);
   /** Чи налаштований пуш на сервері. Питаємо запитом, а не зі змінної. */
   const [configured, setConfigured] = useState(false);
 
+  /** Чи знає про цей пристрій сервер. Без цього «увімкнено» нічого не означає. */
+  const [known, setKnown] = useState(true);
+
   useEffect(() => {
-    void Promise.all([pushActive(), pushConfigured()]).then(([active, ok]) => {
-      setOn(active);
+    void Promise.all([pushState(), pushConfigured()]).then(([state, ok]) => {
+      setOn(state.browser);
+      setKnown(state.server);
       setConfigured(ok);
       setReady(true);
     });
@@ -338,6 +343,33 @@ function PushCard() {
 
   const supported = pushSupported() && configured;
   const iosNotInstalled = isIos() && !isStandalone();
+
+  /**
+   * Пробне сповіщення — єдиний чесний спосіб перевірити ланцюг.
+   *
+   * Він довгий: браузер, запис у базі, ключі VAPID, служба пуша Google або
+   * Apple, налаштування самого телефона. Будь-яка ланка може мовчки не
+   * спрацювати, і без кнопки «перевірити» людина дізнається про це лише з
+   * того, що сповіщення не приходять.
+   */
+  const sendTest = async () => {
+    setTesting(true);
+    try {
+      const token = (await getSupabase()?.auth.getSession())?.data.session?.access_token;
+      const res = await fetch("/api/push/test", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = (await res.json()) as { ok?: boolean; sent?: number; reason?: string };
+      if (data.ok && (data.sent ?? 0) > 0) toast("Надіслано — зараз прилетить", "🔔");
+      else if (data.ok) toast("Сервер не знайшов жодного пристрою", "⚠️");
+      else toast(`Не вийшло: ${data.reason ?? "невідомо"}`, "⚠️");
+    } catch {
+      toast("Не вийшло: немає звʼязку", "⚠️");
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const toggle = async () => {
     setBusy(true);
@@ -350,13 +382,16 @@ function PushCard() {
       }
 
       const result = await enablePush(account.id);
-      if (result === "on") {
+      if (result.state === "on") {
         setOn(true);
+        setKnown(true);
         toast("Сповіщення увімкнено", "🔔");
-      } else if (result === "denied") {
-        toast("Дозвіл не надано — увімкни в налаштуваннях браузера", "🔕");
+      } else if (result.state === "denied") {
+        toast("Дозвіл не надано — увімкни в налаштуваннях телефона", "🔕");
       } else {
-        toast("Не вдалося увімкнути сповіщення", "⚠️");
+        // Кажемо, що саме не вийшло: інакше порожня таблиця підписок виглядає
+        // як «мабуть, телефон не підтримує».
+        toast(`Не вдалося: ${result.reason}`, "⚠️");
       }
     } finally {
       setBusy(false);
@@ -381,20 +416,48 @@ function PushCard() {
             На iPhone сповіщення працюють лише в застосунку, доданому на екран «Домів».
             Додай Ням туди — і перемикач зʼявиться.
           </p>
-        ) : !ready ? null : !supported ? (
+        ) : !ready ? (
+          <p className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] text-muted">
+            Перевіряю…
+          </p>
+        ) : !supported ? (
           <p className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] leading-relaxed text-muted">
             Цей браузер не вміє сповіщень, або їх ще не налаштовано на сервері.
           </p>
         ) : (
-          <Button
-            full
-            variant={on ? "secondary" : "primary"}
-            className="mt-3"
-            onClick={() => void toggle()}
-            loading={busy || !ready}
-          >
-            {on ? "Вимкнути на цьому пристрої" : "Увімкнути сповіщення"}
-          </Button>
+          <>
+            {/*
+              Підписка живе у двох місцях — у браузері й у базі. Коли вони
+              розійшлись, телефон каже «увімкнено», а надсилати нема кому;
+              мовчати про це не можна.
+            */}
+            {on && !known && (
+              <p className="mt-3 rounded-2xl border border-berry/30 bg-berry/10 p-3 text-[12.5px] leading-relaxed text-berry">
+                Цей пристрій підписаний у браузері, але сервер про нього не знає — тому
+                нічого й не приходить. Вимкни й увімкни ще раз.
+              </p>
+            )}
+            <Button
+              full
+              variant={on ? "secondary" : "primary"}
+              className="mt-3"
+              onClick={() => void toggle()}
+              loading={busy}
+            >
+              {on ? "Вимкнути на цьому пристрої" : "Увімкнути сповіщення"}
+            </Button>
+            {on && known && (
+              <Button
+                full
+                variant="ghost"
+                className="mt-2"
+                loading={testing}
+                onClick={() => void sendTest()}
+              >
+                Надіслати пробне
+              </Button>
+            )}
+          </>
         )}
       </Card>
     </section>
