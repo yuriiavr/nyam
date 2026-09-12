@@ -30,8 +30,6 @@ export interface Filters {
   /** Частина прийому їжі: гарнір, основна, суп… */
   courses: Course[];
   query: string;
-  /** виключити страви, приготовані за останні N днів */
-  avoidRecentDays: number | null;
 }
 
 export const emptyFilters: Filters = {
@@ -44,7 +42,6 @@ export const emptyFilters: Filters = {
   cuisines: [],
   courses: [],
   query: "",
-  avoidRecentDays: null,
 };
 
 export const POOL_LABEL: Record<Pool, string> = {
@@ -75,6 +72,24 @@ function inPool(state: AppState, r: Recipe, pool: Pool): boolean {
 
 const norm = (s: string) => s.toLowerCase().replace(/[ʼ’`]/g, "'").trim();
 
+/**
+ * Страви, які має сенс пропонувати.
+ *
+ * Те саме, що allRecipes, але без щойно приготованого: людина відкриває
+ * рулетку саме тоді, коли не хоче знову те, що їла в середу. Скільки днів
+ * памʼятати — уподобання, яке живе в налаштуваннях, а не фільтр екрана:
+ * рішення приймають раз, а не щоразу.
+ *
+ * Пошук цим не користується навмисно: там людина шукає конкретну страву, і
+ * ховати борщ тому, що його готували вчора, — це не турбота, а поломка.
+ */
+export function suggestable(state: AppState): Recipe[] {
+  const days = state.avoidRecentDays;
+  const all = allRecipes(state);
+  if (days == null) return all;
+  return all.filter((r) => daysSinceCooked(state, r.id) >= days);
+}
+
 export function applyFilters(state: AppState, f: Filters, source?: Recipe[]): Recipe[] {
   const base = source ?? allRecipes(state);
   const q = norm(f.query);
@@ -87,7 +102,6 @@ export function applyFilters(state: AppState, f: Filters, source?: Recipe[]): Re
     if (f.maxCost != null && r.costLevel > f.maxCost) return false;
     if (f.cuisines.length && !f.cuisines.includes(r.cuisine)) return false;
     if (f.courses.length && !f.courses.includes(courseOf(r))) return false;
-    if (f.avoidRecentDays != null && daysSinceCooked(state, r.id) < f.avoidRecentDays) return false;
     if (q) {
       const hay = [
         r.title,
@@ -111,7 +125,6 @@ export function activeFilterCount(f: Filters): number {
   if (f.maxTime != null) n++;
   if (f.maxDifficulty != null) n++;
   if (f.maxCost != null) n++;
-  if (f.avoidRecentDays != null) n++;
   return n;
 }
 
@@ -424,6 +437,8 @@ export function generateWeekPlan(
       const candidates = recommend(state, {
         limit: 40,
         respectPantry: false,
+        // План на тиждень — теж пропозиція, тож і повторів уникає так само.
+        pool: suggestable(state),
       }).filter(
         (rec) => rec.recipe.mealTypes.includes(slot as MealType) && !used.has(rec.recipe.id),
       );

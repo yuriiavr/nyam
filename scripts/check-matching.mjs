@@ -359,5 +359,50 @@ check("колесо без напоїв", WHEEL_COURSES.includes("drink"), false
 check("колесо без соусів", WHEEL_COURSES.includes("sauce"), false);
 check("колесо з гарнірами", WHEEL_COURSES.includes("side"), true);
 
+console.log("── Не пропонувати щойно готоване ──");
+
+const { suggestable, applyFilters, emptyFilters } = await jiti.import(
+  path.join(root, "src/lib/matching.ts"),
+);
+
+const borsch = byTitle("Червоний борщ");
+const day = 24 * 60 * 60 * 1000;
+const cookedRecently = {
+  ...empty,
+  avoidRecentDays: 7,
+  cooked: [{ recipeId: borsch.id, at: new Date(Date.now() - 2 * day).toISOString() }],
+  remoteReady: true,
+  remoteRecipes: SEED_RECIPES,
+};
+
+const titles = (state) => suggestable(state).map((r) => r.title);
+
+check("готоване два дні тому не пропонуємо", titles(cookedRecently).includes(borsch.title), false);
+check("решта страв на місці", titles(cookedRecently).length, SEED_RECIPES.length - 1);
+
+// Вісім днів — уже не «щойно».
+const longAgo = {
+  ...cookedRecently,
+  cooked: [{ recipeId: borsch.id, at: new Date(Date.now() - 8 * day).toISOString() }],
+};
+check("через тиждень повертається", titles(longAgo).includes(borsch.title), true);
+
+// Знята галочка означає «пропонуй усе».
+check(
+  "вимкнене уподобання нічого не ховає",
+  titles({ ...cookedRecently, avoidRecentDays: null }).includes(borsch.title),
+  true,
+);
+
+/*
+ * А пошук цим не користується навмисно: ховати борщ тому, що його готували
+ * вчора, — це не турбота, а поломка.
+ */
+check(
+  "пошук показує все",
+  applyFilters(cookedRecently, { ...emptyFilters, query: "борщ" }).length,
+  1,
+);
+
 console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
 process.exit(fail ? 1 : 0);

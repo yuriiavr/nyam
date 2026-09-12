@@ -13,6 +13,7 @@ import {
   activeFilterCount,
   applyFilters,
   emptyFilters,
+  suggestable,
   type Filters,
   type Pool,
 } from "@/lib/matching";
@@ -74,7 +75,8 @@ export default function RoulettePage() {
 
   const pool = useMemo(() => {
     if (!hydrated) return [];
-    const matched = applyFilters(useApp.getState(), filters);
+    const state = useApp.getState();
+    const matched = applyFilters(state, filters, suggestable(state));
     /*
      * У барабан ідуть страви, а не доповнення до них: соус чи напій, що
      * випав замість вечері, — це не відповідь на питання «що готувати».
@@ -346,6 +348,7 @@ export default function RoulettePage() {
       )}
 
       <FilterSheet
+        suggesting
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         value={filters}

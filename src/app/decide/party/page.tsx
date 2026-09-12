@@ -8,7 +8,13 @@ import { FilterButton, FilterSheet } from "@/components/FilterSheet";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
 import { Button, Card, EmptyState } from "@/components/ui";
-import { activeFilterCount, applyFilters, emptyFilters, type Filters } from "@/lib/matching";
+import {
+  activeFilterCount,
+  applyFilters,
+  emptyFilters,
+  suggestable,
+  type Filters,
+} from "@/lib/matching";
 import { useApp } from "@/lib/store";
 import type { Recipe } from "@/lib/types";
 import { formatMinutes, haptic, plural, shuffle } from "@/lib/utils";
@@ -37,7 +43,10 @@ export default function PartyPage() {
   const [votes, setVotes] = useState<Record<string, number>>({});
 
   const pool = useMemo(
-    () => (hydrated ? applyFilters(useApp.getState(), filters) : []),
+    () =>
+      hydrated
+        ? applyFilters(useApp.getState(), filters, suggestable(useApp.getState()))
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hydrated, filters, myRecipes, saved, following],
   );
@@ -369,6 +378,7 @@ export default function PartyPage() {
       </AnimatePresence>
 
       <FilterSheet
+        suggesting
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         value={filters}

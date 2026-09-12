@@ -7,8 +7,9 @@ import { useMemo, useState } from "react";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
 import { Card, EmptyState, Segmented } from "@/components/ui";
+import { suggestable } from "@/lib/matching";
 import { powerMatches, type PowerMatch, type PowerMode } from "@/lib/power";
-import { allRecipes, useApp } from "@/lib/store";
+import { useApp } from "@/lib/store";
 import { formatMinutes, haptic, plural } from "@/lib/utils";
 
 /**
@@ -39,7 +40,7 @@ export default function BlackoutPage() {
   const matches = useMemo(() => {
     if (!hydrated) return [];
     // Без вогню час не обмежуємо: там «готування» це нарізати й змішати.
-    return powerMatches(allRecipes(useApp.getState()), {
+    return powerMatches(suggestable(useApp.getState()), {
       mode,
       minutes: mode === "cold" ? null : minutes,
     });

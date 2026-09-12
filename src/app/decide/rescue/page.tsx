@@ -8,8 +8,8 @@ import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
 import { Button, Card, EmptyState } from "@/components/ui";
 import { ing } from "@/data/ingredients";
-import { rescueMatches, type RescueMatch } from "@/lib/matching";
-import { allRecipes, useApp } from "@/lib/store";
+import { rescueMatches, type RescueMatch, suggestable } from "@/lib/matching";
+import { useApp } from "@/lib/store";
 import type { PantryItem } from "@/lib/types";
 import { expiryInfo, formatMinutes, plural } from "@/lib/utils";
 
@@ -40,7 +40,7 @@ export default function RescuePage() {
     soon.sort((a, b) => (expiryInfo(a.expiresAt)?.days ?? 0) - (expiryInfo(b.expiresAt)?.days ?? 0));
 
     return {
-      matches: rescueMatches(allRecipes(useApp.getState()), pantry),
+      matches: rescueMatches(suggestable(useApp.getState()), pantry),
       expiring: soon,
       expired: gone,
     };

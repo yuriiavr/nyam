@@ -14,7 +14,13 @@ import { FilterButton, FilterSheet } from "@/components/FilterSheet";
 import { RecipeMedia, RecipeRow } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
 import { Button, EmptyState, useToast } from "@/components/ui";
-import { activeFilterCount, applyFilters, emptyFilters, type Filters } from "@/lib/matching";
+import {
+  activeFilterCount,
+  applyFilters,
+  emptyFilters,
+  suggestable,
+  type Filters,
+} from "@/lib/matching";
 import { useApp } from "@/lib/store";
 import type { Recipe } from "@/lib/types";
 import { formatMinutes, haptic, shuffle } from "@/lib/utils";
@@ -42,7 +48,10 @@ export default function SwipePage() {
   const [flyOut, setFlyOut] = useState<"left" | "right" | null>(null);
 
   const pool = useMemo(
-    () => (hydrated ? applyFilters(useApp.getState(), filters) : []),
+    () =>
+      hydrated
+        ? applyFilters(useApp.getState(), filters, suggestable(useApp.getState()))
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [hydrated, filters, myRecipes, following, saved, cooked],
   );
@@ -162,6 +171,7 @@ export default function SwipePage() {
       )}
 
       <FilterSheet
+        suggesting
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         value={filters}

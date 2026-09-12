@@ -1,6 +1,6 @@
 "use client";
 
-import { SlidersHorizontal } from "lucide-react";
+import { Check, SlidersHorizontal } from "lucide-react";
 import { useMemo } from "react";
 import { Button, Chip, Sheet } from "./ui";
 import { allRecipes, useApp } from "@/lib/store";
@@ -37,6 +37,48 @@ const POOLS: Pool[] = [
   "wishlist",
 ];
 
+/**
+ * «Не пропонувати те, що вже готували».
+ *
+ * Живе в сховищі, а не у фільтрах екрана: це рішення про смак, а не про
+ * конкретний пошук, і людина приймає його один раз. Увімкнено за
+ * замовчуванням — саме по повтори минулого тижня й скаржаться найчастіше.
+ */
+function AvoidRecent() {
+  const days = useApp((s) => s.avoidRecentDays);
+  const setDays = useApp((s) => s.setAvoidRecentDays);
+  const on = days != null;
+
+  return (
+    <div className="mt-5">
+      <button
+        onClick={() => {
+          haptic(10);
+          setDays(on ? null : 7);
+        }}
+        aria-pressed={on}
+        className="flex w-full items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 text-left"
+      >
+        <span
+          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${
+            on ? "border-brand bg-brand text-brand-ink" : "border-line"
+          }`}
+        >
+          {on && <Check size={12} strokeWidth={3.5} />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13.5px] font-bold">
+            Не пропонувати те, що готували минулі 7 днів
+          </span>
+          <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">
+            Діє в усіх способах вибору. У пошуку — ні: там шукають конкретну страву.
+          </span>
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export function FilterButton({
   count,
   onClick,
@@ -70,6 +112,7 @@ export function FilterSheet({
   onChange,
   resultCount,
   hidePool = false,
+  suggesting = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -78,6 +121,11 @@ export function FilterSheet({
   resultCount?: number;
   /** Там, де джерело обирають окремим перемикачем, тут його дублювати нічим. */
   hidePool?: boolean;
+  /**
+   * Екран пропонує страву, а не шукає конкретну. Тоді тут зʼявляється
+   * перемикач повторів — у пошуку він був би шкідливий.
+   */
+  suggesting?: boolean;
 }) {
   const myRecipes = useApp((s) => s.myRecipes);
   const remoteRecipes = useApp((s) => s.remoteRecipes);
@@ -227,22 +275,7 @@ export function FilterSheet({
         ))}
       </Group>
 
-      <Group title="Не повторюватись">
-        {[3, 7, 14].map((d) => (
-          <Chip
-            key={d}
-            active={value.avoidRecentDays === d}
-            onClick={() =>
-              onChange({
-                ...value,
-                avoidRecentDays: value.avoidRecentDays === d ? null : d,
-              })
-            }
-          >
-            не готував {d} дн.
-          </Chip>
-        ))}
-      </Group>
+      {suggesting && <AvoidRecent />}
 
       <div className="h-3" />
     </Sheet>

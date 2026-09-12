@@ -74,6 +74,14 @@ export interface AppState {
   plan: WeekPlan;
   theme: "dark" | "light";
   onboarded: boolean;
+  /**
+   * Скільки днів не пропонувати те, що вже готували. null — пропонувати все.
+   *
+   * Уподобання, а не фільтр екрана: людина вирішує це раз і назавжди, а не
+   * щоразу, коли відкриває рулетку. Тиждень за замовчуванням — бо саме про
+   * повтори минулого тижня й питають «знову це?».
+   */
+  avoidRecentDays: number | null;
 
   /* ── Бекенд ─────────────────────────────────────────────────────────── */
   /** Авторизований користувач; null — не увійшов. */
@@ -99,6 +107,7 @@ export interface AppState {
 
   setHydrated: (v: boolean) => void;
   setTheme: (t: "dark" | "light") => void;
+  setAvoidRecentDays: (days: number | null) => void;
   setOnboarded: (v: boolean) => void;
   updateProfile: (patch: Partial<Profile>) => void;
 
@@ -248,6 +257,7 @@ export const useApp = create<AppState>()(
       following: [],
       plan: {},
       theme: "dark",
+      avoidRecentDays: 7,
       onboarded: false,
 
       account: null,
@@ -263,6 +273,7 @@ export const useApp = create<AppState>()(
 
       setHydrated: (v) => set({ hydrated: v }),
       setTheme: (theme) => set({ theme }),
+      setAvoidRecentDays: (avoidRecentDays) => set({ avoidRecentDays }),
       setOnboarded: (onboarded) => set({ onboarded }),
 
       updateProfile: (patch) => {

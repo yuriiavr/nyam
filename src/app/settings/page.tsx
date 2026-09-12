@@ -2,6 +2,7 @@
 
 import {
   Bell,
+  Check,
   ChevronRight,
   CloudOff,
   Download,
@@ -12,6 +13,7 @@ import {
   Moon,
   Share,
   Smartphone,
+  Sparkles,
   Sun,
   Users,
 } from "lucide-react";
@@ -35,6 +37,8 @@ import { haptic, plural } from "@/lib/utils";
 export default function SettingsPage() {
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
+  const avoidRecentDays = useApp((s) => s.avoidRecentDays);
+  const setAvoidRecentDays = useApp((s) => s.setAvoidRecentDays);
   const myRecipes = useApp((s) => s.myRecipes);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
@@ -164,6 +168,43 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </Card>
+      </section>
+
+      {/* Що пропонувати */}
+      <section className="px-4 pt-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-2">
+            <Sparkles size={17} className="text-brand" />
+            <h2 className="font-display text-[16px] font-bold">Що пропонувати</h2>
+          </div>
+          <button
+            onClick={() => {
+              haptic(10);
+              setAvoidRecentDays(avoidRecentDays == null ? 7 : null);
+            }}
+            aria-pressed={avoidRecentDays != null}
+            className="mt-3 flex w-full items-start gap-3 text-left"
+          >
+            <span
+              className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${
+                avoidRecentDays != null
+                  ? "border-brand bg-brand text-brand-ink"
+                  : "border-line"
+              }`}
+            >
+              {avoidRecentDays != null && <Check size={12} strokeWidth={3.5} />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-bold">
+                Не пропонувати те, що готували минулі 7 днів
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-snug text-muted">
+                Діє в рулетці, дуелі, холодильнику, порятунку, «поки є світло», разом і
+                в плані на тиждень. Пошук це не зачіпає: там шукають конкретну страву.
+              </span>
+            </span>
+          </button>
         </Card>
       </section>
 

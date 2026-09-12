@@ -8,8 +8,8 @@ import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
 import { Button, Card, EmptyState, Segmented } from "@/components/ui";
 import { ing } from "@/data/ingredients";
-import { fridgeMatches } from "@/lib/matching";
-import { allRecipes, useApp } from "@/lib/store";
+import { fridgeMatches, suggestable } from "@/lib/matching";
+import { useApp } from "@/lib/store";
 import type { MatchResult } from "@/lib/types";
 import { formatMinutes, plural } from "@/lib/utils";
 
@@ -32,7 +32,7 @@ export default function FridgePage() {
     if (!hydrated || pantryKeys.length === 0) return [];
     // Бібліотеці потрібен увесь стан, але перемальовування — ні: беремо
     // знімок у момент обчислення, а залежності перелічені нижче.
-    return fridgeMatches(allRecipes(useApp.getState()), pantryKeys);
+    return fridgeMatches(suggestable(useApp.getState()), pantryKeys);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, pantry, myRecipes]);
 
