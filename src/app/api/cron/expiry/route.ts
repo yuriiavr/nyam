@@ -1,4 +1,4 @@
-import { ing } from "@/data/ingredients";
+import { expiryMessage, expiryRowName, type ExpiryRow } from "@/lib/expiry-text";
 import { admin, authorised, pushConfigured, sendPush } from "@/lib/push-server";
 
 /**
@@ -10,16 +10,22 @@ import { admin, authorised, pushConfigured, sendPush } from "@/lib/push-server";
  *
  * Прострочене сюди не потрапляє навмисно. Порада зʼїсти те, що зіпсувалось
  * учора, гірша за мовчання, а списком «викинь» ніхто не зрадіє щоранку.
+ *
+ * Кому. Лише власнику рядка (user_id) — навіть у сімʼї (H2.5): кожна пачка
+ * має того, хто її приніс, і два однакові сповіщення двом людям про ту саму
+ * пачку були б шумом. Сімейна комора однаково видна обом у застосунку.
+ *
+ * Назва. Сервер не має реєстру дописаних типів і кешу карток, тож дотягуємо
+ * їх тут: назви карток товарів (I4) і назви own_* типів. Касовий рядок людям
+ * не показуємо — з нього складається людська назва (expiryRowName).
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-interface PantryRow {
+interface PantryRow extends ExpiryRow {
   user_id: string;
-  ingredient_key: string;
-  expires_at: string;
 }
 
 const dayKey = (shift: number): string => {
@@ -27,6 +33,8 @@ const dayKey = (shift: number): string => {
   d.setUTCDate(d.getUTCDate() + shift);
   return d.toISOString().slice(0, 10);
 };
+
+const uniq = <T,>(list: Iterable<T>): T[] => [...new Set(list)];
 
 export async function GET(request: Request): Promise<Response> {
   if (!authorised(request)) return new Response("Немає доступу", { status: 401 });
@@ -37,32 +45,52 @@ export async function GET(request: Request): Promise<Response> {
 
   const { data, error } = await admin()
     .from("pantry_items")
-    .select("user_id,ingredient_key,expires_at")
+    .select("user_id,ingredient_key,label,receipt_name,product_id,expires_at")
     .gte("expires_at", today)
     .lte("expires_at", tomorrow);
 
   if (error) return Response.json({ ok: false, reason: error.message }, { status: 502 });
+  const rows = (data ?? []) as PantryRow[];
+
+  /*
+   * Довідники назв. Зовнішнього ключа на product_id немає навмисно (як у
+   * shopping_items.recipe_id), тож і вбудованого join — окремий запит. Збій
+   * довідника не скасовує сповіщення: назва типу краща за тишу.
+   */
+  const productIds = uniq(rows.flatMap((r) => (r.product_id ? [r.product_id] : [])));
+  const ownKeys = uniq(rows.map((r) => r.ingredient_key).filter((key) => key.startsWith("own_")));
+  const [productsRes, customRes] = await Promise.all([
+    productIds.length
+      ? admin().from("products").select("id,name").in("id", productIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }>, error: null }),
+    ownKeys.length
+      ? admin().from("custom_ingredients").select("key,label").in("key", ownKeys)
+      : Promise.resolve({ data: [] as Array<{ key: string; label: string }>, error: null }),
+  ]);
+  if (productsRes.error) console.warn("[cron/expiry] назви товарів не прочитались", productsRes.error.message);
+  if (customRes.error) console.warn("[cron/expiry] дописані типи не прочитались", customRes.error.message);
+  const lookups = {
+    products: new Map(((productsRes.data ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name])),
+    customLabels: new Map(((customRes.data ?? []) as Array<{ key: string; label: string }>).map((c) => [c.key, c.label])),
+  };
 
   const byUser = new Map<string, PantryRow[]>();
-  for (const row of (data ?? []) as PantryRow[]) {
+  for (const row of rows) {
     byUser.set(row.user_id, [...(byUser.get(row.user_id) ?? []), row]);
   }
 
   let notified = 0;
-  for (const [userId, rows] of byUser) {
+  for (const [userId, own] of byUser) {
     // Найтерміновіше — першим у тексті: саме його назву людина побачить.
-    rows.sort((a, b) => a.expires_at.localeCompare(b.expires_at));
-
-    const first = ing(rows[0].ingredient_key).label;
-    const rest = rows.length - 1;
-    const when = rows[0].expires_at === today ? "сьогодні останній день" : "псується завтра";
+    const { title, body } = expiryMessage(
+      own.map((row) => ({ expires_at: row.expires_at, name: expiryRowName(row, lookups) })),
+      today,
+    );
+    if (!title) continue;
 
     const { sent } = await sendPush([userId], {
-      title: rest > 0 ? `${first} — ${when}` : `${first}: ${when}`,
-      body:
-        rest > 0
-          ? `І ще ${rest} ${rest === 1 ? "продукт" : rest < 5 ? "продукти" : "продуктів"} на черзі. Зазирни, що з них приготувати.`
-          : "Зазирни в комору — можливо, саме з нього щось вийде.",
+      title,
+      body,
       url: "/decide/rescue",
       // Один тег на всі дні: вчорашнє нагадування заміниться, а не ляже поруч.
       tag: "expiry",

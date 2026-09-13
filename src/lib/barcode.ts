@@ -1,292 +1,185 @@
+import { ing, knownIngredient } from "@/data/ingredients";
+import { lookupOffDraft } from "./off-draft";
+import type { Product } from "./product-types";
+import { resolveBarcode, type BarcodeResult, type ResolveDeps } from "./resolve";
+import { isSupabaseConfigured } from "./supabase/client";
 import {
-  findIngredient,
-  findIngredientByCategory,
-  ing,
-  knownIngredient,
-} from "@/data/ingredients";
-import { cacheBarcode, fetchCachedBarcode, saveBarcodeCard } from "./supabase/api";
-import { parseQty } from "./units";
+  fetchProductsByIds,
+  resolveIdentifiers,
+  searchProducts,
+  similarReceiptNames,
+} from "./supabase/products-api";
 import type { IngredientDef, Nutrition, Unit } from "./types";
 
+export { normalizeEan } from "./ean";
+export { lookupOffDraft, parseNutriments, parsePackSize, productDraftFromOff } from "./off-draft";
+export type { BarcodeResult };
+
+/*
+ * Штрихкод → що це за товар.
+ *
+ * Уся логіка впізнавання — у src/lib/resolve.ts (B1): кеш стору, спільна база
+ * (resolve_identifiers), Open Food Facts, порожня чернетка. Тут лише «живі»
+ * залежності для неї (клієнт Supabase, fetch до OFF) і стара форма відповіді
+ * ProductInfo для екранів, які ще не перейшли на картки товарів.
+ *
+ * Спільний довідник barcode_cache новий код не читає й не пише: його записи
+ * перенесено в product_identifiers (supabase/products.sql), а вчать базу
+ * тепер teach_identifiers (src/lib/teach.ts) і картки товарів (save_product).
+ */
+
+/** Кеш стору, яким сканер впізнає знайомий код і без звʼязку. */
+export type CatalogCache = NonNullable<ResolveDeps["cache"]>;
+
+/**
+ * Бренди з кешу карток: те, що люди вже назвали, підказка впізнає наступного
+ * разу — і в касових скороченнях. Прибрані картки не рахуються: бренд зі
+ * сміттєвої картки не мусить «уточнювати» чужі чеки.
+ */
+export function cachedBrands(products: Readonly<Record<string, Product>>): string[] {
+  const seen = new Set<string>();
+  for (const product of Object.values(products)) {
+    const brand = product.brand?.trim();
+    if (brand && !product.archived) seen.add(brand);
+  }
+  return [...seen];
+}
+
+/** navigator.onLine; на сервері (SSR) і без navigator вважаємо, що звʼязок є. */
+export const isOnline = (): boolean => typeof navigator === "undefined" || navigator.onLine !== false;
+
+/**
+ * Залежності resolve.ts для справжнього застосунку.
+ *
+ * Без бекенду (`configured: false`) resolve.ts не робить жодного RPC — лише
+ * OFF, щоб рядок «лише тип» мав назву з пачки. `cache` — products і eanIndex
+ * зі стору: екрани передають їх самі, щоб цей модуль не тягнув за собою стор.
+ */
+export function catalogDeps(cache?: CatalogCache, overrides: Partial<ResolveDeps> = {}): ResolveDeps {
+  return {
+    configured: isSupabaseConfigured,
+    online: isOnline,
+    resolveIdentifiers,
+    fetchProductsByIds,
+    searchProducts,
+    similarReceiptNames,
+    lookupOff: (ean, signal) => lookupOffDraft(ean, signal),
+    cache,
+    extraBrands: cache ? cachedBrands(cache.products) : [],
+    ...overrides,
+  };
+}
+
+/**
+ * Відповідь сканера у старій формі — для екранів, що ще не перейшли на
+ * ScanResultSheet і картки товарів (форма рецепта, старий потік комори).
+ */
 export interface ProductInfo {
   barcode: string;
   name: string;
   brand?: string;
   image?: string;
-  /** Розпізнаний інгредієнт з нашого каталогу, якщо вдалося зіставити */
+  /** Розпізнаний тип з нашого каталогу, якщо вдалося зіставити */
   ingredient: IngredientDef | null;
   /** Харчова цінність на 100 г з етикетки, якщо виробник її вказав. */
   nutrition?: Nutrition;
   /** Вага або обʼєм упаковки з етикетки — щоб не вводити «500 г» руками. */
   amount?: number;
   unit?: Unit;
+  /** community — це знає спільна база (картка товару чи «лише тип»). */
   source: "openfoodfacts" | "community" | "unknown";
+  /** Спільна картка, коли код веде саме до неї. */
+  product?: Product;
+  /** Повна відповідь resolveBarcode — для нових екранів. */
+  resolution?: BarcodeResult;
 }
 
-/**
- * Пошук товару за штрихкодом.
- *
- * Спершу питаємо спільний довідник: якщо цей код хтось уже розпізнав, це
- * і швидше, і точніше за будь-яку евристику. Далі — Open Food Facts.
- *
- * Порядок саме такий, бо український ринок OFF майже не покриває: коди 482…
- * там здебільшого просто відсутні. Відповідь спільноти для них єдина.
- */
-export async function lookupBarcode(barcode: string): Promise<ProductInfo> {
-  const known = await fetchCachedBarcode(barcode).catch(() => null);
-  /*
-   * Через ing(), а не ING_BY_KEY: картку могли завести на продукт, дописаний
-   * людьми. Той лежить в окремому реєстрі, і пошук лише по вбудованих робив
-   * би власний продукт невидимим саме для того, хто його й створив.
-   */
-  const ingredient = known && knownIngredient(known.ingredientKey) ? ing(known.ingredientKey) : null;
-  if (known && ingredient) {
+const typeOf = (key: string | undefined): IngredientDef | null => (key && knownIngredient(key) ? ing(key) : null);
+
+/** BarcodeResult → стара форма ProductInfo. Чисто; `code` — те, що прочитав сканер. */
+export function productInfoFromResult(code: string, res: BarcodeResult): ProductInfo {
+  const barcode = res.ean ?? code;
+  const fallbackName = `Товар ${barcode}`;
+  if (res.product) {
+    const p = res.product;
     return {
       barcode,
-      name: known.name,
-      brand: known.brand,
-      image: known.image,
-      ingredient,
-      // Те, що хтось уже вписав з етикетки: вага пачки й харчова цінність.
-      nutrition: known.nutrition,
-      amount: known.amount,
-      unit: known.unit,
+      name: p.name,
+      brand: p.brand,
+      image: p.image,
+      ingredient: typeOf(p.typeKey),
+      nutrition: p.nutrition,
+      ...(p.packAmount != null && p.packUnit ? { amount: p.packAmount, unit: p.packUnit } : {}),
       source: "community",
+      product: p,
+      resolution: res,
     };
   }
-
-  return lookupInOpenFoodFacts(barcode);
-}
-
-/**
- * Запамʼятовує вибір користувача для штрихкода, якого не впізнали.
- *
- * Мовчки: підказка спільноті — побічний ефект додавання продукту, і якщо
- * запис не пройшов, користувачу нема на що реагувати.
- */
-export async function teachBarcode(
-  product: ProductInfo,
-  ingredientKey: string,
-  userId?: string,
-): Promise<void> {
-  if (product.source === "community") return;
-  try {
-    await cacheBarcode(
-      {
-        barcode: product.barcode,
-        name: product.name,
-        brand: product.brand,
-        image: product.image,
-        ingredientKey,
-        // Вага пачки й КБЖВ теж: саме через їх відсутність відповідь
-        // спільноти досі була біднішою за відповідь Open Food Facts.
-        amount: product.amount,
-        unit: product.unit,
-        nutrition: product.nutrition,
-      },
-      userId,
-    );
-  } catch {
-    /* довідник спільноти — приємний бонус, а не умова роботи */
-  }
-}
-
-/**
- * Картка, яку людина заповнила руками.
- *
- * На відміну від teachBarcode, пише завжди: у довіднику міг лежати бідний
- * запис із чека — лише назва й продукт, — а тут щойно переписали з пачки
- * вагу й харчову цінність. Мовчки викинути це було б знущанням.
- */
-export async function saveProductCard(
-  product: ProductInfo,
-  ingredientKey: string,
-  userId?: string,
-): Promise<void> {
-  try {
-    await saveBarcodeCard(
-      {
-        barcode: product.barcode,
-        name: product.name,
-        brand: product.brand,
-        image: product.image,
-        ingredientKey,
-        amount: product.amount,
-        unit: product.unit,
-        nutrition: product.nutrition,
-      },
-      userId,
-    );
-  } catch {
-    /* довідник спільноти — приємний бонус, а не умова роботи */
-  }
-}
-
-/**
- * Те саме, але для рядка чека.
- *
- * Окремий вхід, бо в чеку немає ані бренду, ані фото — лише код товару й
- * касова назва. Зате підказка звідти нічим не гірша: людина щойно тримала
- * цей товар у руках і сама сказала, що це таке.
- */
-export async function teachReceiptCode(
-  barcode: string,
-  name: string,
-  ingredientKey: string,
-): Promise<void> {
-  try {
-    await cacheBarcode({ barcode, name, ingredientKey });
-  } catch {
-    /* довідник спільноти — приємний бонус, а не умова роботи */
-  }
-}
-
-async function lookupInOpenFoodFacts(barcode: string): Promise<ProductInfo> {
-  const fallback: ProductInfo = {
-    barcode,
-    name: `Товар ${barcode}`,
-    ingredient: null,
-    source: "unknown",
-  };
-
-  try {
-    const url =
-      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json` +
-      `?fields=product_name,product_name_uk,product_name_ru,generic_name,generic_name_uk,` +
-      `brands,image_small_url,categories_tags,quantity,product_quantity,` +
-      `product_quantity_unit,nutriments`;
-
-    const res = await fetch(url, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return fallback;
-
-    const json = (await res.json()) as {
-      status?: number;
-      product?: {
-        product_name?: string;
-        product_name_uk?: string;
-        product_name_ru?: string;
-        generic_name?: string;
-        generic_name_uk?: string;
-        brands?: string;
-        image_small_url?: string;
-        categories_tags?: string[];
-        quantity?: string;
-        product_quantity?: number | string;
-        product_quantity_unit?: string;
-        nutriments?: Record<string, unknown>;
-      };
-    };
-
-    const p = json.product;
-    if (!p) return fallback;
-
-    const name =
-      p.product_name_uk?.trim() ||
-      p.product_name?.trim() ||
-      p.product_name_ru?.trim() ||
-      fallback.name;
-
-    /*
-     * Зіставляємо в три заходи. Назва на етикетці — маркетинговий текст
-     * («Молочна ріка Особлива»), тож коли вона нічого не дала, пробуємо
-     * generic_name — це рядок, де виробник пише, що це насправді
-     * («сир кисломолочний»). Категорії останні: вони структуровані й тому
-     * найнадійніші, але надто загальні, щоб починати з них.
-     */
-    const generic = p.generic_name_uk?.trim() || p.generic_name?.trim();
-    const ingredient =
-      findIngredient(name) ??
-      (generic ? findIngredient(generic) : null) ??
-      findIngredientByCategory(p.categories_tags ?? []);
-
-    return {
-      barcode,
-      name,
-      brand: p.brands?.split(",")[0]?.trim(),
-      image: p.image_small_url,
-      ingredient,
-      nutrition: parseNutriments(p.nutriments),
-      ...parsePackSize(p.quantity, p.product_quantity, p.product_quantity_unit),
-      source: "openfoodfacts",
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-/**
- * Розмір упаковки з етикетки: «500 г», «1 л».
- *
- * Спершу беремо машинні поля product_quantity + product_quantity_unit, бо
- * вони вже нормалізовані. Якщо їх немає — розбираємо людський рядок quantity
- * тим самим парсером, що й кількості в рецептах.
- *
- * Абсурдні значення відкидаємо: у базі трапляється вага в 0 або 50 кг, і
- * підставити таке в комору гірше, ніж не підставити нічого.
- */
-function parsePackSize(
-  quantity: string | undefined,
-  productQuantity: number | string | undefined,
-  productQuantityUnit: string | undefined,
-): { amount?: number; unit?: Unit } {
-  const sane = (amount: number, unit: Unit) =>
-    amount > 0 && amount <= 10_000 ? { amount: Math.round(amount * 100) / 100, unit } : {};
-
-  const machine = Number(productQuantity);
-  if (Number.isFinite(machine) && machine > 0) {
-    const raw = (productQuantityUnit ?? "g").toLowerCase();
-    const unit: Unit | null = raw === "g" ? "g" : raw === "ml" ? "ml" : null;
-    if (unit) return sane(machine, unit);
-  }
-
-  const parsed = parseQty(quantity);
-  if (parsed?.amount != null && parsed.unit !== "taste") return sane(parsed.amount, parsed.unit);
-  return {};
-}
-
-/**
- * Витягує КБЖВ на 100 г з відповіді Open Food Facts.
- *
- * Дані заповнюють самі користувачі бази, тож поля бувають відсутні або
- * абсурдні. Беремо лише те, що схоже на правду: калорійність вище 900 на
- * 100 г неможлива фізично (чистий жир — 900), тож такий запис відкидаємо
- * цілком, ніж підсунемо в рахунок сміття.
- */
-function parseNutriments(raw: Record<string, unknown> | undefined): Nutrition | undefined {
-  if (!raw) return undefined;
-
-  const num = (key: string): number | null => {
-    const value = raw[key];
-    const n = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(n) && n >= 0 ? n : null;
-  };
-
-  // Якщо ккал немає, але є кДж — переводимо (1 ккал = 4,184 кДж).
-  const kj = num("energy-kj_100g");
-  const kcal = num("energy-kcal_100g") ?? (kj != null ? kj / 4.184 : null);
-  if (kcal == null || kcal > 900) return undefined;
-
-  const protein = num("proteins_100g") ?? 0;
-  const fat = num("fat_100g") ?? 0;
-  const carbs = num("carbohydrates_100g") ?? 0;
-
-  // Сума макронутрієнтів не може перевищувати 100 г у 100 г продукту.
-  if (protein + fat + carbs > 105) return undefined;
-
+  const draft = res.draft;
+  const known = res.hit && "typeKey" in res.hit.target;
+  const typeKey = res.typeKey ?? (draft?.typeKey || undefined);
   return {
-    kcal: Math.round(kcal),
-    protein: Math.round(protein * 10) / 10,
-    fat: Math.round(fat * 10) / 10,
-    carbs: Math.round(carbs * 10) / 10,
+    barcode,
+    name: draft?.name?.trim() || (known && typeKey ? typeOf(typeKey)?.label ?? fallbackName : fallbackName),
+    brand: draft?.brand,
+    image: draft?.image,
+    ingredient: typeOf(typeKey),
+    nutrition: draft?.nutrition,
+    ...(draft?.packAmount != null && draft.packUnit ? { amount: draft.packAmount, unit: draft.packUnit } : {}),
+    source: known ? "community" : draft?.source === "off" ? "openfoodfacts" : "unknown",
+    resolution: res,
   };
 }
 
-/** Чи підтримує браузер нативний BarcodeDetector (Chrome на Android). */
+/**
+ * Пошук товару за штрихкодом — обгортка над resolveBarcode у старій формі.
+ *
+ * Порядок той самий, що в B1: кеш стору → спільна база → Open Food Facts.
+ * Український ринок OFF майже не покриває (коди 482… там здебільшого
+ * відсутні), тож відповідь спільноти для них єдина. Нічого не пише.
+ */
+export async function lookupBarcode(barcode: string, cache?: CatalogCache): Promise<ProductInfo> {
+  try {
+    return productInfoFromResult(barcode, await resolveBarcode(barcode, catalogDeps(cache)));
+  } catch {
+    return { barcode, name: `Товар ${barcode}`, ingredient: null, source: "unknown" };
+  }
+}
+
+/** Чи є в браузері нативний BarcodeDetector узагалі (Chrome на Android). */
 export function hasNativeDetector(): boolean {
   return typeof window !== "undefined" && "BarcodeDetector" in window;
+}
+
+/*
+ * Скільки чекати на список форматів. Відповідь приходить майже миттєво, а
+ * якщо ні — щось із платформою не так, і надійніше одразу взяти ZXing, ніж
+ * тримати людину перед камерою, яка нічого не шукає.
+ */
+const NATIVE_FORMATS_TIMEOUT_MS = 1500;
+
+/**
+ * Чи прочитає нативний BarcodeDetector усе, що ми просимо.
+ *
+ * Сама наявність класу нічого не гарантує: він буває й там, де платформа
+ * потрібного формату не вміє, і тоді detect() просто завжди повертає
+ * порожньо — сканер виглядає живим, але не спрацює ніколи. Тому вимагаємо
+ * кожен формат зі списку, а інакше йдемо в ZXing, який вміє все сам.
+ */
+export async function nativeDetectorSupports(formats: readonly string[]): Promise<boolean> {
+  if (!hasNativeDetector()) return false;
+  const ctor = (window as unknown as { BarcodeDetector: { getSupportedFormats?: () => Promise<string[]> } })
+    .BarcodeDetector;
+  if (typeof ctor.getSupportedFormats !== "function") return false;
+  try {
+    const supported = await Promise.race([
+      ctor.getSupportedFormats(),
+      new Promise<string[]>((resolve) => setTimeout(() => resolve([]), NATIVE_FORMATS_TIMEOUT_MS)),
+    ]);
+    return formats.length > 0 && formats.every((format) => supported.includes(format));
+  } catch {
+    return false;
+  }
 }
 
 export const BARCODE_FORMATS = [

@@ -4,10 +4,10 @@ import { getSupabase } from "./client";
 import type {
   AppNotification,
   CookEvent,
+  Course,
   Family,
   FamilyMember,
   IngredientDef,
-  Nutrition,
   PantryItem,
   PlanSlot,
   Profile,
@@ -42,7 +42,10 @@ interface RecipeRow {
   ingredients: RecipeIngredient[] | null;
   steps: RecipeStep[] | null;
   source_id: string | null;
+  course: string | null;
   created_at: string;
+  /** Ставить тригер recipes_touch — за ним видно, чи дійшла до бази локальна правка. */
+  updated_at: string;
   likes?: number;
   saves?: number;
   cooks?: number;
@@ -57,10 +60,17 @@ function numberOrUndefined(value: number | string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** Рядок комори так, як він лежить у базі. */
+/**
+ * Рядок комори так, як він лежить у базі (після pantry-receipt-name.sql і
+ * pantry-products.sql): власний id, власник, картка товару й сирий текст каси.
+ */
 interface PantryRow {
+  id: string;
+  user_id: string;
   ingredient_key: string;
+  product_id: string | null;
   label: string | null;
+  receipt_name: string | null;
   amount: number | string | null;
   unit: string | null;
   qty: string | null;
@@ -68,6 +78,7 @@ interface PantryRow {
   added_at: string;
   expires_at: string | null;
   price_per_gram: number | string | null;
+  updated_at: string | null;
 }
 
 /**
@@ -83,8 +94,12 @@ interface PantryRow {
  * додати колонку в тип і забути тут більше не вийде — не збереться.
  */
 const PANTRY_COLUMNS = {
+  id: true,
+  user_id: true,
   ingredient_key: true,
+  product_id: true,
   label: true,
+  receipt_name: true,
   amount: true,
   unit: true,
   qty: true,
@@ -92,9 +107,70 @@ const PANTRY_COLUMNS = {
   added_at: true,
   expires_at: true,
   price_per_gram: true,
+  updated_at: true,
 } satisfies Record<keyof PantryRow, true>;
 
 export const PANTRY_SELECT = Object.keys(PANTRY_COLUMNS).join(",");
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Справжній uuid — те, що колонка id прийме. Тимчасові «legacy:<key>» (рядки,
+ * збережені до I4, які ще не бачили знімка бази) сюди не проходять: у базу вони
+ * не пишуться ніколи, а один такий у пачці зробив би 22P02 на весь чек.
+ */
+export const isUuid = (value: unknown): value is string =>
+  typeof value === "string" && UUID_SHAPE.test(value);
+
+/** Рядок бази → рядок комори. Числа з numeric PostgREST віддає рядками. */
+export function rowToPantryItem(row: PantryRow): PantryItem {
+  return {
+    id: row.id,
+    key: row.ingredient_key,
+    productId: row.product_id ?? undefined,
+    ownerId: row.user_id,
+    label: row.label ?? undefined,
+    receiptName: row.receipt_name ?? undefined,
+    amount: numberOrUndefined(row.amount),
+    unit: (row.unit as PantryItem["unit"]) ?? undefined,
+    qty: row.qty ?? undefined,
+    addedAt: row.added_at,
+    expiresAt: row.expires_at ?? undefined,
+    barcode: row.barcode ?? undefined,
+    pricePerGram: numberOrUndefined(row.price_per_gram),
+    updatedAt: row.updated_at ?? undefined,
+  };
+}
+
+/**
+ * Рядок комори для upsert.
+ *
+ * Власник — `ownerId`, а не той, хто зараз править. Старий ключ «людина +
+ * тип» робив із правки чужого рядка другу копію під своїм user_id; тепер
+ * тригер pantry_items_before_update однаково лишає власника, але й запит
+ * мусить казати правду — інакше RLS-перевірка вставки дивилась би не на того.
+ *
+ * Усі колонки завжди на місці (порожнє — null): upsert пише лише передані, і
+ * прибраний строк чи назва без ключа лишились би в базі старими. updated_at не
+ * шлемо — його ставить pantry_items_touch.
+ */
+export function pantryToRow(userId: string, item: PantryItem) {
+  return {
+    id: item.id,
+    user_id: item.ownerId ?? userId,
+    ingredient_key: item.key,
+    product_id: isUuid(item.productId) ? item.productId : null,
+    label: item.label ?? null,
+    receipt_name: item.receiptName ?? null,
+    amount: item.amount ?? null,
+    unit: item.unit ?? null,
+    qty: item.qty ?? null,
+    barcode: item.barcode ?? null,
+    added_at: item.addedAt,
+    expires_at: item.expiresAt ?? null,
+    price_per_gram: item.pricePerGram ?? null,
+  };
+}
 
 /** Рядок списку покупок так, як він лежить у базі. */
 interface ShoppingRow {
@@ -170,17 +246,84 @@ interface ProfileRow {
   followers?: number;
 }
 
-const RECIPE_COLUMNS =
-  "id,author_id,title,description,emoji,gradient,image_url,cuisine,meal_types,moods," +
-  "tags,time_min,difficulty,servings,kcal,cost_level,ingredients,steps,source_id," +
-  "created_at,likes,saves,cooks,rating_sum,rating_count";
+/**
+ * Колонки рецепта для select — за тим самим правилом, що й у комори.
+ *
+ * Тут воно теж коштувало реального бага. Частину страви (course) додали в
+ * таблицю, у тип і у форму, а в текстовий перелік колонок — ні; і в запис
+ * теж. Людина обирала «гарнір», бачила його до перезапуску, а база про нього
+ * так і не дізналась: у всіх рецептів course лишався порожнім. Тепер забута
+ * колонка — це помилка збірки, а не тиха втрата правки.
+ */
+const RECIPE_COLUMNS = {
+  id: true,
+  author_id: true,
+  title: true,
+  description: true,
+  emoji: true,
+  gradient: true,
+  image_url: true,
+  cuisine: true,
+  meal_types: true,
+  moods: true,
+  tags: true,
+  time_min: true,
+  difficulty: true,
+  servings: true,
+  kcal: true,
+  cost_level: true,
+  ingredients: true,
+  steps: true,
+  source_id: true,
+  course: true,
+  created_at: true,
+  updated_at: true,
+  likes: true,
+  saves: true,
+  cooks: true,
+  rating_sum: true,
+  rating_count: true,
+} satisfies Record<keyof RecipeRow, true>;
+
+export const RECIPE_SELECT = Object.keys(RECIPE_COLUMNS).join(",");
+
+/**
+ * Допустимі частини страви. У базі на course немає check-обмеження — тож
+ * сторожем виступає код: у колонку йде лише те, що застосунок уміє прочитати.
+ * `satisfies` не дасть додати нову частину в тип і забути її тут.
+ */
+const COURSES = {
+  whole: true,
+  main: true,
+  side: true,
+  soup: true,
+  salad: true,
+  snack: true,
+  sauce: true,
+  dessert: true,
+  drink: true,
+} satisfies Record<Course, true>;
+
+export function isCourse(value: unknown): value is Course {
+  // hasOwnProperty, а не `in`: інакше «toString» теж зійшов би за частину страви.
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(COURSES, value);
+}
 
 /* ── Перетворення ─────────────────────────────────────────────────────── */
 
 const pair = (value: string[] | null, fallback: [string, string]): [string, string] =>
   value && value.length >= 2 ? [value[0], value[1]] : fallback;
 
-export function rowToRecipe(row: RecipeRow, myId?: string | null): Recipe {
+/**
+ * Рецепт, прочитаний з бази, разом із часом останнього запису в неї.
+ *
+ * Окремим типом, а не полем Recipe: час потрібен лише звірці з локальними
+ * правками, які ще не долетіли (див. mergeRecipes у sync.ts), а решта
+ * застосунку про нього знати не мусить.
+ */
+export type StampedRecipe = Recipe & { updatedAt?: string };
+
+export function rowToRecipe(row: RecipeRow, myId?: string | null): StampedRecipe {
   return {
     id: row.id,
     authorId: row.author_id,
@@ -198,9 +341,12 @@ export function rowToRecipe(row: RecipeRow, myId?: string | null): Recipe {
     servings: row.servings,
     kcal: row.kcal ?? undefined,
     costLevel: (row.cost_level as 1 | 2 | 3) ?? 1,
+    // Порожнє або незнайоме значення — «не вказано»: частину виведе courseOf.
+    course: isCourse(row.course) ? row.course : undefined,
     ingredients: row.ingredients ?? [],
     steps: row.steps ?? [],
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
     sourceId: row.source_id ?? undefined,
     mine: myId ? row.author_id === myId : undefined,
     stats: {
@@ -249,6 +395,11 @@ export function recipeToRow(recipe: Recipe, authorId: string) {
     ingredients: recipe.ingredients,
     steps: recipe.steps,
     source_id: recipe.sourceId ?? null,
+    /*
+     * null, а не пропуск ключа: upsert пише лише передані колонки, і без
+     * course у рядку прибрана частина страви лишалась би в базі старою.
+     */
+    course: isCourse(recipe.course) ? recipe.course : null,
   };
 }
 
@@ -282,7 +433,7 @@ export async function fetchCommunity(
   const [recipesRes, profilesRes] = await Promise.all([
     sb
       .from("recipes_with_stats")
-      .select(RECIPE_COLUMNS)
+      .select(RECIPE_SELECT)
       .order("created_at", { ascending: false })
       .limit(limit),
     sb.from("profiles_with_counts").select("id,handle,name,emoji,gradient,bio,city,avatar_url,followers"),
@@ -295,16 +446,6 @@ export async function fetchCommunity(
     recipes: (recipesRes.data as unknown as RecipeRow[]).map((r) => rowToRecipe(r, myId)),
     profiles: (profilesRes.data as unknown as ProfileRow[]).map(rowToProfile),
   };
-}
-
-/** Один продукт на ingredient_key: перемагає той, кого додали раніше. */
-function dedupePantry(items: PantryItem[]): PantryItem[] {
-  const byKey = new Map<string, PantryItem>();
-  for (const item of items) {
-    const seen = byKey.get(item.key);
-    if (!seen || item.addedAt < seen.addedAt) byKey.set(item.key, item);
-  }
-  return [...byKey.values()];
 }
 
 /**
@@ -377,28 +518,14 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
       return { recipeId: row.recipe_id, at: row.cooked_at };
     }) as CookEvent[],
     following: (follows.data ?? []).map((r) => (r as { followee_id: string }).followee_id),
-    // Комора сімʼї — обʼєднання комор учасників. Один продукт могли додати
-    // двоє, тож лишаємо найраніший запис на кожен ingredient_key.
-    pantry: dedupePantry(
-      (pantry.data ?? []).map((r) => {
-        // Через unknown, бо select зібрано з PANTRY_COLUMNS, а не заданий
-        // рядковим літералом — вивести форму рядка supabase-js уже не може.
-        const row = r as unknown as PantryRow;
-        // amount приїжджає з numeric — postgrest віддає його рядком.
-        const amount = numberOrUndefined(row.amount);
-        return {
-          key: row.ingredient_key,
-          label: row.label ?? undefined,
-          amount,
-          unit: (row.unit as PantryItem["unit"]) ?? undefined,
-          qty: row.qty ?? undefined,
-          barcode: row.barcode ?? undefined,
-          addedAt: row.added_at,
-          expiresAt: row.expires_at ?? undefined,
-          pricePerGram: numberOrUndefined(row.price_per_gram),
-        };
-      }),
-    ),
+    /*
+     * Комора сімʼї — просте обʼєднання рядків учасників, без жодного зведення:
+     * молоко у двох людей — це дві справжні пачки, а не дубль. (Колись тут
+     * лишався один рядок на тип, бо ключем була пара «людина + тип».)
+     * Через unknown, бо select зібрано з PANTRY_COLUMNS, а не заданий рядковим
+     * літералом — вивести форму рядка supabase-js уже не може.
+     */
+    pantry: ((pantry.data ?? []) as unknown as PantryRow[]).map(rowToPantryItem),
     // Список покупок у сімʼї спільний, і зводити рядки не треба: дві пачки
     // молока, додані двома людьми, — це не помилка, а два рядки, за якими
     // видно, що обоє про нього подумали.
@@ -420,18 +547,74 @@ export async function fetchUserState(userId: string, memberIds: string[] = [user
 
 /* ── Запис ────────────────────────────────────────────────────────────── */
 
-export async function upsertRecipe(recipe: Recipe, authorId: string) {
+/**
+ * Записує рядок рецепта.
+ *
+ * `withImage: false` — без колонки image_url: upsert пише лише передані
+ * колонки, тож фото в базі лишається тим, яке там є. Так пише sync — фото
+ * в нього окремим кроком. Інакше пристрій зі старою копією рецепта (скажімо,
+ * ноутбук, де фото змінили з телефона) правкою кроку повертав би в базу
+ * посилання на вже прибраний файл — і порожня рамка була б у всіх.
+ */
+export async function upsertRecipe(
+  recipe: Recipe,
+  authorId: string,
+  { withImage = true }: { withImage?: boolean } = {},
+) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("recipes").upsert(recipeToRow(recipe, authorId));
+  const row = recipeToRow(recipe, authorId);
+  const { image_url: _image, ...withoutImage } = row;
+  const { error } = await sb.from("recipes").upsert(withImage ? row : withoutImage);
   if (error) throw error;
 }
 
-export async function deleteRecipe(id: string) {
+/**
+ * Яке фото зараз записане в рядку рецепта; null — без фото або рядка немає.
+ *
+ * Читаємо з бази, а не з локальної копії: та могла застаріти (фото змінили
+ * на іншому пристрої), і тоді прибиралося б не те — а справжнє старе фото
+ * лишалось би в сховищі сиротою.
+ */
+export async function getRecipeImage(recipeId: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("recipes")
+    .select("image_url")
+    .eq("id", recipeId)
+    .limit(1);
+  if (error) throw error;
+  return (data?.[0] as { image_url: string | null } | undefined)?.image_url ?? null;
+}
+
+/**
+ * Дописує в уже збережений рецепт посилання на фото.
+ *
+ * Окремим записом, бо рядок рецепта йде в базу раніше за фото: сам текст
+ * важить кілобайти й відлітає за мить, а знімок вантажиться секундами — і
+ * саме в цей час iOS любить приспати застосунок.
+ */
+export async function setRecipeImage(recipeId: string, url: string | null) {
   const sb = getSupabase();
   if (!sb) return;
-  const { error } = await sb.from("recipes").delete().eq("id", id);
+  const { error } = await sb.from("recipes").update({ image_url: url }).eq("id", recipeId);
   if (error) throw error;
+}
+
+/**
+ * Видаляє рецепт і повертає фото, яке було в його рядку, — щоб прибрати файл.
+ *
+ * Фото беремо з самої відповіді на видалення, а не з локальної копії: та могла
+ * застаріти, а окреме читання перед видаленням — зайвий запит і зайва мить,
+ * за яку iOS встигає приспати застосунок. Рядка вже не було — null.
+ */
+export async function deleteRecipe(id: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.from("recipes").delete().eq("id", id).select("image_url");
+  if (error) throw error;
+  return (data?.[0] as { image_url: string | null } | undefined)?.image_url ?? null;
 }
 
 /** Вмикає/вимикає запис у таблиці-звʼязці (likes, saves, wishlist, dismissed). */
@@ -488,47 +671,24 @@ export async function setFollow(followerId: string, followeeId: string, on: bool
   if (error) throw error;
 }
 
+/** Один рядок комори — за його id. */
 export async function upsertPantryItem(userId: string, item: PantryItem) {
-  const sb = getSupabase();
-  if (!sb) return;
-  const { error } = await sb.from("pantry_items").upsert({
-    user_id: userId,
-    ingredient_key: item.key,
-    label: item.label ?? null,
-    amount: item.amount ?? null,
-    unit: item.unit ?? null,
-    qty: item.qty ?? null,
-    barcode: item.barcode ?? null,
-    added_at: item.addedAt,
-    expires_at: item.expiresAt ?? null,
-    price_per_gram: item.pricePerGram ?? null,
-  });
-  if (error) throw error;
+  await upsertPantryItems(userId, [item]);
 }
 
 /**
- * Записує одразу кілька продуктів — так у комору лягає цілий чек.
+ * Записує рядки комори за їхнім id — і один, і цілий чек одним запитом.
  *
- * Окремо від upsertPantryItem, бо двадцять позицій двадцятьма запитами — це
- * і двадцять кругів до бази, і двадцять подій realtime у кожного в сімʼї.
+ * Одним, бо двадцять позицій двадцятьма запитами — це і двадцять кругів до
+ * бази, і двадцять подій realtime у кожного в сімʼї. `onConflict: "id"`:
+ * рядок упізнається лише за власним id, тож дві пачки одного типу — два рядки.
+ * Тимчасові «legacy:» id тихо пропускаємо (sync їх і так не шле).
  */
-export async function upsertPantryItems(userId: string, items: PantryItem[]) {
+export async function upsertPantryItems(userId: string, items: readonly PantryItem[]) {
   const sb = getSupabase();
-  if (!sb || items.length === 0) return;
-  const { error } = await sb.from("pantry_items").upsert(
-    items.map((item) => ({
-      user_id: userId,
-      ingredient_key: item.key,
-      label: item.label ?? null,
-      amount: item.amount ?? null,
-      unit: item.unit ?? null,
-      qty: item.qty ?? null,
-      barcode: item.barcode ?? null,
-      added_at: item.addedAt,
-      expires_at: item.expiresAt ?? null,
-      price_per_gram: item.pricePerGram ?? null,
-    })),
-  );
+  const rows = items.filter((item) => isUuid(item.id)).map((item) => pantryToRow(userId, item));
+  if (!sb || rows.length === 0) return;
+  const { error } = await sb.from("pantry_items").upsert(rows, { onConflict: "id" });
   if (error) throw error;
 }
 
@@ -563,8 +723,35 @@ export async function deleteShoppingItems(
   if (error) throw error;
 }
 
-/** Прибирає продукт з комори — і з тієї частини, яку додав хтось із сімʼї. */
-export async function deletePantryItem(
+/**
+ * Прибирає рядки комори за id — зокрема ті, які додав хтось інший із сімʼї.
+ *
+ * Обмеження по user_id тут не для пошуку, а щоб запит не міг зачепити нічого
+ * поза сімʼєю. Шматками по 100: довгий `in (…)` не влазить в адресу запиту.
+ */
+export async function deletePantryItems(
+  userId: string,
+  ids: readonly string[],
+  memberIds: string[] = [userId],
+) {
+  const sb = getSupabase();
+  const valid = [...new Set(ids.filter(isUuid))];
+  if (!sb || valid.length === 0) return;
+  for (let i = 0; i < valid.length; i += 100) {
+    const { error } = await sb
+      .from("pantry_items")
+      .delete()
+      .in("user_id", memberIds.length ? memberIds : [userId])
+      .in("id", valid.slice(i, i + 100));
+    if (error) throw error;
+  }
+}
+
+/**
+ * «Базове» вимкнули: прибирає з комори сімʼї всі рядки рівно цього типу.
+ * Різновиди не чіпає — вимкнена «Олія» не забирає «Олію оливкову».
+ */
+export async function deletePantryType(
   userId: string,
   key: string,
   memberIds: string[] = [userId],
@@ -644,6 +831,36 @@ export async function updateProfile(userId: string, patch: Partial<Profile>) {
 
 /* ── Сховище фото ─────────────────────────────────────────────────────── */
 
+const RECIPE_IMAGES_BUCKET = "recipe-images";
+
+/**
+ * Шлях нового фото у сховищі: щоразу новий, з часом у назві.
+ *
+ * Раніше шлях був один на рецепт — `<user>/<recipe>.jpg` — і заміна фото
+ * перезаписувала файл під тим самим посиланням. Посилання в рецепті від
+ * цього не мінялось, тож телефон (кеш браузера на годину) і CDN Supabase
+ * далі віддавали старий знімок. Після перезапуску це виглядало як правка,
+ * що не збереглась. Supabase і сам радить для змінних файлів новий шлях:
+ * хвіст `?v=` його Smart CDN може й проігнорувати.
+ */
+export function recipeImageObjectPath(userId: string, recipeId: string, now = Date.now()): string {
+  return `${userId}/${recipeId}-${now.toString(36)}.jpg`;
+}
+
+/**
+ * Шлях обʼєкта в бакеті за публічним посиланням — лише якщо фото лежить у
+ * власній теці користувача. Чуже, стороннє чи data:URL — null: такого не
+ * видаляємо ніколи (та й політика сховища не дала б).
+ */
+export function recipeImagePath(url: string | null | undefined, userId: string): string | null {
+  if (!url || !/^https?:\/\//.test(url)) return null;
+  const marker = `/storage/v1/object/public/${RECIPE_IMAGES_BUCKET}/`;
+  const at = url.indexOf(marker);
+  if (at === -1) return null;
+  const path = decodeURIComponent(url.slice(at + marker.length).split(/[?#]/)[0]);
+  return path.startsWith(`${userId}/`) && !path.includes("..") ? path : null;
+}
+
 /** Завантажує data:URL у бакет recipe-images і повертає публічне посилання. */
 export async function uploadRecipeImage(
   userId: string,
@@ -654,15 +871,37 @@ export async function uploadRecipeImage(
   if (!sb) throw new Error("Supabase не налаштовано");
 
   const blob = await (await fetch(dataUrl)).blob();
-  const path = `${userId}/${recipeId}.jpg`;
+  const path = recipeImageObjectPath(userId, recipeId);
 
-  const { error } = await sb.storage.from("recipe-images").upload(path, blob, {
+  const { error } = await sb.storage.from(RECIPE_IMAGES_BUCKET).upload(path, blob, {
     contentType: blob.type || "image/jpeg",
+    // Файл під цим шляхом більше ніколи не зміниться — хай кешується надовго.
+    cacheControl: "31536000",
     upsert: true,
   });
   if (error) throw error;
 
-  return sb.storage.from("recipe-images").getPublicUrl(path).data.publicUrl;
+  return sb.storage.from(RECIPE_IMAGES_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+/**
+ * Прибирає фото, яке рецепт більше не показує.
+ *
+ * Лише з власної теки і лише якщо на це посилання не спирається жоден інший
+ * видимий рецепт — скажімо, копія, що зберегла чужий знімок. Помилку кидаємо:
+ * мовчати вирішує той, хто кличе, — для нього це прибирання, а не збереження.
+ */
+export async function deleteRecipeImageIfUnused(userId: string, url: string): Promise<void> {
+  const sb = getSupabase();
+  const path = recipeImagePath(url, userId);
+  if (!sb || !path) return;
+
+  const { data, error } = await sb.from("recipes").select("id").eq("image_url", url).limit(1);
+  if (error) throw error;
+  if (data && data.length > 0) return;
+
+  const { error: removeError } = await sb.storage.from(RECIPE_IMAGES_BUCKET).remove([path]);
+  if (removeError) throw removeError;
 }
 
 /** Масове очищення — для «повернути приховані» та «очистити план». */
@@ -701,13 +940,13 @@ export async function clearPlan(userId: string, memberIds: string[] = [userId]) 
 export async function fetchMyRecipes(
   userId: string,
   authorIds: string[] = [userId],
-): Promise<Recipe[]> {
+): Promise<StampedRecipe[]> {
   const sb = getSupabase();
   if (!sb) return [];
   const ids = authorIds.length ? authorIds : [userId];
   const { data, error } = await sb
     .from("recipes_with_stats")
-    .select(RECIPE_COLUMNS)
+    .select(RECIPE_SELECT)
     .in("author_id", ids)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -929,7 +1168,7 @@ export async function fetchProfilesByIds(ids: string[]): Promise<Profile[]> {
 
 /* ── Продукти, дописані людьми ────────────────────────────────────────── */
 
-interface CustomIngredientRow {
+export interface CustomIngredientRow {
   key: string;
   label: string;
   emoji: string;
@@ -943,6 +1182,12 @@ interface CustomIngredientRow {
   protein: number | string | null;
   fat: number | string | null;
   carbs: number | string | null;
+  /** Загальніший тип (supabase/ingredient-parents.sql). */
+  parent_key: string | null;
+  /** Номер правки: росте з кожною зміною рядка, потрібен вікі-правкам (I3). */
+  version: number;
+  /** I6 (community-merge.sql): цей тип обʼєднали з іншим — ключ став псевдонімом. */
+  merged_into: string | null;
 }
 
 const CUSTOM_INGREDIENT_COLUMNS = {
@@ -959,31 +1204,45 @@ const CUSTOM_INGREDIENT_COLUMNS = {
   protein: true,
   fat: true,
   carbs: true,
+  parent_key: true,
+  version: true,
+  merged_into: true,
 } satisfies Record<keyof CustomIngredientRow, true>;
 
-const CUSTOM_INGREDIENT_SELECT = Object.keys(CUSTOM_INGREDIENT_COLUMNS).join(",");
+/** Експортовано для npm run db:check: колонки мусять існувати в базі. */
+export const CUSTOM_INGREDIENT_SELECT = Object.keys(CUSTOM_INGREDIENT_COLUMNS).join(",");
 
-function rowToIngredient(row: CustomIngredientRow): IngredientDef {
-  const kcal = numberOrUndefined(row.kcal);
+/**
+ * Рядок custom_ingredients → опис типу. Спільний для читання каталогу,
+ * відповіді save_custom_ingredient і події realtime: там числа — числами, а
+ * колонок, яких у старішій базі ще немає, може й не бути, тож усе через `??`.
+ */
+export function rowToIngredient(
+  row: Partial<CustomIngredientRow> & Pick<CustomIngredientRow, "key" | "label">,
+): IngredientDef {
+  const kcal = numberOrUndefined(row.kcal ?? null);
   return {
     key: row.key,
     label: row.label,
-    emoji: row.emoji,
-    cat: row.cat as IngredientDef["cat"],
+    emoji: row.emoji || "🥫",
+    cat: (row.cat ?? "other") as IngredientDef["cat"],
     aliases: row.aliases ?? [],
-    staple: row.staple,
-    gramsPerPiece: numberOrUndefined(row.grams_per_piece),
-    gramsPerCup: numberOrUndefined(row.grams_per_cup),
-    defaultUnit: row.default_unit as Unit,
+    staple: row.staple ?? false,
+    gramsPerPiece: numberOrUndefined(row.grams_per_piece ?? null),
+    gramsPerCup: numberOrUndefined(row.grams_per_cup ?? null),
+    defaultUnit: (row.default_unit ?? "g") as Unit,
     nutrition:
       kcal != null
         ? {
             kcal,
-            protein: numberOrUndefined(row.protein) ?? 0,
-            fat: numberOrUndefined(row.fat) ?? 0,
-            carbs: numberOrUndefined(row.carbs) ?? 0,
+            protein: numberOrUndefined(row.protein ?? null) ?? 0,
+            fat: numberOrUndefined(row.fat ?? null) ?? 0,
+            carbs: numberOrUndefined(row.carbs ?? null) ?? 0,
           }
         : undefined,
+    ...(row.parent_key ? { parent: row.parent_key } : {}),
+    ...(row.merged_into ? { mergedInto: row.merged_into } : {}),
+    ...(row.version != null && Number.isFinite(Number(row.version)) ? { version: Number(row.version) } : {}),
   };
 }
 
@@ -1033,6 +1292,7 @@ export async function upsertCustomIngredient(def: IngredientDef, userId: string)
     protein: def.nutrition?.protein ?? null,
     fat: def.nutrition?.fat ?? null,
     carbs: def.nutrition?.carbs ?? null,
+    parent_key: def.parent ?? null,
     created_by: userId,
   });
   // 23505 — такий ключ уже є. Повторний запис того самого продукту (він
@@ -1040,84 +1300,60 @@ export async function upsertCustomIngredient(def: IngredientDef, userId: string)
   if (error && error.code !== "23505") throw error;
 }
 
-/* ── Спільний довідник штрихкодів ─────────────────────────────────────── */
+/**
+ * Дописує кілька власних типів — батьків раніше за різновиди.
+ *
+ * Запобіжник у базі (custom_ingredients_guard) не пустить різновид, чийого
+ * батька там ще немає: 23503. А створене без мережі якраз і приїжджає пачкою —
+ * «Кефір домашній», а за ним «Кефір домашній безлактозний». Паралельні
+ * запити лягали б у довільному порядку, тож тут — по одному, від найзагальнішого.
+ * Порядок рахуємо за самим списком, а не за реєстром: реєстр міг ще не
+ * отримати ці типи. Різновид, що однаково впав на 23503 (батько — чужий тип,
+ * який саме записує інший пристрій), пробуємо ще раз наприкінці.
+ *
+ * Помилка одного типу не зупиняє решту: перша кидається вже після всіх.
+ * `insert` — для перевірки в scripts/check-matching.mjs.
+ */
+export async function upsertCustomIngredientsInOrder(
+  defs: IngredientDef[],
+  userId: string,
+  insert: (def: IngredientDef, userId: string) => Promise<void> = upsertCustomIngredient,
+): Promise<void> {
+  const byKey = new Map(defs.map((def) => [def.key, def]));
+  const depth = (def: IngredientDef) => {
+    let n = 0;
+    const seen = new Set([def.key]);
+    for (let cur = def.parent; cur && byKey.has(cur) && !seen.has(cur); cur = byKey.get(cur)?.parent) {
+      seen.add(cur);
+      n += 1;
+    }
+    return n;
+  };
+  const ordered = [...defs].sort((a, b) => depth(a) - depth(b));
 
-export interface CachedBarcode {
-  barcode: string;
-  name: string;
-  brand?: string;
-  image?: string;
-  ingredientKey: string;
-  /** Вага або обʼєм упаковки — те, що написано на пачці. */
-  amount?: number;
-  unit?: Unit;
-  /** Харчова цінність на 100 г з етикетки саме цього товару. */
-  nutrition?: Nutrition;
+  const code = (error: unknown) =>
+    typeof error === "object" && error && "code" in error ? String((error as { code: unknown }).code) : "";
+  let failure: unknown = null;
+  const later: IngredientDef[] = [];
+
+  for (const def of ordered) {
+    try {
+      await insert(def, userId);
+    } catch (error) {
+      if (code(error) === "23503") later.push(def);
+      else failure ??= error;
+    }
+  }
+  for (const def of later) {
+    try {
+      await insert(def, userId);
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  if (failure) throw failure;
 }
 
-/**
- * Що спільнота вже знає про цей штрихкод.
- *
- * Open Food Facts майже не покриває український ринок: більшість кодів 482…
- * не мають там жодного запису. Тому те, що один раз вказав руками хтось із
- * користувачів, зберігається тут і працює для всіх наступних.
- */
-export async function fetchCachedBarcode(barcode: string): Promise<CachedBarcode | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
-
-  const { data, error } = await sb
-    .from("barcode_cache")
-    .select("barcode,name,brand,image_url,ingredient_key,amount,unit,kcal,protein,fat,carbs")
-    .eq("barcode", barcode)
-    .not("ingredient_key", "is", null)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  const row = data as {
-    barcode: string;
-    name: string;
-    brand: string | null;
-    image_url: string | null;
-    ingredient_key: string;
-    amount: number | string | null;
-    unit: string | null;
-    kcal: number | string | null;
-    protein: number | string | null;
-    fat: number | string | null;
-    carbs: number | string | null;
-  };
-
-  const kcal = numberOrUndefined(row.kcal);
-  return {
-    barcode: row.barcode,
-    name: row.name,
-    brand: row.brand ?? undefined,
-    image: row.image_url ?? undefined,
-    ingredientKey: row.ingredient_key,
-    amount: numberOrUndefined(row.amount),
-    unit: (row.unit as Unit) ?? undefined,
-    // Калорійність — те, з чого починається харчова цінність: без неї решта
-    // чисел ні про що не каже, тож і не збираємо їх наполовину.
-    nutrition:
-      kcal != null
-        ? {
-            kcal,
-            protein: numberOrUndefined(row.protein) ?? 0,
-            fat: numberOrUndefined(row.fat) ?? 0,
-            carbs: numberOrUndefined(row.carbs) ?? 0,
-          }
-        : undefined,
-  };
-}
-
-/**
- * Запамʼятовує, чим виявився товар.
- *
- * Політика таблиці дозволяє лише insert, не update: так один користувач не
- * може переписати чужу відповідь. Через це повторний запис того самого коду
- * очікувано конфліктує — і це не помилка, просто хтось нас випередив.
- */
 /* ── Підписки на пуш ──────────────────────────────────────────────────── */
 
 export interface PushSubscriptionRow {
@@ -1174,6 +1410,134 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
   if (!sb) return;
   const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", endpoint);
   if (error) throw error;
+}
+
+/* ── Будильник готування з сервера ────────────────────────────────────── */
+
+export interface TimerPush {
+  /** Придумує сам клієнт — щоб скасувати рядок, не чекаючи відповіді на запис. */
+  id: string;
+  userId: string;
+  fireAt: string;
+  title: string;
+  body: string;
+  url: string;
+  /**
+   * Адреса пуш-підписки цього пристрою: сервер дзвонить лише на неї, а не на
+   * всі пристрої акаунта. Базі вона має бути відома саме від імені того, хто
+   * пише, — інакше тригер timer_pushes_guard запис відхилить.
+   */
+  endpoint: string;
+}
+
+/**
+ * Скільки чекати базу з будильником.
+ *
+ * Сторінка готування шле запис і скасування строго по черзі, а fetch у
+ * supabase-js сам ніколи не здається: один запит, що завис на кухонному
+ * Wi-Fi, тримав би за собою й «паузу», аж поки будильник не продзвонить.
+ */
+const TIMER_PUSH_TIMEOUT_MS = 8000;
+
+/**
+ * Збій запису чи скасування будильника.
+ *
+ * `rejected` — база відповіла відмовою (4xx): рядка точно немає і не буде.
+ * Інакше (мережа, тайм-аут, 5xx) запит міг і дійти, лише відповідь
+ * загубилась, — тож записаний будильник доводиться вважати можливо живим.
+ */
+export class TimerPushError extends Error {
+  readonly rejected: boolean;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "TimerPushError";
+    this.rejected = status >= 400 && status < 500;
+  }
+}
+
+/**
+ * Ставить (або переставляє) будильник, який надішле сервер.
+ *
+ * Upsert за id: той самий будильник можна записати вдруге — скажімо, коли
+ * дозвіл на сповіщення дали вже після старту таймера, — і це не стане другим
+ * дзвінком. Помилку кидаємо: мовчати вирішує той, хто кличе.
+ */
+export async function scheduleTimerPush(push: TimerPush): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new TimerPushError("база не налаштована", 400);
+
+  const { error, status } = await sb
+    .from("timer_pushes")
+    .upsert(
+      {
+        id: push.id,
+        user_id: push.userId,
+        fire_at: push.fireAt,
+        title: push.title,
+        body: push.body,
+        url: push.url,
+        endpoint: push.endpoint,
+      },
+      { onConflict: "id" },
+    )
+    .abortSignal(AbortSignal.timeout(TIMER_PUSH_TIMEOUT_MS));
+  if (error) throw new TimerPushError(error.message, status);
+}
+
+/**
+ * Скасовує будильник. Рядка вже немає (сервер забрав) — не помилка.
+ *
+ * Без бази кидаємо, а не мовчимо: тихе «готово» прибрало б скасування з
+ * черги повторів, хоча рядок у базі лишився.
+ */
+export async function cancelTimerPush(id: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new TimerPushError("база не налаштована", 0);
+  const { error, status } = await sb
+    .from("timer_pushes")
+    .delete()
+    .eq("id", id)
+    .abortSignal(AbortSignal.timeout(TIMER_PUSH_TIMEOUT_MS));
+  if (error) throw new TimerPushError(error.message, status);
+}
+
+/**
+ * Власні будильники, що ще не настали, для однієї сторінки й одного пристрою.
+ *
+ * Сторінка готування шукає так «загублені» будильники: ті, про які вже не
+ * памʼятає жоден відкритий екран, — наприклад, після того як застосунок
+ * вивантажили разом зі сховищем. Чужих RLS не покаже.
+ *
+ * Саме цього пристрою (endpoint), а не всього акаунта: знайдене сторінка
+ * скасовує при першій дії з таймером. Без цієї умови ноутбук, на якому
+ * просто глянули наступний крок і закрили хрестиком, скасував би будильник
+ * телефона, що лежить заблокований біля плити, — а там, крім сервера,
+ * дзвонити нікому. Будильник, записаний на чужу чи колишню підписку, сюди й
+ * так дзвонити не міг би, тож губити тут нічого.
+ *
+ * endpoint у select коду не потрібен — він для npm run db:check: той звіряє
+ * колонки з select-ів цього файлу зі схемою, і так побачить базу, на якій
+ * timer-push.sql не перезапустили після появи колонки.
+ */
+export async function fetchTimerPushes(
+  url: string,
+  endpoint: string,
+): Promise<Array<{ id: string; fireAt: number }>> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error, status } = await sb
+    .from("timer_pushes")
+    .select("id,fire_at,endpoint")
+    .eq("url", url)
+    .eq("endpoint", endpoint)
+    .gt("fire_at", new Date().toISOString())
+    .abortSignal(AbortSignal.timeout(TIMER_PUSH_TIMEOUT_MS));
+  if (error) throw new TimerPushError(error.message, status);
+  return ((data ?? []) as Array<{ id: string; fire_at: string }>).map((row) => ({
+    id: row.id,
+    fireAt: Date.parse(row.fire_at),
+  }));
 }
 
 /* ── Коментарі до рецептів ────────────────────────────────────────────── */
@@ -1238,66 +1602,4 @@ export async function deleteComment(id: string): Promise<void> {
   if (!sb) return;
   const { error } = await sb.from("recipe_comments").delete().eq("id", id);
   if (error) throw error;
-}
-
-export async function cacheBarcode(item: CachedBarcode, userId?: string): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-
-  const { error } = await sb.from("barcode_cache").insert({
-    barcode: item.barcode,
-    name: item.name,
-    brand: item.brand ?? null,
-    image_url: item.image ?? null,
-    ingredient_key: item.ingredientKey,
-    amount: item.amount ?? null,
-    unit: item.unit ?? null,
-    kcal: item.nutrition?.kcal ?? null,
-    protein: item.nutrition?.protein ?? null,
-    fat: item.nutrition?.fat ?? null,
-    carbs: item.nutrition?.carbs ?? null,
-    taught_by: userId ?? null,
-  });
-
-  // 23505 — код уже в довіднику. Це не помилка: хтось устиг раніше, і його
-  // відповідь не гірша за нашу.
-  if (error && error.code !== "23505") throw error;
-}
-
-/**
- * Записує заповнену людиною картку — навіть якщо код у довіднику вже є.
- *
- * Саме «навіть якщо»: найчастіше там лежить бідний запис із чека, де відома
- * тільки назва й продукт. Людина щойно переписала з пачки вагу й КБЖВ, і
- * мовчки викинути це означало б попросити її про роботу задарма.
- *
- * Перезаписати чужу картку не вийде: політика доступу пускає лише автора
- * запису — або будь-кого, якщо автора не було (так виходять записи з чека).
- */
-export async function saveBarcodeCard(item: CachedBarcode, userId?: string): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-
-  const { error } = await sb.from("barcode_cache").upsert(
-    {
-      barcode: item.barcode,
-      name: item.name,
-      brand: item.brand ?? null,
-      image_url: item.image ?? null,
-      ingredient_key: item.ingredientKey,
-      amount: item.amount ?? null,
-      unit: item.unit ?? null,
-      kcal: item.nutrition?.kcal ?? null,
-      protein: item.nutrition?.protein ?? null,
-      fat: item.nutrition?.fat ?? null,
-      carbs: item.nutrition?.carbs ?? null,
-      taught_by: userId ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "barcode" },
-  );
-
-  // Чужу картку база не дасть перезаписати — і це правильно, а не помилка,
-  // про яку треба доповідати людині.
-  if (error && error.code !== "42501") throw error;
 }

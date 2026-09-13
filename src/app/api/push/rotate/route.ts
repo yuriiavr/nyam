@@ -55,6 +55,14 @@ export async function POST(request: Request): Promise<Response> {
   );
   if (error) return Response.json({ ok: false, reason: error.message }, { status: 500 });
 
+  // Будильники таймера адресовані конкретній підписці. Без перенесення на нову
+  // адресу вже заведений таймер задзвонив би в мертву — тобто ніде.
+  await sb
+    .from("timer_pushes")
+    .update({ endpoint })
+    .eq("endpoint", old)
+    .eq("user_id", previous.user_id);
+
   await sb.from("push_subscriptions").delete().eq("endpoint", old);
   return Response.json({ ok: true });
 }

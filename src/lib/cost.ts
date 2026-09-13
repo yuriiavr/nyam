@@ -1,5 +1,7 @@
-import { ing } from "@/data/ingredients";
+import { ing, satisfies } from "@/data/ingredients";
 import { ingredientGrams } from "./nutrition";
+import { consumptionOrder, rowGrams, type ProductCache } from "./pantry";
+import type { Product } from "./product-types";
 import type { PantryItem, Recipe } from "./types";
 import { quantityOf } from "./units";
 
@@ -38,15 +40,25 @@ export function pricePerGram(item: PantryItem): number | null {
   return item.pricePerGram;
 }
 
-/** Ціна за грам із покупки: скільки заплатили за скільки продукту. */
+/**
+ * Ціна за грам із покупки: скільки заплатили за скільки продукту.
+ *
+ * Грами — через rowGrams (D10): з карткою товару «2 шт» пачки 900 мл — це
+ * 1800 г, а не вага «середньої штуки молока»; без картки — через тип і його
+ * предків, як і в рецептах.
+ */
 export function priceFromPurchase(
   key: string,
   amount: number | undefined,
   unit: PantryItem["unit"],
   paid: number | undefined,
+  product?: Product,
 ): number | null {
   if (amount == null || !unit || paid == null || paid <= 0) return null;
-  const grams = ingredientGrams({ key, amount, unit });
+  const grams = rowGrams(
+    { id: "", key: product?.typeKey ?? key, amount, unit, addedAt: "", productId: product?.id },
+    product ? { [product.id]: product } : undefined,
+  );
   if (grams == null || grams <= 0) return null;
 
   const perGram = paid / grams;
@@ -55,13 +67,37 @@ export function priceFromPurchase(
   return perGram > 0 && perGram < 100 ? perGram : null;
 }
 
-export function recipeCost(recipe: Recipe, pantry: PantryItem[]): RecipeCost | null {
-  const prices = new Map<string, number>();
-  for (const item of pantry) {
-    const price = pricePerGram(item);
-    if (price != null) prices.set(item.key, price);
+/**
+ * Ціна грама для потреби рецепта.
+ *
+ * Годиться і сам тип, і різновид: безлактозне молоко з чека оцінює рецепт із
+ * «Молоко». Беремо той рядок, який списання взяло б першим (точний тип, далі
+ * найближчий строк), — страва коштує стільки, скільки те, що в неї піде. Якщо
+ * такого з кількістю немає, — середнє за грамами серед рядків із ціною.
+ */
+function priceFor(needKey: string, priced: PantryItem[], products: ProductCache): number | null {
+  const fitting = priced.filter((row) => satisfies(row.key, needKey));
+  if (fitting.length === 0) return null;
+  const first = consumptionOrder(needKey, fitting, products)[0];
+  if (first) return pricePerGram(first);
+
+  let grams = 0;
+  let sum = 0;
+  for (const row of fitting) {
+    const weight = rowGrams(row, products) ?? 1;
+    grams += weight;
+    sum += (pricePerGram(row) as number) * weight;
   }
-  if (prices.size === 0) return null;
+  return grams > 0 ? sum / grams : null;
+}
+
+/**
+ * `products` — кеш карток зі стору: з ним штучні рядки товару важать як
+ * пачка, а не як «середня штука» типу. Без нього рахуємо за типом.
+ */
+export function recipeCost(recipe: Recipe, pantry: PantryItem[], products: ProductCache = {}): RecipeCost | null {
+  const priced = pantry.filter((item) => pricePerGram(item) != null);
+  if (priced.length === 0) return null;
 
   const parts: Array<{ key: string; label: string; cost: number }> = [];
   let considered = 0;
@@ -75,7 +111,7 @@ export function recipeCost(recipe: Recipe, pantry: PantryItem[]): RecipeCost | n
     const negligible = q?.unit === "taste";
     if (!negligible) considered += 1;
 
-    const price = prices.get(item.key);
+    const price = priceFor(item.key, priced, products);
     const grams = ingredientGrams(item);
     if (price == null || grams == null) continue;
 

@@ -1,0 +1,58 @@
+# Кожен пуш у main збирається і деплоїться в продакшн на Vercel.
+#
+# Потрібні три секрети: GitHub → Settings → Secrets and variables → Actions.
+#   VERCEL_TOKEN       vercel.com/account/tokens
+#   VERCEL_ORG_ID      Vercel → Team Settings → General → Team ID
+#   VERCEL_PROJECT_ID  Vercel → проєкт → Settings → General → Project ID
+#
+# Змінні середовища (ключі Supabase, VAPID тощо) лишаються у Vercel:
+# `vercel pull` забирає їх звідти перед збіркою.
+
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Два пуші поспіль: деплоїмо останній, попередній скасовуємо.
+concurrency:
+  group: vercel-production
+  cancel-in-progress: true
+
+env:
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        run: |
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "$(printenv "$name")" ]; then
+              echo "::error::Немає секрету $name — див. коментар на початку .github/workflows/deploy.yml"
+              missing=1
+            fi
+          done
+          [ -z "$missing" ]
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel settings and env
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

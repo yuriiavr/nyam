@@ -234,6 +234,16 @@ let sheetDepth = 0;
 let lockedScrollY = 0;
 let lockedStyles: Record<string, string> | null = null;
 
+/**
+ * Чи відкритий зараз хоч один аркуш.
+ *
+ * Для того, що зʼявляється саме, без натиску (пропозиція сповіщень): влізти
+ * поверх аркуша, у якому людина щось заповнює, означає збити її з думки.
+ */
+export function anySheetOpen(): boolean {
+  return sheetDepth > 0;
+}
+
 export function Sheet({
   open,
   onClose,

@@ -10,6 +10,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { SEED_PROFILES, SEED_RECIPES } from "../src/data/seed.ts";
+import { builtinRowsSql, loadIngredients } from "./generate-builtin-sql.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outPath = resolve(here, "../supabase/seed.sql");
@@ -115,6 +116,9 @@ const NOTIFY = "notify pgrst, 'reload schema';";
 const schema = readFileSync(schemaPath, "utf8").replace(NOTIFY, "").trimEnd();
 // Прибираємо власну шапку seed.sql — у склеєному файлі вона зайва.
 const seed = lines.slice(9).join("\n");
+// Рядки вбудованих типів — ті самі, що в supabase/builtin-ingredients.sql:
+// таблицю створює схема, а без рядків не пройде жоден батько дописаного типу.
+const builtinRows = builtinRowsSql(await loadIngredients());
 
 writeFileSync(
   setupPath,
@@ -122,7 +126,8 @@ writeFileSync(
     "-- ============================================================================",
     "--  Ням — ПОВНЕ налаштування бази за один запуск.",
     "--",
-    "--  Це supabase/schema.sql + supabase/seed.sql в одному файлі.",
+    "--  Це supabase/schema.sql + рядки supabase/builtin-ingredients.sql +",
+    "--  supabase/seed.sql в одному файлі.",
     "--  Встав усе це в Supabase → SQL Editor → Run. Повторний запуск безпечний.",
     "--",
     "--  ЗГЕНЕРОВАНО: node scripts/generate-seed-sql.mjs",
@@ -133,7 +138,14 @@ writeFileSync(
     "",
     "",
     "-- ============================================================================",
-    "--  ЧАСТИНА 2: демо-спільнота",
+    "--  ЧАСТИНА 2: вбудовані типи продуктів (supabase/builtin-ingredients.sql)",
+    "-- ============================================================================",
+    "",
+    builtinRows,
+    "",
+    "",
+    "-- ============================================================================",
+    "--  ЧАСТИНА 3: демо-спільнота",
     "-- ============================================================================",
     "",
     seed,

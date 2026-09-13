@@ -47,6 +47,8 @@ interface Extra {
   cup?: number;
   /** Одиниця, яку підставляти за замовчуванням у формі рецепта. */
   unit?: Unit;
+  /** Загальніший вбудований тип: «Печериці» → «Гриби». Див. IngredientDef.parent. */
+  parent?: string;
 }
 
 /**
@@ -80,6 +82,7 @@ const D = (
   nutrition: nut
     ? { kcal: nut[0], protein: nut[1], fat: nut[2], carbs: nut[3] }
     : undefined,
+  ...(extra.parent ? { parent: extra.parent } : {}),
 });
 
 /**
@@ -105,9 +108,12 @@ const SEASONINGS = new Set([
   "voda",
 ]);
 
+/*
+ * За всім родоводом, а не лише за самим ключем: дописана «Олія гарбузова» з
+ * батьком «Олія» — така сама присмака, як олія, хоч у SEASONINGS її немає.
+ */
 export function isSeasoning(key: string): boolean {
-  const def = ing(key);
-  return def.cat === "spice" || SEASONINGS.has(def.key);
+  return lineage(key).some((k) => ing(k).cat === "spice" || SEASONINGS.has(k));
 }
 
 export const INGREDIENTS: IngredientDef[] = [
@@ -124,14 +130,14 @@ export const INGREDIENTS: IngredientDef[] = [
   D("brusselska", "Брюссельська капуста", "🥬", "veg", ["брюссельська", "brussels sprouts"], [43, 3.4, 0.3, 9]),
   D("brokoli", "Броколі", "🥦", "veg", ["броколі", "броколи", "broccoli"], [34, 2.8, 0.4, 7]),
   D("pomidor", "Помідор", "🍅", "veg", ["помідор", "томат", "tomato", "tomatoes"], [18, 0.9, 0.2, 3.9], { perPiece: 120 }),
-  D("pomidory_cherri", "Помідори чері", "🍅", "veg", ["чері", "черри", "cherry tomatoes", "помідори чері", "томати чері"], [18, 0.9, 0.2, 3.9]),
+  D("pomidory_cherri", "Помідори чері", "🍅", "veg", ["чері", "черри", "cherry tomatoes", "помідори чері", "томати чері"], [18, 0.9, 0.2, 3.9], { parent: "pomidor", perPiece: 15, unit: "g" }),
   D("ogirok", "Огірок", "🥒", "veg", ["огірок", "огурец", "cucumber"], [15, 0.7, 0.1, 3.6], { perPiece: 100 }),
   D("perets", "Солодкий перець", "🫑", "veg", ["болгарський перець", "паприка свіжа", "bell pepper"], [31, 1, 0.3, 6], { perPiece: 150 }),
   D("chili", "Перець чилі", "🌶️", "veg", ["чилі", "гострий перець", "chili"], [40, 1.9, 0.4, 9], { perPiece: 15 }),
-  D("gryby", "Гриби", "🍄", "veg", ["гриби", "печериці", "шампіньйони", "mushroom"], [22, 3.1, 0.3, 3.3]),
-  D("pecherytsi", "Печериці", "🍄", "veg", ["печериці", "шампіньйони", "шампиньоны", "champignon", "печериця"], [22, 3.1, 0.3, 3.3]),
-  D("hlyva", "Гливи", "🍄", "veg", ["гливи", "вешенки", "oyster mushroom"], [33, 3.3, 0.4, 4.2]),
-  D("bilyi_hryb", "Білі гриби", "🍄", "veg", ["білі гриби", "боровик", "porcini"], [34, 3.7, 1.7, 1.1]),
+  D("gryby", "Гриби", "🍄", "veg", ["гриби", "mushroom"], [22, 3.1, 0.3, 3.3]),
+  D("pecherytsi", "Печериці", "🍄", "veg", ["печериці", "шампіньйони", "шампиньоны", "champignon", "печериця"], [22, 3.1, 0.3, 3.3], { parent: "gryby" }),
+  D("hlyva", "Гливи", "🍄", "veg", ["гливи", "вешенки", "oyster mushroom"], [33, 3.3, 0.4, 4.2], { parent: "gryby" }),
+  D("bilyi_hryb", "Білі гриби", "🍄", "veg", ["білі гриби", "боровик", "porcini"], [34, 3.7, 1.7, 1.1], { parent: "gryby" }),
   D("kabachok", "Кабачок", "🥒", "veg", ["кабачок", "цукіні", "zucchini"], [17, 1.2, 0.3, 3.1], { perPiece: 200 }),
   D("baklazhan", "Баклажан", "🍆", "veg", ["баклажан", "eggplant"], [25, 1, 0.2, 6], { perPiece: 250 }),
   D("garbuz", "Гарбуз", "🎃", "veg", ["гарбуз", "тыква", "pumpkin"], [26, 1, 0.1, 6.5]),
@@ -177,11 +183,11 @@ export const INGREDIENTS: IngredientDef[] = [
   D("abrykos", "Абрикос", "🍑", "fruit", ["абрикос", "apricot"], [48, 1.4, 0.4, 11], { perPiece: 40 }),
   D("slyva", "Слива", "🫐", "fruit", ["слива", "plum"], [46, 0.7, 0.3, 11], { perPiece: 60 }),
   D("vyshnya", "Вишня", "🍒", "fruit", ["вишня", "черешня", "cherry"], [50, 1, 0.3, 12]),
-  D("yagody", "Ягоди", "🫐", "fruit", ["ягоди", "чорниця", "малина", "berries", "заморожені ягоди", "ягідна суміш"], [57, 0.7, 0.3, 14]),
-  D("klubnika", "Полуниця", "🍓", "fruit", ["полуниця", "клубника", "strawberry"], [32, 0.7, 0.3, 7.7]),
-  D("malyna", "Малина", "🫐", "fruit", ["малина", "raspberry"], [52, 1.2, 0.7, 12]),
-  D("chornytsya", "Чорниця", "🫐", "fruit", ["чорниця", "черника", "blueberry"], [57, 0.7, 0.3, 14]),
-  D("smorodyna", "Смородина", "🫐", "fruit", ["смородина", "currant"], [56, 1.4, 0.4, 14]),
+  D("yagody", "Ягоди", "🫐", "fruit", ["ягоди", "berries", "заморожені ягоди", "ягідна суміш"], [57, 0.7, 0.3, 14]),
+  D("klubnika", "Полуниця", "🍓", "fruit", ["полуниця", "клубника", "strawberry"], [32, 0.7, 0.3, 7.7], { parent: "yagody" }),
+  D("malyna", "Малина", "🫐", "fruit", ["малина", "raspberry"], [52, 1.2, 0.7, 12], { parent: "yagody" }),
+  D("chornytsya", "Чорниця", "🫐", "fruit", ["чорниця", "черника", "blueberry"], [57, 0.7, 0.3, 14], { parent: "yagody" }),
+  D("smorodyna", "Смородина", "🫐", "fruit", ["смородина", "currant"], [56, 1.4, 0.4, 14], { parent: "yagody" }),
   D("ananas", "Ананас", "🍍", "fruit", ["ананас", "pineapple"], [50, 0.5, 0.1, 13]),
   D("manho", "Манго", "🥭", "fruit", ["манго", "mango"], [60, 0.8, 0.4, 15], { perPiece: 200 }),
   D("kivi", "Ківі", "🥝", "fruit", ["ківі", "киви", "kiwi"], [61, 1.1, 0.5, 15], { perPiece: 75 }),
@@ -201,8 +207,8 @@ export const INGREDIENTS: IngredientDef[] = [
   D("kuryachi_krylsya", "Курячі крильця", "🍗", "meat", ["крильця", "крылья", "chicken wings"], [203, 30, 8, 0]),
   D("indychka", "Індичка", "🦃", "meat", ["індичка", "индейка", "turkey"], [189, 29, 7, 0]),
   D("kachka", "Качка", "🦆", "meat", ["качка", "утка", "duck"], [337, 19, 28, 0]),
-  D("svynyna", "Свинина", "🐖", "meat", ["свинина", "pork", "свиняча", "свинячий", "ошийок"], [242, 27, 14, 0]),
-  D("oshyjok", "Свинячий ошийок", "🥩", "meat", ["ошийок", "шия", "свинячий ошийок", "pork neck", "pork collar"], [267, 16, 22, 0]),
+  D("svynyna", "Свинина", "🐖", "meat", ["свинина", "pork", "свиняча", "свинячий"], [242, 27, 14, 0]),
+  D("oshyjok", "Свинячий ошийок", "🥩", "meat", ["ошийок", "шия", "свинячий ошийок", "pork neck", "pork collar"], [267, 16, 22, 0], { parent: "svynyna" }),
   D("yalovychyna", "Яловичина", "🥩", "meat", ["яловичина", "говядина", "beef", "яловичий", "телятина"], [250, 26, 15, 0]),
   D("barannyna", "Баранина", "🐑", "meat", ["баранина", "ягня", "lamb"], [294, 25, 21, 0]),
   D("kroliatyna", "Кролятина", "🐰", "meat", ["кролятина", "кролик", "rabbit"], [173, 33, 3.5, 0]),
@@ -232,12 +238,20 @@ export const INGREDIENTS: IngredientDef[] = [
   D("yajtsya", "Яйця", "🥚", "dairy", ["яйця", "яйце", "яйца", "egg", "яйце куряче", "курячі яйця"], [155, 13, 11, 1.1], { perPiece: 60 }),
   D("yajtsya_perepel", "Перепелині яйця", "🥚", "dairy", ["перепелині", "quail egg"], [158, 13, 11, 0.4], { perPiece: 12 }),
   D("moloko", "Молоко", "🥛", "dairy", ["молоко", "milk", "молочний"], [60, 3.2, 3.2, 4.8], { unit: "ml" }),
+  /*
+   * Різновид, а не окремий продукт: рецепт із молоком безлактозне бере, а от
+   * безлактозному рецепту звичайне молоко не годиться. Однослівного синоніма
+   * «безлактозне» немає свідомо — інакше «Кефір безлактозний» дрейфував би в
+   * молоко. Фраза ж додає слово в каталог, і касове «БЕЗЛАКТ.» розкривається
+   * однозначно (receipt.ts, CATALOG_WORDS).
+   */
+  D("moloko_bezlaktozne", "Молоко безлактозне", "🥛", "dairy", ["молоко безлактозне", "безлактозне молоко", "молоко без лактози", "lactose free milk", "lactose-free milk"], [52, 3, 2.5, 4.7], { unit: "ml", parent: "moloko" }),
   D("kefir", "Кефір", "🥛", "dairy", ["кефір", "кефир", "kefir"], [41, 3.4, 1, 4.7], { unit: "ml" }),
   D("ryazhanka", "Ряжанка", "🥛", "dairy", ["ряжанка"], [54, 2.9, 2.5, 4.2], { unit: "ml" }),
   D("smetana", "Сметана", "🥣", "dairy", ["сметана", "sour cream", "сметанний", "smetana"], [193, 2.8, 20, 3.4], { cup: 230 }),
   D("vershky", "Вершки", "🍶", "dairy", ["вершки", "сливки", "cream", "вершки кулінарні", "вершки для збивання", "heavy cream", "whipping cream"], [292, 2.5, 30, 3.2], { unit: "ml" }),
   D("syr", "Твердий сир", "🧀", "dairy", ["твердий сир", "гауда", "чедер", "cheese", "сир твердий", "сирний", "hard cheese", "сир"], [380, 25, 30, 2], { cup: 100, perPiece: 20, unit: "g" }),
-  D("parmezan", "Пармезан", "🧀", "dairy", ["пармезан", "пекорино", "parmesan", "parmigiano reggiano", "parmigiano", "grana padano"], [431, 38, 29, 4.1], { cup: 90 }),
+  D("parmezan", "Пармезан", "🧀", "dairy", ["пармезан", "пекорино", "parmesan", "parmigiano reggiano", "parmigiano", "grana padano"], [431, 38, 29, 4.1], { cup: 90, parent: "syr" }),
   D("motsarela", "Моцарела", "🧀", "dairy", ["моцарела", "mozzarella"], [280, 22, 22, 2.2]),
   D("feta", "Фета", "🧀", "dairy", ["фета", "бринза", "feta"], [264, 14, 21, 4.1]),
   D("rikotta", "Рікота", "🧀", "dairy", ["рікота", "ricotta"], [174, 11, 13, 3]),
@@ -279,7 +293,7 @@ export const INGREDIENTS: IngredientDef[] = [
   D("soya", "Соя", "🫘", "grain", ["соя", "soybean"], [446, 36, 20, 30]),
   D("krokhmal", "Крохмаль", "🤍", "grain", ["крохмаль", "крахмал", "starch"], [381, 0.1, 0.1, 91], { cup: 128, staple: true }),
   D("panirovka", "Панірувальні сухарі", "🍞", "grain", ["панірувальні сухарі", "паніровка", "breadcrumbs"], [395, 13, 5, 72], { cup: 108 }),
-  D("krokhmal_kukurudz", "Кукурудзяний крохмаль", "🌽", "grain", ["кукурудзяний крохмаль", "кукурудзяне борошно", "corn starch", "cornstarch"], [381, 0.3, 0.1, 91], { cup: 128 }),
+  D("krokhmal_kukurudz", "Кукурудзяний крохмаль", "🌽", "grain", ["кукурудзяний крохмаль", "corn starch", "cornstarch"], [381, 0.3, 0.1, 91], { cup: 128 }),
   D("otrubi", "Висівки", "🌾", "grain", ["висівки", "отруби", "bran"], [216, 16, 4.3, 65], { cup: 60 }),
 
   /* ── Спеції та сипке ─────────────────────────────────────────────────── */
@@ -344,7 +358,7 @@ export const INGREDIENTS: IngredientDef[] = [
 
   /* ── Хліб та випічка ─────────────────────────────────────────────────── */
   D("khlib", "Хліб", "🍞", "bakery", ["хліб", "багет", "bread", "хлібина", "буханець", "хлібець"], [265, 9, 3.2, 49], { perPiece: 30, unit: "g" }),
-  D("baton", "Батон", "🥖", "bakery", ["батон", "loaf"], [264, 8, 3, 51], { perPiece: 30, unit: "g" }),
+  D("baton", "Батон", "🥖", "bakery", ["батон", "loaf"], [264, 8, 3, 51], { perPiece: 30, unit: "g", parent: "khlib" }),
   D("khlib_zhytniy", "Житній хліб", "🍞", "bakery", ["житній хліб", "чорний хліб", "rye bread"], [259, 8.5, 3.3, 48], { perPiece: 30, unit: "g" }),
   D("tortylya", "Лаваш / тортилья", "🫓", "bakery", ["лаваш", "тортилья", "піта", "tortilla"], [297, 8, 7.9, 50], { perPiece: 60 }),
   D("bulochka", "Булочка для бургера", "🍔", "bakery", ["булочка", "бургер бан", "bun"], [279, 9, 4.9, 50], { perPiece: 70 }),
@@ -361,8 +375,8 @@ export const INGREDIENTS: IngredientDef[] = [
      придатності, їх витрачають на рецепти, і пів літра соку з пачки — це
      теж запас, який колись закінчується. Цінність на 100 мл. */
   D("sik", "Сік", "🧃", "drink", ["сік", "сок", "juice", "нектар", "juices"], [46, 0.5, 0.1, 11], { unit: "ml" }),
-  D("sik_apelsynovyi", "Апельсиновий сік", "🍊", "drink", ["апельсиновий сік", "orange juice"], [45, 0.7, 0.2, 10], { unit: "ml" }),
-  D("sik_yablunyi", "Яблучний сік", "🍎", "drink", ["яблучний сік", "apple juice"], [46, 0.1, 0.1, 11], { unit: "ml" }),
+  D("sik_apelsynovyi", "Апельсиновий сік", "🍊", "drink", ["апельсиновий сік", "orange juice"], [45, 0.7, 0.2, 10], { unit: "ml", parent: "sik" }),
+  D("sik_yablunyi", "Яблучний сік", "🍎", "drink", ["яблучний сік", "apple juice"], [46, 0.1, 0.1, 11], { unit: "ml", parent: "sik" }),
   D("voda_gazovana", "Газована вода", "🫧", "drink", ["газована вода", "мінеральна вода", "sparkling water"], [0, 0, 0, 0], { unit: "ml" }),
   D("lymonad", "Лимонад", "🥤", "drink", ["лимонад", "газованка", "кола", "cola", "soda", "sodas", "soft drink"], [38, 0, 0, 9.6], { unit: "ml" }),
   D("kvas", "Квас", "🍺", "drink", ["квас", "kvass"], [27, 0.2, 0, 5.2], { unit: "ml" }),
@@ -372,11 +386,11 @@ export const INGREDIENTS: IngredientDef[] = [
 
   /* ── Інше ────────────────────────────────────────────────────────────── */
   D("gorikhy", "Горіхи", "🥜", "other", ["горіхи", "nuts", "горіховий", "горіхова суміш"], [654, 15, 65, 14], { cup: 120 }),
-  D("voloski", "Волоські горіхи", "🌰", "other", ["волоські горіхи", "walnuts"], [654, 15, 65, 14], { cup: 120 }),
-  D("mygdal", "Мигдаль", "🌰", "other", ["мигдаль", "миндаль", "almonds"], [579, 21, 50, 22], { cup: 140 }),
-  D("funduk", "Фундук", "🌰", "other", ["фундук", "hazelnut"], [628, 15, 61, 17], { cup: 135 }),
-  D("keshyu", "Кешʼю", "🌰", "other", ["кешʼю", "кешью", "cashew"], [553, 18, 44, 30], { cup: 130 }),
-  D("fistashky", "Фісташки", "🌰", "other", ["фісташки", "pistachio"], [560, 20, 45, 28], { cup: 125 }),
+  D("voloski", "Волоські горіхи", "🌰", "other", ["волоські горіхи", "walnuts"], [654, 15, 65, 14], { cup: 120, parent: "gorikhy" }),
+  D("mygdal", "Мигдаль", "🌰", "other", ["мигдаль", "миндаль", "almonds"], [579, 21, 50, 22], { cup: 140, parent: "gorikhy" }),
+  D("funduk", "Фундук", "🌰", "other", ["фундук", "hazelnut"], [628, 15, 61, 17], { cup: 135, parent: "gorikhy" }),
+  D("keshyu", "Кешʼю", "🌰", "other", ["кешʼю", "кешью", "cashew"], [553, 18, 44, 30], { cup: 130, parent: "gorikhy" }),
+  D("fistashky", "Фісташки", "🌰", "other", ["фісташки", "pistachio"], [560, 20, 45, 28], { cup: 125, parent: "gorikhy" }),
   D("arahis", "Арахіс", "🥜", "other", ["арахіс", "peanut"], [567, 26, 49, 16], { cup: 145 }),
   D("kunzhut", "Кунжут", "⚪", "other", ["кунжут", "sesame"], [573, 18, 50, 23], { cup: 144 }),
   D("nasinnya_soniashnyka", "Соняшникове насіння", "🌻", "other", ["соняшникове насіння", "семечки"], [584, 21, 51, 20], { cup: 140 }),
@@ -415,6 +429,14 @@ let CUSTOM: Map<string, IngredientDef> = new Map();
 
 export function setCustomIngredients(list: IngredientDef[]) {
   CUSTOM = new Map(list.map((def) => [def.key, def]));
+  /*
+   * Дерево типів залежить від дописаних: новий батько в чужому продукті
+   * міняє, що саме «є в коморі». Памʼять родоводів тримається лише до цієї
+   * миті, а номер версії — сигнал для кешів поза модулем (pantryTypes).
+   */
+  registryVersion += 1;
+  ANCESTORS.clear();
+  CHILDREN = null;
 }
 
 /** Усе, з чого можна обирати: вбудоване плюс дописане. */
@@ -480,6 +502,170 @@ export function ing(key: string): IngredientDef {
   const found = ING_BY_KEY.get(key) ?? CUSTOM.get(key);
   if (found) return found;
   return { key, label: key, emoji: "🍽️", cat: "other", aliases: [], defaultUnit: "g" };
+}
+
+/* ── Різновиди типів ──────────────────────────────────────────────────── */
+
+/**
+ * Скільки рівнів «різновид різновиду» дозволено загалом — разом із
+ * вбудованими. Та сама межа стоїть у базі (custom_ingredients_guard): довший
+ * ланцюжок там просто не запишеться, а тут не дасть зациклитись на сміттєвих
+ * даних із локального сховища.
+ */
+export const MAX_TYPE_DEPTH = 6;
+
+/** Скільки разів поспіль іти за обʼєднанням дописаних типів (I6). */
+const MAX_MERGE_HOPS = 8;
+
+let registryVersion = 0;
+
+/**
+ * Номер версії реєстру: росте щоразу, як приїжджає каталог дописаних.
+ *
+ * Функція, а не експортована змінна: jiti і збірка по-різному тримають живі
+ * привʼязки `export let`, а номер читають кеші поза модулем (pantryTypes).
+ */
+export function currentRegistryVersion(): number {
+  return registryVersion;
+}
+
+const ANCESTORS = new Map<string, readonly string[]>();
+let CHILDREN: Map<string, string[]> | null = null;
+
+/** Безпосередній батько: спершу вбудований опис, потім дописаний. */
+export function parentOf(key: string): string | undefined {
+  return ING_BY_KEY.get(key)?.parent ?? CUSTOM.get(key)?.parent ?? undefined;
+}
+
+/**
+ * Ключ, яким тип є насправді.
+ *
+ * Дописаний тип після обʼєднання (I6) — лише псевдонім іншого, а рецепти зі
+ * старим ключем у базі ніхто не переписує. Ідемо за mergedInto, але не далі
+ * восьми кроків і не по колу: сміття в каталозі не має вішати застосунок.
+ */
+export function canonicalKey(key: string): string {
+  let cur = key;
+  const seen = new Set<string>([cur]);
+  for (let i = 0; i < MAX_MERGE_HOPS; i++) {
+    const next = CUSTOM.get(cur)?.mergedInto;
+    if (!next || seen.has(next)) break;
+    seen.add(next);
+    cur = next;
+  }
+  return cur;
+}
+
+/**
+ * Загальніші типи, від найближчого: «moloko_bezlaktozne» → ["moloko"].
+ *
+ * Без самого ключа, без повторів і не глибше MAX_TYPE_DEPTH — цикл, який
+ * хтось зібрав із дописаних типів, обривається на першому повторі.
+ */
+export function ancestors(key: string): readonly string[] {
+  const self = canonicalKey(key);
+  const cached = ANCESTORS.get(self);
+  if (cached) return cached;
+
+  const out: string[] = [];
+  const seen = new Set<string>([self]);
+  let cur = parentOf(self);
+  while (cur && out.length < MAX_TYPE_DEPTH) {
+    const canon = canonicalKey(cur);
+    if (seen.has(canon)) break;
+    seen.add(canon);
+    out.push(canon);
+    cur = parentOf(canon);
+  }
+  ANCESTORS.set(self, out);
+  return out;
+}
+
+/** Сам тип (справжній ключ) і всі загальніші — у порядку віддалення. */
+export function lineage(key: string): readonly string[] {
+  return [canonicalKey(key), ...ancestors(key)];
+}
+
+/**
+ * Чи годиться те, що є, туди, де потрібне `need`.
+ *
+ * Годиться сам тип і будь-який його різновид: рецепту з молоком підходить
+ * безлактозне. Навпаки — ні: рецепт, якому треба саме безлактозне, звичайне
+ * молоко не задовольняє.
+ */
+export function satisfies(have: string, need: string): boolean {
+  return lineage(have).includes(canonicalKey(need));
+}
+
+/** На скільки рівнів `have` конкретніший за `need`; −1 — не годиться зовсім. */
+export function typeDistance(have: string, need: string): number {
+  return lineage(have).indexOf(canonicalKey(need));
+}
+
+/** Глибина типу: 0 — самостійний, 1 — різновид самостійного… */
+export function typeDepth(key: string): number {
+  return ancestors(key).length;
+}
+
+/** Усі різновиди типу (без нього самого) — одним проходом каталогу на версію. */
+export function descendants(key: string): readonly string[] {
+  if (!CHILDREN) {
+    CHILDREN = new Map();
+    for (const def of allIngredients()) {
+      const parent = def.parent ? canonicalKey(def.parent) : undefined;
+      if (!parent || def.mergedInto) continue;
+      CHILDREN.set(parent, [...(CHILDREN.get(parent) ?? []), def.key]);
+    }
+  }
+  const root = canonicalKey(key);
+  const out: string[] = [];
+  const seen = new Set<string>([root]);
+  const queue = [...(CHILDREN.get(root) ?? [])];
+  while (queue.length) {
+    const next = queue.shift() as string;
+    if (seen.has(next)) continue;
+    seen.add(next);
+    out.push(next);
+    queue.push(...(CHILDREN.get(next) ?? []));
+  }
+  return out;
+}
+
+/**
+ * Властивість типу з урахуванням родоводу.
+ *
+ * Дописана «Моцарела домашня» без КБЖВ і ваги штуки — усе одно сир: беремо
+ * найближче відоме значення вгору по дереву. Краще приблизне число батька,
+ * ніж страва, чиї калорії мовчки не порахувались.
+ */
+export function typeValue<K extends "nutrition" | "gramsPerPiece" | "gramsPerCup">(
+  key: string,
+  prop: K,
+): IngredientDef[K] {
+  for (const k of lineage(key)) {
+    const value = ing(k)[prop];
+    if (value != null) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Набір типів, «які є», — вже з усіма загальнішими.
+ *
+ * Тавро в типі не для краси: matchRecipe й решта приймають лише HaveSet, тож
+ * виклик, що досі складає звичайний Set із ключів комори, не збереться. Інакше
+ * такий виклик мовчки не бачив би, що безлактозне молоко — теж молоко.
+ */
+export type HaveSet = ReadonlySet<string> & { readonly __closure: true };
+
+export function haveTypes(keys: Iterable<string>): HaveSet {
+  const set = new Set<string>();
+  for (const key of keys) for (const k of lineage(key)) set.add(k);
+  // Старі ключі обʼєднаних дописаних типів теж «є», якщо є той, у який їх злили.
+  for (const def of CUSTOM.values()) {
+    if (def.mergedInto && set.has(canonicalKey(def.key))) set.add(def.key);
+  }
+  return set as unknown as HaveSet;
 }
 
 const normalize = (s: string) =>
@@ -664,6 +850,55 @@ export function findIngredient(text: string): IngredientDef | null {
   }
 
   return best ? best.def : null;
+}
+
+/**
+ * Тип із тією самою назвою — за назвою або будь-яким синонімом.
+ *
+ * Для «Новий тип продукту»: «Шампіньйони» — синонім «Печериць», і другий тип
+ * із тим самим змістом розвів би чек і пошук на два кандидати. Спершу назва,
+ * потім синонім: «Сир» — назва нічого, але синонім «Твердого сиру».
+ */
+export function sameNameIngredient(name: string): IngredientDef | null {
+  const target = normalize(name);
+  if (!target) return null;
+  const all = allIngredients();
+  const same = (text: string) => normalize(text) === target;
+  return all.find((d) => same(d.label)) ?? all.find((d) => (d.aliases ?? []).some(same)) ?? null;
+}
+
+/*
+ * Ознаки, з якими назва — вже інший продукт, а не різновид знайденого:
+ * соєве й мигдальне молоко не молоко (H2.1), кокосове борошно не пшеничне,
+ * сухе й згущене молоко в рецепті молока не замінять. Початки слів, бо
+ * закінчення в назві будь-які.
+ */
+const NOT_A_VARIANT = [
+  "рослин", "соєв", "соя", "мигдал", "кокос", "вівсян", "рисов", "горіх", "арахіс",
+  "гречан", "кукурудз", "конопл", "лляне", "лляна", "кешю", "фісташ", "веган", "згущ", "сух",
+];
+
+/**
+ * Кого запропонувати в батьки новому типу — або нікого.
+ *
+ * Лише пропозиція, яку людина підтверджує: findIngredient шукає найсхожіше, а
+ * не загальніше. Тому строгіше за нього: слова знайденої назви мають стояти в
+ * новій точно, а не за основою, — інакше «Рисове борошно» ставало б різновидом
+ * «Рису», а «Горіхова паста» — «Горіхів». І нічого, коли назва вже є (це
+ * дублікат) або в ній ознака іншого продукту (NOT_A_VARIANT).
+ */
+export function variantParentGuess(name: string): IngredientDef | null {
+  const target = words(name);
+  if (target.length < 2 || sameNameIngredient(name)) return null;
+  const guess = findIngredient(name);
+  if (!guess) return null;
+  const phrase = [guess.label, ...(guess.aliases ?? [])]
+    .map(words)
+    .find((p) => p.length > 0 && p.every((w) => target.includes(w)));
+  if (!phrase) return null;
+  const rest = target.filter((w) => !phrase.includes(w));
+  if (rest.some((w) => NOT_A_VARIANT.some((q) => w.startsWith(q)))) return null;
+  return guess;
 }
 
 export function searchIngredients(query: string, limit = 30): IngredientDef[] {

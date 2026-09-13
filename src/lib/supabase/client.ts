@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { guardStaleWrites } from "../schema-version";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -24,6 +25,13 @@ export function getSupabase(): SupabaseClient | null {
         detectSessionInUrl: true,
         storageKey: "nyam-auth",
       },
+      /*
+       * Єдині двері, через які застосунок пише в базу. Коли перевірка версії
+       * дізналась, що сервер новіший, запис тут і зупиняється — хоч би звідки
+       * він ішов: з готування, сканера чи аркуша під банером
+       * (див. src/lib/schema-version.ts).
+       */
+      global: { fetch: guardStaleWrites },
     });
   }
   return cached;
@@ -49,6 +57,10 @@ export function friendlyError(error: unknown): string {
     [/relation .* does not exist/i, "У базі немає таблиць — виконай supabase/schema.sql."],
     [/provider is not enabled/i, "Вхід через Google не увімкнено в налаштуваннях Supabase."],
     [/redirect_uri_mismatch/i, "Адреса повернення не збігається з тією, що вказана в Google Cloud."],
+    // Запобіжник дерева типів (supabase/ingredient-parents.sql).
+    [/задовгий ланцюжок різновидів/i, "Забагато рівнів різновидів — обери загальніший тип."],
+    [/не може бути різновидом самого себе/i, "Тип не може бути різновидом самого себе."],
+    [/немає типу/i, "Такого типу вже немає — онови застосунок і обери тип ще раз."],
   ];
 
   for (const [re, text] of map) if (re.test(message)) return text;

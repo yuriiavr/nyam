@@ -172,7 +172,7 @@ console.log("── Базові продукти ──");
 const { matchRecipe, fridgeMatches } = await jiti.import(
   path.join(root, "src/lib/matching.ts"),
 );
-const { ing, isSeasoning, INGREDIENTS } = await jiti.import(
+const { ing, isSeasoning, INGREDIENTS, haveTypes } = await jiti.import(
   path.join(root, "src/data/ingredients.ts"),
 );
 const INGREDIENT_COUNT = INGREDIENTS.length;
@@ -187,17 +187,17 @@ const withSalt = {
  */
 check(
   "без солі в коморі вона в списку браку",
-  matchRecipe(withSalt, new Set(["kurka"])).missing.join(","),
+  matchRecipe(withSalt, haveTypes(["kurka"])).missing.join(","),
   "sil",
 );
 check(
   "позначена сіль рахується наявною",
-  matchRecipe(withSalt, new Set(["kurka", "sil"])).missing.join(","),
+  matchRecipe(withSalt, haveTypes(["kurka", "sil"])).missing.join(","),
   "",
 );
 check(
   "відсоток збігу теж це враховує",
-  matchRecipe(withSalt, new Set(["kurka"])).pct,
+  matchRecipe(withSalt, haveTypes(["kurka"])).pct,
   50,
 );
 
@@ -234,13 +234,13 @@ const pastaGarlic = {
 };
 check(
   "страва, для якої є геть усе, не зникає",
-  fridgeMatches([pastaGarlic], ["makarony", "chasnyk", "oliya"]).length,
+  fridgeMatches([pastaGarlic], haveTypes(["makarony", "chasnyk", "oliya"])).length,
   1,
 );
 // А ось лише присмака приводом не є: інакше до всього радили б усе.
 check(
   "сама лише олія — не привід",
-  fridgeMatches([pastaGarlic], ["oliya"]).length,
+  fridgeMatches([pastaGarlic], haveTypes(["oliya"])).length,
   0,
 );
 
@@ -403,6 +403,337 @@ check(
   applyFilters(cookedRecently, { ...emptyFilters, query: "борщ" }).length,
   1,
 );
+
+console.log("── Різновиди типів ──");
+
+const types = await jiti.import(path.join(root, "src/data/ingredients.ts"));
+const { unitDef } = await jiti.import(path.join(root, "src/lib/units.ts"));
+const { rescueMatches, shoppingListFor } = await jiti.import(path.join(root, "src/lib/matching.ts"));
+const { readFileSync, readdirSync } = await import("node:fs");
+const same = (label, actual, expected) => check(label, JSON.stringify(actual), JSON.stringify(expected));
+
+/*
+ * Інваріанти вбудованого дерева. Воно живе в коді, а база лише дзеркалить його
+ * (supabase/builtin-ingredients.sql), тож помилка тут розійшлась би всюди.
+ */
+const builtinKeys = new Set(INGREDIENTS.map((d) => d.key));
+check(
+  "батьки вбудованих — теж вбудовані",
+  INGREDIENTS.filter((d) => d.parent && !builtinKeys.has(d.parent)).map((d) => d.key).join(","),
+  "",
+);
+const rawDepth = (def) => {
+  let n = 0;
+  const seen = new Set([def.key]);
+  for (let cur = def.parent; cur; cur = types.ING_BY_KEY.get(cur)?.parent) {
+    if (seen.has(cur)) return Infinity;
+    seen.add(cur);
+    n += 1;
+  }
+  return n;
+};
+check("вбудоване дерево без циклів", INGREDIENTS.filter((d) => rawDepth(d) === Infinity).map((d) => d.key).join(","), "");
+check("вбудовані різновиди не глибші за 3 рівні", INGREDIENTS.filter((d) => rawDepth(d) > 3).map((d) => d.key).join(","), "");
+
+/*
+ * Міри різновиду й батька мусять зводитись: списання й «є 1,9 л» рахують через
+ * грами. Грами й мілілітри — одна родина (1 мл ≈ 1 г, як у nutrition.ts), а
+ * штуки — лише коли відома вага штуки: «Помідори чері» в грамах під
+ * «Помідором» у штуках по 120 г зводяться, а штуки без ваги — ні.
+ */
+const measure = (def) => {
+  const base = unitDef(def.defaultUnit ?? "g").base;
+  if (base === "g" || base === "ml") return "маса";
+  if (base === "pcs" && types.typeValue(def.key, "gramsPerPiece")) return "маса";
+  return base;
+};
+check(
+  "міри різновиду й батька зводяться",
+  INGREDIENTS.filter((d) => d.parent && measure(d) !== measure(types.ing(d.parent))).map((d) => `${d.key}→${d.parent}`).join(", "),
+  "",
+);
+
+/*
+ * Вагу штуки різновид успадковує, лише коли міряється так само, як той, у кого
+ * її бере. «Пармезан» у грамах під «Твердим сиром» у грамах — шматочок по 20 г,
+ * чесно. А «Помідори чері» в грамах під «Помідором» у штуках без власної ваги
+ * важили б по 120 г за штуку: «10 шт» — 1,2 кг калорій і списана вся пачка.
+ */
+const pieceDonor = (def) => types.lineage(def.key).find((k) => types.ing(k).gramsPerPiece != null);
+check(
+  "вагу штуки успадковують лише від типу з тією самою мірою",
+  INGREDIENTS.filter((d) => d.parent && d.gramsPerPiece == null)
+    .filter((d) => {
+      const donor = pieceDonor(d);
+      return donor && types.ing(donor).defaultUnit !== d.defaultUnit;
+    })
+    .map((d) => `${d.key}→${pieceDonor(d)}`)
+    .join(", "),
+  "",
+);
+
+// Спільний синонім батька й різновиду — і findIngredient вгадує навмання.
+const names = (def) => new Set([def.label, ...(def.aliases ?? [])].map((t) => t.toLowerCase().trim()));
+check(
+  "батько й різновид не ділять синонімів",
+  INGREDIENTS.filter((d) => d.parent)
+    .flatMap((d) => types.ancestors(d.key).flatMap((a) => [...names(types.ing(a))].filter((n) => names(d).has(n)).map((n) => `${d.key}/${a}: ${n}`)))
+    .join("; "),
+  "",
+);
+
+const committed = readFileSync(path.join(root, "scripts/builtin-keys.txt"), "utf8")
+  .split(/\r?\n/)
+  .map((l) => l.trim())
+  .filter((l) => l && !l.startsWith("#"));
+check(
+  "ключі вбудованих лише додаються (scripts/builtin-keys.txt)",
+  committed.filter((k) => !builtinKeys.has(k)).join(","),
+  "",
+);
+
+const { renderBuiltinSql, BUILTIN_SQL_PATH } = await import("./generate-builtin-sql.mjs");
+check(
+  "supabase/builtin-ingredients.sql збігається з каталогом (інакше npm run db:seed-sql)",
+  readFileSync(BUILTIN_SQL_PATH, "utf8").replace(/\r\n/g, "\n") === renderBuiltinSql(INGREDIENTS),
+  true,
+);
+
+/*
+ * Тавро HaveSet ловить лише виклики matchRecipe й сусідів. Код, що сам складає
+ * набір із ключів комори й питає .has, компілятор не бачить — і такий код мовчки
+ * не знав би, що безлактозне молоко теж молоко. Тому шукаємо його в тексті.
+ */
+const HAND_BUILT = /\bpantry\w*\.map\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.key\s*\)/;
+const sources = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? sources(path.join(dir, e.name)) : /\.(ts|tsx)$/.test(e.name) ? [path.join(dir, e.name)] : [],
+  );
+const offenders = [];
+for (const file of sources(path.join(root, "src"))) {
+  const rel = path.relative(root, file).replace(/\\/g, "/");
+  if (rel === "src/lib/store.ts") continue; // pantryTypes і pantryKeyList
+  readFileSync(file, "utf8")
+    .split(/\r?\n/)
+    .forEach((line, i) => {
+      if (HAND_BUILT.test(line)) offenders.push(`${rel}:${i + 1}`);
+    });
+}
+check("ключі комори в набір складає лише pantryTypes (store.ts)", offenders.join(", "), "");
+
+check("безлактозне годиться там, де треба молоко", types.satisfies("moloko_bezlaktozne", "moloko"), true);
+check("звичайне молоко не годиться як безлактозне", types.satisfies("moloko", "moloko_bezlaktozne"), false);
+check("тип годиться сам собі", types.satisfies("moloko", "moloko"), true);
+check("відстань різновиду до батька", types.typeDistance("moloko_bezlaktozne", "moloko"), 1);
+check("відстань, коли не годиться", types.typeDistance("moloko", "moloko_bezlaktozne"), -1);
+same("родовід", types.lineage("moloko_bezlaktozne"), ["moloko_bezlaktozne", "moloko"]);
+same("різновиди грибів", [...types.descendants("gryby")].sort(), ["bilyi_hryb", "hlyva", "pecherytsi"]);
+same("набір із загальнішими", [...types.haveTypes(["moloko_bezlaktozne"])].sort(), ["moloko", "moloko_bezlaktozne"]);
+same("загальний тип не тягне різновидів", [...types.haveTypes(["moloko"])], ["moloko"]);
+
+/*
+ * Присмака за родоводом. «Оливкова» тут не годиться: вона сама в SEASONINGS і
+ * без батька, тож пройшла б і без родоводу. Потрібен дописаний різновид олії
+ * з категорією не «спеції». Реєструємо його в екземплярі «@/data/ingredients»:
+ * саме той бачить fridgeMatches (jiti тримає окремий модуль на кожне написання
+ * імпорту), а isSeasoning беремо звідти ж.
+ */
+{
+  const aliased = await jiti.import("@/data/ingredients");
+  const pumpkinOil = { key: "own_oliya_garbuz", label: "Олія гарбузова", emoji: "🫒", cat: "sauce", aliases: [], defaultUnit: "ml", parent: "oliya" };
+  aliased.setCustomIngredients([pumpkinOil]);
+  check("присмака за родоводом: «Олія гарбузова» → «Олія»", aliased.isSeasoning("own_oliya_garbuz"), true);
+  check(
+    "холодильник: сама гарбузова олія — не привід радити страву",
+    fridgeMatches([{ id: "r_oil", ingredients: [{ key: "own_oliya_garbuz" }, { key: "makarony" }] }], aliased.haveTypes(["own_oliya_garbuz"])).length,
+    0,
+  );
+  aliased.setCustomIngredients([]);
+}
+
+/*
+ * «Новий тип продукту»: кого запропонувати в батьки й коли назва — дублікат.
+ * Пропозиція строга: соєве молоко не молоко (H2.1), рисове борошно не рис.
+ */
+for (const [name, expected] of [
+  ["Кефір безлактозний", "kefir"],
+  ["Олія гарбузова", "oliya"],
+  ["Сметана безлактозна", "smetana"],
+  ["Помідори чері жовті", "pomidory_cherri"],
+  ["Соєве молоко", null],
+  ["Мигдальне молоко", null],
+  ["Сухе молоко", null],
+  ["Рисове борошно", null],
+  ["Рисове молоко", null],
+  ["Кокосове борошно", null],
+  ["Гречане борошно", null],
+  ["Горіхова паста", null],
+  ["Кефір", null],
+]) {
+  check(`батько для «${name}»`, types.variantParentGuess(name)?.key ?? null, expected);
+}
+check("дублікат за синонімом: «Шампіньйони» — це «Печериці»", types.sameNameIngredient("Шампіньйони")?.key, "pecherytsi");
+check("дублікат за назвою важливіший за синонім", types.sameNameIngredient("  молоко ")?.key, "moloko");
+check("не дублікат", types.sameNameIngredient("Молоко козяче"), null);
+
+const custom = (key, parent, extra = {}) => ({
+  key,
+  label: key,
+  emoji: "🥛",
+  cat: "dairy",
+  aliases: [],
+  defaultUnit: "ml",
+  ...(parent ? { parent } : {}),
+  ...extra,
+});
+
+const v0 = types.currentRegistryVersion();
+types.setCustomIngredients([custom("own_kefir_bezl", "kefir")]);
+check("версія реєстру росте з каталогом", types.currentRegistryVersion() > v0, true);
+check("дописаний різновид вбудованого", types.satisfies("own_kefir_bezl", "kefir"), true);
+check("і кефір із ним у рецепті є", matchRecipe({ ingredients: [{ key: "kefir" }] }, haveTypes(["own_kefir_bezl"])).pct, 100);
+
+// I6: обʼєднані дописані типи. Рецептів ніхто не переписує — рецепт зі старим
+// ключем (own_b) і комора з новим (own_a), або навпаки, мусять зустрітись.
+types.setCustomIngredients([custom("own_a", "kefir"), custom("own_b", "kefir", { mergedInto: "own_a" })]);
+check("злитий тип: канонічний ключ — переможець", types.canonicalKey("own_b"), "own_a");
+check("рецепт з A, у коморі злитий B → є", matchRecipe({ ingredients: [{ key: "own_a" }] }, haveTypes(["own_b"])).pct, 100);
+check("рецепт зі злитим B, у коморі A → є", matchRecipe({ ingredients: [{ key: "own_b" }] }, haveTypes(["own_a"])).pct, 100);
+check("злитий B лишається різновидом кефіру через A", matchRecipe({ ingredients: [{ key: "kefir" }] }, haveTypes(["own_b"])).pct, 100);
+check("чужий тип злиттям не підхоплюється", matchRecipe({ ingredients: [{ key: "own_a" }] }, haveTypes(["kefir"])).pct, 0);
+
+// Новий каталог — новий родовід: памʼять не тримає старого батька.
+types.setCustomIngredients([custom("own_kefir_bezl", null)]);
+check("батька прибрали — вже не кефір", types.satisfies("own_kefir_bezl", "kefir"), false);
+
+// Цикл, зібраний із дописаних (у базі його не пустить запобіжник, але локальне
+// сховище може принести що завгодно), обривається, а не вішає застосунок.
+types.setCustomIngredients([custom("own_a", "own_b"), custom("own_b", "own_c"), custom("own_c", "own_a")]);
+same("цикл дописаних обривається", types.ancestors("own_a"), ["own_b", "own_c"]);
+check("і набір збирається", types.haveTypes(["own_a"]).size, 3);
+same("різновиди в циклі — теж без безкінечності", [...types.descendants("own_a")].sort(), ["own_b", "own_c"]);
+
+const chain = Array.from({ length: 10 }, (_, i) => custom(`own_l${i}`, i ? `own_l${i - 1}` : "moloko"));
+types.setCustomIngredients(chain);
+check("родовід не глибший за MAX_TYPE_DEPTH", types.ancestors("own_l9").length, types.MAX_TYPE_DEPTH);
+check("глибина типу", types.typeDepth("own_l2"), 3);
+types.setCustomIngredients([]);
+
+// Підбір страв: різновид у коморі закриває потребу в загальнішому.
+const pancakes = byTitle("Млинці");
+const lactoseFree = haveTypes(["moloko_bezlaktozne"]);
+check("рецепт із молоком бачить безлактозне", matchRecipe(pancakes, lactoseFree).missing.includes("moloko"), false);
+check(
+  "безлактозному рецепту звичайне молоко не підходить",
+  matchRecipe({ ingredients: [{ key: "moloko_bezlaktozne" }] }, haveTypes(["moloko"])).missing.join(","),
+  "moloko_bezlaktozne",
+);
+check(
+  "холодильник: безлактозне відкриває страву з молоком",
+  fridgeMatches([{ id: "r_milk", ingredients: [{ key: "moloko" }, { key: "banan" }] }], lactoseFree).length,
+  1,
+);
+check("список покупок не радить молоко, коли є безлактозне", shoppingListFor([pancakes], lactoseFree).some((x) => x.key === "moloko"), false);
+check("а бананів таки бракує", shoppingListFor([pancakes], lactoseFree).some((x) => x.key === "banan"), true);
+
+const noon = new Date(2026, 8, 10, 12, 0, 0);
+const rescue = rescueMatches(
+  [{ id: "r_milk", ingredients: [{ key: "moloko" }, { key: "yajtsya" }] }],
+  [{ key: "moloko_bezlaktozne", addedAt: noon.toISOString(), expiresAt: "2026-09-11" }],
+  { now: noon },
+);
+check("безлактозне, що псується завтра, рятує рецепт із молоком", rescue.length, 1);
+same("і рятує саме «Молоко»", rescue[0]?.saves, [{ key: "moloko", days: 1 }]);
+
+const kokteil = suggestDrinks({ ...empty, pantry: [{ key: "moloko_bezlaktozne" }] }, pancakes, 3, at(13)).find(
+  (p) => p.drink.key === "kokteil",
+);
+check("напій із молоком — «вже вдома», коли є безлактозне", kokteil?.home, true);
+
+// Назви: фраза різновиду перемагає однослівного батька, але не тягне сусідів.
+byName("Молоко безлактозне Галичина 900мл", "moloko_bezlaktozne");
+byName("Молоко Галичина 2,5% 900 мл", "moloko");
+byName("Кефір безлактозний", "kefir");
+byName("печериці", "pecherytsi");
+byName("Шампіньйони свіжі", "pecherytsi");
+byName("Малина заморожена", "malyna");
+byName("Свинячий ошийок", "oshyjok");
+byName("кукурудзяне борошно", "kukurudziane_boroshno");
+byName("кукурудзяний крохмаль", "krokhmal_kukurudz");
+byCat(["en:dairies", "en:milks", "en:lactose-free-milks"], "moloko_bezlaktozne");
+
+// Дописані без мережі йдуть у базу пачкою: батьки раніше за різновиди.
+const api = await jiti.import(path.join(root, "src/lib/supabase/api.ts"));
+{
+  const stored = new Set();
+  const written = [];
+  const insert = async (def) => {
+    if (def.parent?.startsWith("own_") && !stored.has(def.parent)) {
+      throw Object.assign(new Error(`Немає типу ${def.parent}`), { code: "23503" });
+    }
+    stored.add(def.key);
+    written.push(def.key);
+  };
+  await api.upsertCustomIngredientsInOrder(
+    [custom("own_kefir_dom_bezl", "own_kefir_dom"), custom("own_kefir_dom", "kefir")],
+    "u",
+    insert,
+  );
+  same("батько записаний раніше за різновид", written, ["own_kefir_dom", "own_kefir_dom_bezl"]);
+}
+{
+  // Батько — чужий тип, який інший пристрій дописує саме зараз: перша спроба
+  // впала на 23503, повтор після решти проходить.
+  let parentArrived = false;
+  const written = [];
+  const insert = async (def) => {
+    if (def.key === "own_x" && !parentArrived) {
+      parentArrived = true;
+      throw Object.assign(new Error("Немає типу own_chuzhyi"), { code: "23503" });
+    }
+    written.push(def.key);
+  };
+  await api.upsertCustomIngredientsInOrder([custom("own_x", "own_chuzhyi"), custom("own_y", null)], "u", insert);
+  same("23503 — повтор наприкінці вдається", written, ["own_y", "own_x"]);
+}
+{
+  // Інша помилка не зупиняє решту пачки, але не губиться.
+  const written = [];
+  let thrown = null;
+  const insert = async (def) => {
+    if (def.key === "own_bad") throw Object.assign(new Error("rls"), { code: "42501" });
+    written.push(def.key);
+  };
+  await api
+    .upsertCustomIngredientsInOrder([custom("own_bad", null), custom("own_ok", null)], "u", insert)
+    .catch((e) => (thrown = e));
+  same("решта пачки записана", written, ["own_ok"]);
+  check("помилка дійшла до викликача", thrown?.code, "42501");
+}
+{
+  /*
+   * Спільнота перезавантажується від кожної чужої правки й приносить каталог
+   * новим масивом. Той самий вміст не має бути новою версією реєстру: інакше
+   * головна перемішує «Для тебе» під пальцем. Сховище бачить реєстр через
+   * «@/data/ingredients» — звідти й читаємо версію.
+   */
+  // Без браузера persist лише попереджає, що localStorage немає, — тут це шум.
+  const warn = console.warn;
+  console.warn = () => {};
+  const { useApp } = await jiti.import("@/lib/store");
+  const registry = await jiti.import("@/data/ingredients");
+  const catalog = () => [custom("own_kefir_bezl", "kefir", { nutrition: { kcal: 40, protein: 3, fat: 1, carbs: 4 } })];
+  useApp.getState().setCustomIngredients(catalog());
+  const before = registry.currentRegistryVersion();
+  const list = useApp.getState().customIngredients;
+  useApp.getState().setCustomIngredients(catalog());
+  check("той самий каталог новим масивом — версія та сама", registry.currentRegistryVersion(), before);
+  check("і стан не міняється", useApp.getState().customIngredients === list, true);
+  useApp.getState().setCustomIngredients([custom("own_kefir_bezl", null)]);
+  check("інший батько — нова версія", registry.currentRegistryVersion() > before, true);
+  useApp.getState().setCustomIngredients([]);
+  console.warn = warn;
+}
 
 console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
 process.exit(fail ? 1 : 0);

@@ -262,6 +262,20 @@ begin
   end loop;
 end $$;
 
+-- Дописані продукти правлять усі через save_custom_ingredient — з історією
+-- змін (schema.sql / products.sql забирають у клієнтів прямий UPDATE). Тож
+-- політики «custom ingredients update own» тут більше немає: без права UPDATE
+-- вона нічого не дозволяла б.
+--
+-- Картки штрихкодів (застарілий довідник, доки старі застосунки ще пишуть у
+-- нього): виправити може автор або його сімʼя; картку без автора (з чека) —
+-- будь-хто. schema.sql цього не вміє: shares_family зʼявляється лише тут.
+drop policy if exists "barcodes update own" on public.barcode_cache;
+create policy "barcodes update own" on public.barcode_cache
+  for update
+  using (taught_by is null or auth.uid() = taught_by or public.shares_family(taught_by))
+  with check (taught_by is null or auth.uid() = taught_by or public.shares_family(taught_by));
+
 -- Рецепти: сімʼя бачить навіть приватні рецепти одне одного.
 -- Редагувати й видаляти лишається правом автора — спільна видимість не те саме,
 -- що спільне право переписати чужий рецепт.

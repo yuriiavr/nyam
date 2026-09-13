@@ -10,7 +10,7 @@ import { Button, Card, Sheet, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import { applyFilters, byAisle, emptyFilters, generateWeekPlan, shoppingListFor } from "@/lib/matching";
 import { pickQuantity } from "@/lib/shopping";
-import { allRecipes, recipeById, useApp } from "@/lib/store";
+import { allRecipes, pantryTypes, recipeById, useApp } from "@/lib/store";
 import type { MealType, PlanSlot } from "@/lib/types";
 import { dateKey, haptic, MEAL_LABEL, newId, pick, plural, startOfWeek, WEEKDAYS } from "@/lib/utils";
 
@@ -19,6 +19,9 @@ const SLOTS: PlanSlot[] = ["breakfast", "lunch", "dinner"];
 export default function PlanPage() {
   const plan = useApp((s) => s.plan);
   const pantry = useApp((s) => s.pantry);
+  const customIngredients = useApp((s) => s.customIngredients);
+  // Правка типу картки товару переписує тип рядків комори — список закупівлі теж.
+  const products = useApp((s) => s.products);
   const myRecipes = useApp((s) => s.myRecipes);
   const setPlanSlot = useApp((s) => s.setPlanSlot);
   const addShopping = useApp((s) => s.addShopping);
@@ -58,9 +61,10 @@ export default function PlanPage() {
   }, [hydrated, plan, days, myRecipes]);
 
   const shoppingList = useMemo(
-    () => (hydrated ? shoppingListFor(plannedRecipes, pantry.map((p) => p.key)) : []),
+    // Різновид у коморі закриває потребу: безлактозне молоко — молоко не купуємо.
+    () => (hydrated ? shoppingListFor(plannedRecipes, pantryTypes(useApp.getState())) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, plannedRecipes, pantry],
+    [hydrated, plannedRecipes, pantry, customIngredients, products],
   );
 
   // Той самий список, розкладений по відділах у порядку обходу магазину.

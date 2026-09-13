@@ -31,13 +31,16 @@ import {
   Stars,
   useToast,
 } from "@/components/ui";
-import { ing } from "@/data/ingredients";
-import type { Recipe, RecipeComment } from "@/lib/types";
+import { canonicalKey, ing, satisfies } from "@/data/ingredients";
+import type { Product } from "@/lib/product-types";
+import type { PantryItem, Recipe, RecipeComment } from "@/lib/types";
 import { matchRecipe } from "@/lib/matching";
+import { availableFor } from "@/lib/pantry";
 import { itemsForRecipe } from "@/lib/shopping";
 import {
   allRecipes,
   effectiveStats,
+  pantryTypes,
   profileById,
   recipeById,
   useApp,
@@ -57,7 +60,7 @@ import * as api from "@/lib/supabase/api";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { recipeCost } from "@/lib/cost";
 import { macroShares, recipeNutrition } from "@/lib/nutrition";
-import { ingredientQtyLabel } from "@/lib/units";
+import { formatSummed, ingredientQtyLabel } from "@/lib/units";
 
 export default function RecipePage() {
   const params = useParams<{ id: string }>();
@@ -71,6 +74,18 @@ export default function RecipePage() {
   const ratings = useApp((s) => s.ratings);
   const followingIds = useApp((s) => s.following);
   const pantryItems = useApp((s) => s.pantry);
+  /*
+   * Що є — разом із загальнішими типами: безлактозне молоко закриває
+   * «Молоко» в складі. Селектор кешований на масив комори й версію каталогу,
+   * тож новий батько в дописаному типі перераховує збіг без перезапуску.
+   */
+  const have = useApp(pantryTypes);
+  useApp((s) => s.customIngredients);
+  /*
+   * Картки товарів — для «є 1,9 л»: штучна пачка рахується у грами через свою
+   * картку, тож підпис міняється, коли картка приїхала чи змінилась.
+   */
+  const products = useApp((s) => s.products);
   const toggleLike = useApp((s) => s.toggleLike);
   const toggleSave = useApp((s) => s.toggleSave);
   const toggleFollow = useApp((s) => s.toggleFollow);
@@ -125,8 +140,7 @@ export default function RecipePage() {
   const currentServings = servings ?? recipe.servings;
   const factor = currentServings / recipe.servings;
 
-  const pantry = new Set(pantryItems.map((p) => p.key));
-  const match = matchRecipe(recipe, pantry);
+  const match = matchRecipe(recipe, have);
 
   const share = async () => {
     haptic(12);
@@ -424,7 +438,8 @@ export default function RecipePage() {
           {recipe.ingredients.map((item) => {
             const def = ing(item.key);
             // Базове позначається наявним лише тоді, коли воно справді в коморі.
-            const have = pantry.has(item.key);
+            const inStock = have.has(canonicalKey(item.key));
+            const stockNote = inStock ? pantryNote(item.key, pantryItems, products) : "";
             return (
               <div
                 key={item.key}
@@ -444,13 +459,9 @@ export default function RecipePage() {
                   </p>
                   {pantryItems.length > 0 && (
                     <p
-                      className={`text-[11px] ${have ? "text-mint" : "text-faint"}`}
+                      className={`text-[11px] ${inStock ? "text-mint" : "text-faint"}`}
                     >
-                      {have
-                        ? pantry.has(item.key)
-                          ? "є в коморі"
-                          : "базовий продукт"
-                        : "треба купити"}
+                      {inStock ? stockNote : "треба купити"}
                     </p>
                   )}
                 </div>
@@ -627,7 +638,9 @@ function NutritionCard({
   recipe: Recipe;
   servings: number;
 }) {
-  const n = useMemo(() => recipeNutrition(recipe), [recipe]);
+  // КБЖВ дописаного різновиду без власних чисел береться з батька — з каталогу.
+  const customIngredients = useApp((s) => s.customIngredients);
+  const n = useMemo(() => recipeNutrition(recipe), [recipe, customIngredients]);
   if (!n) return null;
 
   const per = {
@@ -841,6 +854,25 @@ function CommentsSection({ recipe }: { recipe: Recipe }) {
 }
 
 /**
+ * Підпис під рядком складу, коли потрібне вдома є: «є в коморі · 1,9 л».
+ *
+ * Якщо є лише різновид — називаємо саме його («є: Молоко безлактозне»):
+ * інакше людина шукала б у холодильнику звичайне молоко, якого там немає.
+ */
+function pantryNote(needKey: string, pantry: PantryItem[], products: Record<string, Product>): string {
+  const need = canonicalKey(needKey);
+  const exact = pantry.some((p) => canonicalKey(p.key) === need);
+  // Разом по всіх пачках, що годяться: Галичина 900 мл + Молокія 1 л — «1,9 л».
+  const amount = formatSummed(availableFor(needKey, pantry, products));
+  if (exact) return amount ? `є в коморі · ${amount}` : "є в коморі";
+  const variants = [
+    ...new Set(pantry.filter((p) => satisfies(p.key, need)).map((p) => p.key)),
+  ];
+  const names = variants.map((key) => ing(key).label).join(", ");
+  return amount ? `є: ${names} · ${amount}` : `є: ${names}`;
+}
+
+/**
  * Скільки страва коштує за цінами з твоїх чеків.
  *
  * Не «дешево / дорого» з картки рецепта — це рівень, який автор ставив на
@@ -853,7 +885,15 @@ function CommentsSection({ recipe }: { recipe: Recipe }) {
  */
 function CostCard({ recipe, servings }: { recipe: Recipe; servings: number }) {
   const pantry = useApp((s) => s.pantry);
-  const cost = useMemo(() => recipeCost(recipe, pantry), [recipe, pantry]);
+  // Ціну дає і рядок-різновид, а родовід живе в каталозі дописаних.
+  const customIngredients = useApp((s) => s.customIngredients);
+  // Грами штучної пачки знає її картка товару — без неї ціна грама не порахується.
+  const products = useApp((s) => s.products);
+  const cost = useMemo(
+    () => recipeCost(recipe, pantry, products),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recipe, pantry, products, customIngredients],
+  );
   if (!cost || cost.coverage < 0.34) return null;
 
   const partial = cost.coverage < 0.95;

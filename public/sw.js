@@ -102,6 +102,10 @@ self.addEventListener("push", (event) => {
       // строки не має накопичуватись стосом за тиждень.
       tag: payload.tag || undefined,
       renotify: Boolean(payload.tag),
+      // Будильник готування з сервера: не зникає сам і вібрує так само, як
+      // місцевий, якого він заміняє. iOS обидва поля ігнорує, Android слухає.
+      requireInteraction: Boolean(payload.requireInteraction),
+      vibrate: Array.isArray(payload.vibrate) ? payload.vibrate : undefined,
       data: { url: payload.url || "/" },
     }),
   );
@@ -114,6 +118,16 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      /*
+       * Вікно, що вже стоїть на потрібній сторінці, лише піднімаємо. Перехід
+       * туди, де ти вже є, — це перезавантаження, а для будильника готування
+       * воно означало б: натиснув «час вийшов» — і опинився на початку
+       * рецепта, без кроку й таймера.
+       */
+      for (const client of windows) {
+        const url = new URL(client.url);
+        if (url.pathname + url.search === target && "focus" in client) return client.focus();
+      }
       // Уже відкритий застосунок не піднімаємо вдруге, а просто переводимо.
       for (const client of windows) {
         if ("focus" in client) {

@@ -1,0 +1,318 @@
+-- ============================================================================
+--  Ням — вбудовані типи продуктів у базі: 256 ключів, 19 із батьком.
+--
+--  ЗГЕНЕРОВАНО: node scripts/generate-builtin-sql.mjs із src/data/ingredients.ts.
+--  Не редагувати вручну.
+--
+--  Виконувати в Supabase → SQL Editor після schema.sql. Скрипт ідемпотентний.
+--  Кожен деплой, що додає вбудовані продукти чи міняє їхніх батьків, —
+--  перезапустити цей файл ДО деплою коду: інакше новий тип не пройде
+--  перевірку батька дописаного типу (помилка 23503 «Немає типу …»).
+-- ============================================================================
+
+create table if not exists public.builtin_ingredients (
+  key        text primary key check (key ~ '^[a-z][a-z0-9_]*$' and key !~ '^own_'),
+  parent_key text references public.builtin_ingredients (key)
+);
+
+alter table public.builtin_ingredients enable row level security;
+revoke all on public.builtin_ingredients from anon, authenticated;
+grant select on public.builtin_ingredients to anon, authenticated;
+drop policy if exists "builtin ingredients readable" on public.builtin_ingredients;
+create policy "builtin ingredients readable" on public.builtin_ingredients
+  for select using (true);
+
+insert into public.builtin_ingredients (key, parent_key) values
+  ('kartoplya', null),
+  ('tsybulya', null),
+  ('chasnyk', null),
+  ('morkva', null),
+  ('buryak', null),
+  ('kapusta', null),
+  ('kapusta_pekinska', null),
+  ('kapusta_chervona', null),
+  ('tsvitna_kapusta', null),
+  ('brusselska', null),
+  ('brokoli', null),
+  ('pomidor', null),
+  ('pomidory_cherri', 'pomidor'),
+  ('ogirok', null),
+  ('perets', null),
+  ('chili', null),
+  ('gryby', null),
+  ('pecherytsi', 'gryby'),
+  ('hlyva', 'gryby'),
+  ('bilyi_hryb', 'gryby'),
+  ('kabachok', null),
+  ('baklazhan', null),
+  ('garbuz', null),
+  ('batat', null),
+  ('salat', null),
+  ('ruccola', null),
+  ('shpynat', null),
+  ('zelen', null),
+  ('kinza', null),
+  ('bazylik', null),
+  ('myata', null),
+  ('rozmaryn', null),
+  ('chebrets', null),
+  ('kukurudza', null),
+  ('goroshok', null),
+  ('strukova_kvasolya', null),
+  ('sparzha', null),
+  ('selera', null),
+  ('redys', null),
+  ('daykon', null),
+  ('porey', null),
+  ('zelena_tsybulya', null),
+  ('shalot', null),
+  ('imbyr', null),
+  ('khrin', null),
+  ('koren_selery', null),
+  ('pasternak', null),
+  ('lymon', null),
+  ('lime', null),
+  ('apelsyn', null),
+  ('mandaryn', null),
+  ('grejpfrut', null),
+  ('banan', null),
+  ('yabluko', null),
+  ('grusha', null),
+  ('avokado', null),
+  ('vynograd', null),
+  ('kavun', null),
+  ('dynya', null),
+  ('persyk', null),
+  ('abrykos', null),
+  ('slyva', null),
+  ('vyshnya', null),
+  ('yagody', null),
+  ('klubnika', 'yagody'),
+  ('malyna', 'yagody'),
+  ('chornytsya', 'yagody'),
+  ('smorodyna', 'yagody'),
+  ('ananas', null),
+  ('manho', null),
+  ('kivi', null),
+  ('granat', null),
+  ('hurma', null),
+  ('inzhyr', null),
+  ('finiky', null),
+  ('izyum', null),
+  ('kurah', null),
+  ('chornoslyv', null),
+  ('kokos', null),
+  ('olivky', null),
+  ('kurka', null),
+  ('kuryachi_stegna', null),
+  ('kuryachi_krylsya', null),
+  ('indychka', null),
+  ('kachka', null),
+  ('svynyna', null),
+  ('oshyjok', 'svynyna'),
+  ('yalovychyna', null),
+  ('barannyna', null),
+  ('kroliatyna', null),
+  ('farsh', null),
+  ('pechinka', null),
+  ('bekon', null),
+  ('vetchyna', null),
+  ('kovbasa', null),
+  ('salo', null),
+  ('smalets', null),
+  ('losos', null),
+  ('forel', null),
+  ('bila_ryba', null),
+  ('tunets', null),
+  ('skumbriya', null),
+  ('oseledets', null),
+  ('sardyny', null),
+  ('krevetky', null),
+  ('midiyi', null),
+  ('kalmar', null),
+  ('ikra', null),
+  ('krab_palychky', null),
+  ('yajtsya', null),
+  ('yajtsya_perepel', null),
+  ('moloko', null),
+  ('moloko_bezlaktozne', 'moloko'),
+  ('kefir', null),
+  ('ryazhanka', null),
+  ('smetana', null),
+  ('vershky', null),
+  ('syr', null),
+  ('parmezan', 'syr'),
+  ('motsarela', null),
+  ('feta', null),
+  ('rikotta', null),
+  ('mascarpone', null),
+  ('kamember', null),
+  ('blakytnyi_syr', null),
+  ('vershkovyi_syr', null),
+  ('syr_plavlenyi', null),
+  ('tvorog', null),
+  ('jogurt', null),
+  ('maslo', null),
+  ('moloko_zguschene', null),
+  ('yajechnyi_bilok', null),
+  ('yajechnyi_zhovtok', null),
+  ('moloko_roslynne', null),
+  ('rys', null),
+  ('ris_burui', null),
+  ('grechka', null),
+  ('makarony', null),
+  ('lokshyna', null),
+  ('lokshyna_rysova', null),
+  ('funchoza', null),
+  ('lokshyna_grechana', null),
+  ('lokshyna_kukurudz', null),
+  ('boroshno', null),
+  ('kukurudziane_boroshno', null),
+  ('vivsyanka', null),
+  ('bulgur', null),
+  ('kinoa', null),
+  ('perlivka', null),
+  ('pshono', null),
+  ('manka', null),
+  ('kvasolya', null),
+  ('nut', null),
+  ('sochevytsya', null),
+  ('horokh', null),
+  ('soya', null),
+  ('krokhmal', null),
+  ('panirovka', null),
+  ('krokhmal_kukurudz', null),
+  ('otrubi', null),
+  ('sil', null),
+  ('perets_ch', null),
+  ('perets_chervonyi', null),
+  ('paprika', null),
+  ('kmyn', null),
+  ('kari', null),
+  ('kurkuma', null),
+  ('oregano', null),
+  ('korytsya', null),
+  ('muskat', null),
+  ('gvozdyka', null),
+  ('kardamon', null),
+  ('lavrovyi', null),
+  ('suneli', null),
+  ('imbyr_moloty', null),
+  ('tsukor', null),
+  ('tsukor_korychnevyi', null),
+  ('tsukrova_pudra', null),
+  ('vanilnyi_tsukor', null),
+  ('kakao', null),
+  ('vanil', null),
+  ('rozpushuvach', null),
+  ('drizhdzhi', null),
+  ('zhelatyn', null),
+  ('oliya', null),
+  ('olyvkova', null),
+  ('kunzhutna_oliya', null),
+  ('kokosova_oliya', null),
+  ('soyevyi', null),
+  ('rybnyi_sous', null),
+  ('ustrychnyi', null),
+  ('teriyaki', null),
+  ('sriracha', null),
+  ('worcester', null),
+  ('tomatna_pasta', null),
+  ('pomidory_konserv', null),
+  ('ketchup', null),
+  ('maionez', null),
+  ('girchytsya', null),
+  ('otset', null),
+  ('balsamik', null),
+  ('sous_kyslo_solodkyi', null),
+  ('sous', null),
+  ('med', null),
+  ('dzhem', null),
+  ('kokos_moloko', null),
+  ('tahini', null),
+  ('arahisova_pasta', null),
+  ('humus', null),
+  ('pesto', null),
+  ('bulion', null),
+  ('tom_yam_pasta', null),
+  ('lymonnyi_sik', null),
+  ('tomatnyi_sik', null),
+  ('vyno_bile', null),
+  ('vyno_chervone', null),
+  ('khlib', null),
+  ('baton', 'khlib'),
+  ('khlib_zhytniy', null),
+  ('tortylya', null),
+  ('bulochka', null),
+  ('kruassan', null),
+  ('tisto_slojene', null),
+  ('tisto_pisochne', null),
+  ('lasagna_lysty', null),
+  ('sukhary', null),
+  ('pechyvo', null),
+  ('savoyardi', null),
+  ('sik', null),
+  ('sik_apelsynovyi', 'sik'),
+  ('sik_yablunyi', 'sik'),
+  ('voda_gazovana', null),
+  ('lymonad', null),
+  ('kvas', null),
+  ('kompot', null),
+  ('pyvo', null),
+  ('sirop', null),
+  ('gorikhy', null),
+  ('voloski', 'gorikhy'),
+  ('mygdal', 'gorikhy'),
+  ('funduk', 'gorikhy'),
+  ('keshyu', 'gorikhy'),
+  ('fistashky', 'gorikhy'),
+  ('arahis', null),
+  ('kunzhut', null),
+  ('nasinnya_soniashnyka', null),
+  ('garbuzove_nasinnya', null),
+  ('chia', null),
+  ('lnyane', null),
+  ('kokosova_struzhka', null),
+  ('shokolad', null),
+  ('tofu', null),
+  ('morozyvo', null),
+  ('kava', null),
+  ('chai', null),
+  ('voda', null)
+on conflict (key) do update set parent_key = excluded.parent_key
+  where builtin_ingredients.parent_key is distinct from excluded.parent_key;
+
+do $$
+declare deepest text;
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'custom_ingredients'
+                and column_name = 'parent_key') then
+    with recursive up (key, cur, d) as (
+      select key, parent_key, 0 from public.builtin_ingredients
+      union all
+      select key, parent_key, 0 from public.custom_ingredients
+      union all
+      select u.key, coalesce(c.parent_key, b.parent_key), u.d + 1
+        from up u
+        left join public.custom_ingredients c on c.key = u.cur
+        left join public.builtin_ingredients b on b.key = u.cur
+       where u.cur is not null and u.d < 6
+    )
+    select key into deepest from up where d = 6 and cur is not null limit 1;
+  else
+    with recursive up (key, cur, d) as (
+      select key, parent_key, 0 from public.builtin_ingredients
+      union all
+      select u.key, b.parent_key, u.d + 1
+        from up u join public.builtin_ingredients b on b.key = u.cur
+       where u.d < 6
+    )
+    select key into deepest from up where d = 6 and cur is not null limit 1;
+  end if;
+  if deepest is not null then
+    raise exception 'Задовгий ланцюжок різновидів: %', deepest using errcode = '23514';
+  end if;
+end $$;
+
+notify pgrst, 'reload schema';

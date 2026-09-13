@@ -1,15 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Plus, ScanBarcode, ShoppingBasket } from "lucide-react";
+import { Plus, ScanBarcode, ShoppingBasket, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, EmptyState, Segmented } from "@/components/ui";
-import { ing } from "@/data/ingredients";
+import { Button, Card, Chip, EmptyState, Segmented } from "@/components/ui";
+import { ing, knownIngredient, satisfies } from "@/data/ingredients";
 import { fridgeMatches, suggestable } from "@/lib/matching";
-import { useApp } from "@/lib/store";
+import { pantryCounts } from "@/lib/pantry";
+import { pantryTypes, useApp } from "@/lib/store";
 import type { MatchResult } from "@/lib/types";
 import { formatMinutes, plural } from "@/lib/utils";
 
@@ -24,34 +25,59 @@ export default function FridgePage() {
   const hydrated = useApp((s) => s.hydrated);
   const pantry = useApp((s) => s.pantry);
   const myRecipes = useApp((s) => s.myRecipes);
+  /*
+   * Типи комори разом із загальнішими: безлактозне молоко відкриває рецепти з
+   * молоком. Набір залежить і від каталогу дописаних — там живуть батьки.
+   */
+  const have = useApp(pantryTypes);
+  const customIngredients = useApp((s) => s.customIngredients);
+  // Правка типу картки товару переписує тип рядків комори — з нею й збіги.
+  const products = useApp((s) => s.products);
   const [mode, setMode] = useState<Mode>("almost");
-
-  const pantryKeys = pantry.map((p) => p.key);
+  /*
+   * «Рецепти з цим» з групи комори (F1): лише страви, яким годиться цей тип —
+   * сам або як різновид потрібного («Молоко безлактозне» → рецепти з молоком).
+   * Читаємо з адреси після монтування, без useSearchParams: тому потрібна
+   * межа Suspense, а сторінка статична.
+   */
+  const [withKey, setWithKey] = useState<string | null>(null);
+  useEffect(() => {
+    const key = new URLSearchParams(window.location.search).get("with");
+    if (key && knownIngredient(key)) setWithKey(key);
+  }, []);
 
   const matches = useMemo(() => {
-    if (!hydrated || pantryKeys.length === 0) return [];
+    if (!hydrated || pantry.length === 0) return [];
     // Бібліотеці потрібен увесь стан, але перемальовування — ні: беремо
     // знімок у момент обчислення, а залежності перелічені нижче.
-    return fridgeMatches(suggestable(useApp.getState()), pantryKeys);
+    return fridgeMatches(suggestable(useApp.getState()), have);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, pantry, myRecipes]);
+  }, [hydrated, pantry, have, myRecipes, customIngredients, products]);
+
+  const withType = useMemo(
+    () => (withKey ? matches.filter((m) => m.recipe.ingredients.some((i) => satisfies(withKey, i.key))) : matches),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [matches, withKey, customIngredients],
+  );
 
   const filtered = useMemo(() => {
-    if (mode === "ready") return matches.filter((m) => m.missing.length === 0);
-    if (mode === "almost") return matches.filter((m) => m.missing.length <= 2);
-    return matches;
-  }, [matches, mode]);
+    if (mode === "ready") return withType.filter((m) => m.missing.length === 0);
+    if (mode === "almost") return withType.filter((m) => m.missing.length <= 2);
+    return withType;
+  }, [withType, mode]);
 
   const counts = useMemo(
     () => ({
-      ready: matches.filter((m) => m.missing.length === 0).length,
-      almost: matches.filter((m) => m.missing.length <= 2).length,
-      all: matches.length,
+      ready: withType.filter((m) => m.missing.length === 0).length,
+      almost: withType.filter((m) => m.missing.length <= 2).length,
+      all: withType.length,
     }),
-    [matches],
+    [withType],
   );
+  // Рядки комори, а не ключі: дві пачки молока — два продукти; «Сіль» у двох членів сімʼї — одна.
+  const rows = useMemo(() => pantryCounts(pantry).items, [pantry]);
 
-  if (hydrated && pantryKeys.length === 0) {
+  if (hydrated && pantry.length === 0) {
     return (
       <div>
         <TopBar title="Що в холодильнику" />
@@ -76,7 +102,7 @@ export default function FridgePage() {
     <div className="pb-8">
       <TopBar
         title="Що в холодильнику"
-        subtitle={`${pantryKeys.length} ${plural(pantryKeys.length, "продукт", "продукти", "продуктів")} у коморі`}
+        subtitle={`${rows} ${plural(rows, "продукт", "продукти", "продуктів")} у коморі`}
         right={
           <Link
             href="/pantry"
@@ -87,6 +113,14 @@ export default function FridgePage() {
           </Link>
         }
       />
+
+      {withKey && (
+        <div className="px-4 pt-4">
+          <Chip active onClick={() => setWithKey(null)}>
+            {ing(withKey).emoji} Лише з «{ing(withKey).label}» <X size={13} />
+          </Chip>
+        </div>
+      )}
 
       <div className="px-4 pt-4">
         <Segmented

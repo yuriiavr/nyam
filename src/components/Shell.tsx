@@ -6,6 +6,7 @@ import { refreshFromServer } from "@/lib/session";
 import { usePathname } from "next/navigation";
 import { AuthScreen } from "./AuthScreen";
 import { BottomNav, NAV_HEIGHT, useNavHidden } from "./BottomNav";
+import { PushOffer } from "./PushOffer";
 import { useApp } from "@/lib/store";
 
 /**
@@ -62,8 +63,26 @@ function AuthGate({ pathname, children }: { pathname: string; children: React.Re
 
   if (isPublic(pathname)) return <>{children}</>;
   if (!hydrated || !authChecked) return <Splash />;
-  if (!account) return <AuthScreen />;
-  return <>{children}</>;
+  if (!account) {
+    return (
+      <>
+        <AuthScreen />
+        {/* На екрані входу — лише підказка про встановлення, не про сповіщення:
+            на iPhone застосунок з Початкового екрана має окреме сховище, тож
+            краще встановити до входу, а з вбудованого браузера Instagram чи
+            Telegram вхід через Google часто не пускає зовсім. */}
+        <PushOffer />
+      </>
+    );
+  }
+  return (
+    <>
+      {children}
+      {/* Пропозиції ніколи не мають вискочити поверх заставки чи публічних
+          сторінок; сповіщення — лише тут, у гілці з акаунтом. */}
+      <PushOffer />
+    </>
+  );
 }
 
 /** Заставка на час перевірки сесії — секунда-дві на холодному старті. */

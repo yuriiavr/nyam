@@ -9,6 +9,7 @@ import { TopBar } from "@/components/TopBar";
 import { Button, Card, EmptyState } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import { rescueMatches, type RescueMatch, suggestable } from "@/lib/matching";
+import { pantryDisplayName } from "@/lib/pantry";
 import { useApp } from "@/lib/store";
 import type { PantryItem } from "@/lib/types";
 import { expiryInfo, formatMinutes, plural } from "@/lib/utils";
@@ -25,6 +26,10 @@ export default function RescuePage() {
   const hydrated = useApp((s) => s.hydrated);
   const pantry = useApp((s) => s.pantry);
   const myRecipes = useApp((s) => s.myRecipes);
+  // Строк переходить на загальніші типи через каталог — і з ним перераховується.
+  const customIngredients = useApp((s) => s.customIngredients);
+  // Назва пачки — з картки товару, коли вона є: «Кефір Яготинський», а не просто «Кефір».
+  const products = useApp((s) => s.products);
 
   const { matches, expiring, expired } = useMemo(() => {
     if (!hydrated) return { matches: [], expiring: [], expired: [] };
@@ -45,7 +50,7 @@ export default function RescuePage() {
       expired: gone,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, pantry, myRecipes]);
+  }, [hydrated, pantry, myRecipes, customIngredients]);
 
   if (hydrated && expiring.length === 0) {
     return (
@@ -92,11 +97,12 @@ export default function RescuePage() {
               const exp = expiryInfo(item.expiresAt);
               return (
                 <span
-                  key={item.key}
+                  // Дві пачки одного типу з різними строками — два рядки: ключ типу не унікальний.
+                  key={item.id}
                   className="inline-flex items-center gap-1.5 rounded-full border border-brand-2/50 bg-brand-2/10 px-3 py-1.5 text-[13px] font-semibold"
                 >
                   <span>{def.emoji}</span>
-                  {def.label}
+                  {pantryDisplayName(item, products)}
                   <span className="text-[10.5px] font-bold text-brand-2">{exp?.label}</span>
                 </span>
               );

@@ -1,6 +1,6 @@
-import { CAT_LABEL, ing, isSeasoning } from "@/data/ingredients";
+import { CAT_LABEL, canonicalKey, ing, isSeasoning, lineage, type HaveSet } from "@/data/ingredients";
 import type { AppState } from "./store";
-import { allRecipes, daysSinceCooked, effectiveStats } from "./store";
+import { allRecipes, daysSinceCooked, effectiveStats, pantryTypes } from "./store";
 import { courseOf } from "./pairing";
 import type {
   Course,
@@ -132,9 +132,12 @@ export function activeFilterCount(f: Filters): number {
 
 /**
  * Рахує, наскільки рецепт покривається наявними продуктами.
- * Базові продукти (сіль, олія, борошно) не штрафують — вважаємо, що вони є.
+ *
+ * `have` — лише HaveSet (haveTypes / pantryTypes): у ньому вже лежать і
+ * загальніші типи, тож безлактозне молоко в коморі закриває «Молоко» в
+ * рецепті. Звичайний Set із ключів комори сюди не пройде компіляцію.
  */
-export function matchRecipe(r: Recipe, have: Set<string>): MatchResult {
+export function matchRecipe(r: Recipe, have: HaveSet): MatchResult {
   const required = r.ingredients.filter((i) => !i.optional);
   const haveKeys: string[] = [];
   const missing: string[] = [];
@@ -147,7 +150,7 @@ export function matchRecipe(r: Recipe, have: Set<string>): MatchResult {
      * справді немає. Припущення «сіль точно є» колись рятувало від порожньої
      * комори, а тепер просто брехало б людині, яка щойно сказала протилежне.
      */
-    if (have.has(item.key)) haveKeys.push(item.key);
+    if (have.has(canonicalKey(item.key))) haveKeys.push(item.key);
     else missing.push(item.key);
   }
 
@@ -158,10 +161,9 @@ export function matchRecipe(r: Recipe, have: Set<string>): MatchResult {
 
 export function fridgeMatches(
   recipes: Recipe[],
-  pantry: string[],
+  have: HaveSet,
   { minPct = 1 }: { minPct?: number } = {},
 ): MatchResult[] {
-  const have = new Set(pantry);
   if (!have.size) return [];
   return recipes
     .map((r) => matchRecipe(r, have))
@@ -172,7 +174,9 @@ export function fridgeMatches(
        * лежить у базових. Виняток — страва, для якої є геть усе: саме такі
        * й готують, коли в холодильнику порожньо.
        */
-      const realHit = m.recipe.ingredients.some((i) => have.has(i.key) && !isSeasoning(i.key));
+      const realHit = m.recipe.ingredients.some(
+        (i) => have.has(canonicalKey(i.key)) && !isSeasoning(i.key),
+      );
       return (realHit || m.pct === 100) && m.pct >= minPct;
     })
     .sort((a, b) => b.pct - a.pct || a.missing.length - b.missing.length);
@@ -203,21 +207,28 @@ export function rescueMatches(
   pantry: PantryItem[],
   { withinDays = 3, now = new Date() }: { withinDays?: number; now?: Date } = {},
 ): RescueMatch[] {
-  const have = new Set(pantry.map((p) => p.key));
+  const have = pantryTypes({ pantry });
   const urgent = new Map<string, number>();
 
+  /*
+   * Строк переходить і на загальніші типи: безлактозне молоко, що псується
+   * завтра, рятує й рецепт, якому треба просто «Молоко». Із кількох рядків
+   * одного типу рахується найтерміновіший.
+   */
   for (const item of pantry) {
     const exp = expiryInfo(item.expiresAt, now);
     if (!exp || exp.days < 0 || exp.days > withinDays) continue;
-    urgent.set(item.key, exp.days);
+    for (const k of lineage(item.key)) {
+      urgent.set(k, Math.min(urgent.get(k) ?? Infinity, exp.days));
+    }
   }
   if (urgent.size === 0) return [];
 
   const out: RescueMatch[] = [];
   for (const recipe of recipes) {
     const saves = recipe.ingredients
-      .filter((i) => !i.optional && urgent.has(i.key))
-      .map((i) => ({ key: i.key, days: urgent.get(i.key) as number }));
+      .filter((i) => !i.optional && urgent.has(canonicalKey(i.key)))
+      .map((i) => ({ key: i.key, days: urgent.get(canonicalKey(i.key)) as number }));
     if (saves.length === 0) continue;
 
     // Чим ближче строк, тим важчий продукт: кефір, у якого сьогодні останній
@@ -237,10 +248,9 @@ export function rescueMatches(
  */
 export function shoppingSuggestions(
   recipes: Recipe[],
-  pantry: string[],
+  have: HaveSet,
   limit = 8,
 ): Array<{ key: string; unlocks: number }> {
-  const have = new Set(pantry);
   const counter = new Map<string, number>();
   for (const r of recipes) {
     const m = matchRecipe(r, have);
@@ -354,7 +364,7 @@ export function recommend(
 ): Recommendation[] {
   const { limit = 20, respectPantry = true } = opts;
   const taste = buildTaste(state);
-  const have = new Set(state.pantry.map((p) => p.key));
+  const have = pantryTypes(state);
   const meal = currentMeal();
   const seen = new Set([...state.dismissed]);
 
@@ -461,16 +471,16 @@ export function generateWeekPlan(
  */
 export function shoppingListFor(
   recipes: Recipe[],
-  pantry: string[],
+  have: HaveSet,
 ): Array<{ key: string; quantities: SummedQuantity[]; label: string; count: number }> {
-  const have = new Set(pantry);
   const map = new Map<string, { parts: Array<{ amount?: number; unit: Unit }>; free: string[]; count: number }>();
 
   for (const r of recipes) {
     for (const item of r.ingredients) {
       if (item.optional) continue;
       // Базове теж потрапляє в список: скінчилась олія — треба купити олію.
-      if (have.has(item.key)) continue;
+      // Різновид теж закриває потребу: безлактозне молоко вдома — молоко не купуємо.
+      if (have.has(canonicalKey(item.key))) continue;
 
       const entry = map.get(item.key) ?? { parts: [], free: [], count: 0 };
       const q = quantityOf(item);

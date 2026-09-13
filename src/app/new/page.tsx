@@ -23,9 +23,12 @@ import {
   CAT_ORDER,
   allIngredients,
   ing,
+  isOwnKey,
+  knownIngredient,
   searchIngredients,
 } from "@/data/ingredients";
-import { lookupBarcode } from "@/lib/barcode";
+import { catalogDeps } from "@/components/pantry/catalog";
+import { resolveBarcode } from "@/lib/resolve";
 import { recipeById, useApp } from "@/lib/store";
 import type {
   Course,
@@ -37,6 +40,7 @@ import type {
   RecipeIngredient,
   RecipeStep,
 } from "@/lib/types";
+import { EditTypeButton } from "@/components/EditTypeButton";
 import { NewIngredientSheet } from "@/components/NewIngredientSheet";
 import { FOOD_EMOJI } from "@/data/emoji";
 import { COURSE_LABEL, COURSE_ORDER, courseOf } from "@/lib/pairing";
@@ -211,41 +215,64 @@ function RecipeForm() {
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   /**
-   * Додає товар зі штрихкоду. Якщо він зіставився з каталогом — беремо звідти
-   * ключ і емодзі, але харчову цінність лишаємо з етикетки: вона стосується
-   * саме цього товару, а не усередненої категорії.
+   * Додає товар зі штрихкоду (D10).
+   *
+   * Рецепт спільний, тож рядок складу — завжди тип, а не конкретна пачка:
+   * ключ — тип картки товару (чи тип, який знає база або Open Food Facts), а
+   * назва й КБЖВ — з картки чи етикетки, бо стосуються саме цього товару, а
+   * не усередненої категорії. Синтетичний ключ `barcode:…` лишається тільки
+   * тоді, коли ні товару, ні типу не знає ніхто: інакше рядок не зливався б із
+   * рецептами й списком покупок.
    */
   const onScanned = async (code: string) => {
     setScanOpen(false);
     setScanBusy(true);
     try {
-      const product = await lookupBarcode(code);
-      const matched = product.ingredient;
-      // Для товару поза каталогом синтетичний ключ, щоб він не зливався
-      // з іншими й не ламав список покупок.
-      const key = matched?.key ?? `barcode:${product.barcode}`;
+      const res = await resolveBarcode(code, catalogDeps());
+      if (!res.ean) {
+        toast("Це не штрихкод товару — обери продукт зі списку", "ℹ️");
+        return;
+      }
 
+      const product = res.product;
+      if (product) useApp.getState().upsertProducts([product], res.hit ? [res.hit] : undefined);
+      const typeKey = product?.typeKey ?? (res.typeKey && knownIngredient(res.typeKey) ? res.typeKey : undefined);
+      const name = product?.name ?? (res.draft?.name || undefined);
+      const nutrition = product?.nutrition ?? res.draft?.nutrition;
+
+      if (!typeKey && !name) {
+        toast(
+          res.error === "offline"
+            ? "Без звʼязку штрихкод не прочитати — обери продукт зі списку"
+            : "Цього штрихкоду ніхто не знає — обери продукт зі списку",
+          "⚠️",
+        );
+        return;
+      }
+
+      const key = typeKey ?? `barcode:${res.ean}`;
       if (ingredients.some((i) => i.key === key)) {
         toast("Цей продукт уже в списку", "ℹ️");
         return;
       }
 
+      const def = typeKey ? ing(typeKey) : null;
       setIngredients((prev) => [
         ...prev,
         {
           key,
-          unit: matched?.defaultUnit ?? "g",
-          label: matched ? undefined : product.name,
-          nutrition: product.nutrition,
+          unit: def?.defaultUnit ?? "g",
+          // Назва товару уточнює тип («Молоко безлактозне Галичина 2,5%»); без неї — назва типу.
+          label: name && name !== def?.label ? name : undefined,
+          nutrition,
         },
       ]);
 
       haptic(14);
+      const shown = name ?? def?.label ?? "Товар";
       toast(
-        product.nutrition
-          ? `${product.name} — КБЖВ з етикетки`
-          : `${product.name} — без даних про склад`,
-        product.nutrition ? "✅" : "⚠️",
+        nutrition ? `${shown} — КБЖВ з етикетки` : `${shown} — без даних про склад`,
+        nutrition ? "✅" : "⚠️",
       );
     } catch {
       toast("Не вдалося прочитати товар", "⚠️");
@@ -716,7 +743,7 @@ function RecipeForm() {
         open={creating !== null}
         initialName={creating ?? ""}
         onClose={() => setCreating(null)}
-        onCreated={(def) => {
+        onCreated={(def, { existing }) => {
           setIngredients((p) => [
             ...p,
             {
@@ -729,7 +756,8 @@ function RecipeForm() {
               nutrition: def.nutrition,
             },
           ]);
-          toast(`«${def.label}» тепер у каталозі`, "📦");
+          // Обрали наявний тип замість нового — каталог той самий, змінився лише рецепт.
+          toast(existing ? `«${def.label}» у рецепті` : `«${def.label}» тепер у каталозі`, "📦");
         }}
       />
     </div>
@@ -960,7 +988,8 @@ function IngredientPicker({
 }) {
   const list = useMemo(() => {
     const base = query.trim() ? searchIngredients(query) : allIngredients();
-    return base.filter((d) => !exclude.includes(d.key));
+    // Обʼєднаний дописаний тип — лише псевдонім переможця: у рецепт кладемо переможця.
+    return base.filter((d) => !exclude.includes(d.key) && !d.mergedInto);
   }, [query, exclude]);
 
   const grouped = useMemo(() => {
@@ -1017,23 +1046,45 @@ function IngredientPicker({
                 {CAT_LABEL[cat]}
               </h3>
               <div className="flex flex-wrap gap-2">
-                {items.map((def) => (
-                  <button
-                    key={def.key}
-                    onClick={() => {
-                      onPick(def.key);
-                      // Продукт уже в списку — рядок пошуку більше не потрібен,
-                      // а з ним наступний продукт довелось би шукати крізь
-                      // залишки попереднього запиту.
-                      onQueryChange("");
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 px-3 text-[13px] font-semibold active:bg-surface-2"
-                  >
-                    <span>{def.emoji}</span>
-                    {def.label}
-                    <Plus size={13} className="text-brand" />
-                  </button>
-                ))}
+                {items.map((def) => {
+                  const own = isOwnKey(def.key);
+                  const pick = (
+                    <button
+                      key={def.key}
+                      onClick={() => {
+                        onPick(def.key);
+                        // Продукт уже в списку — рядок пошуку більше не потрібен,
+                        // а з ним наступний продукт довелось би шукати крізь
+                        // залишки попереднього запиту.
+                        onQueryChange("");
+                      }}
+                      className={
+                        own
+                          ? "inline-flex items-center gap-1.5 py-2 pl-3 pr-1 text-[13px] font-semibold"
+                          : "inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 px-3 text-[13px] font-semibold active:bg-surface-2"
+                      }
+                    >
+                      <span>{def.emoji}</span>
+                      {def.label}
+                      <Plus size={13} className="text-brand" />
+                    </button>
+                  );
+                  /*
+                   * Дописаний тип із хибним батьком виправляють просто тут, де
+                   * його й створили, — не чекаючи, поки хтось покладе його в комору.
+                   */
+                  return own ? (
+                    <span
+                      key={def.key}
+                      className="inline-flex items-center rounded-full border border-line bg-surface pr-1 active:bg-surface-2"
+                    >
+                      {pick}
+                      <EditTypeButton typeKey={def.key} icon />
+                    </span>
+                  ) : (
+                    pick
+                  );
+                })}
               </div>
             </div>
           ))}

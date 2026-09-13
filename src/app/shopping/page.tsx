@@ -14,7 +14,7 @@ import {
   Sheet,
   useToast,
 } from "@/components/ui";
-import { allIngredients, ing } from "@/data/ingredients";
+import { allIngredients, ing, satisfies } from "@/data/ingredients";
 import { byAisle, shoppingSuggestions } from "@/lib/matching";
 import {
   catalogItem,
@@ -23,9 +23,9 @@ import {
   shoppingLabel,
   shoppingQtyLabel,
 } from "@/lib/shopping";
-import { allRecipes, recipeById, useApp } from "@/lib/store";
+import { allRecipes, pantryTypes, recipeById, useApp } from "@/lib/store";
 import type { PantryItem, ShoppingItem } from "@/lib/types";
-import { haptic, plural } from "@/lib/utils";
+import { haptic, newId, plural } from "@/lib/utils";
 
 /**
  * Список покупок.
@@ -50,7 +50,7 @@ export default function ShoppingPage() {
    * і без цього рядка екран не дізнався б, що він нарешті приїхав, — власний
    * продукт показувався б сирим ключем до наступного дотику.
    */
-  useApp((s) => s.customIngredients);
+  const customIngredients = useApp((s) => s.customIngredients);
   const myRecipes = useApp((s) => s.myRecipes);
   const remoteRecipes = useApp((s) => s.remoteRecipes);
   const hydrated = useApp((s) => s.hydrated);
@@ -91,14 +91,15 @@ export default function ShoppingPage() {
   const suggestions = useMemo(() => {
     if (!hydrated) return [];
     const state = useApp.getState();
-    const have = state.pantry.map((p) => p.key);
+    // Разом із загальнішими типами: є печериці — «Гриби» докуповувати не радимо.
+    const have = pantryTypes(state);
     const listed = new Set(
       shopping.filter((x) => !x.done && x.key).map((x) => x.key),
     );
 
     const unlocking = shoppingSuggestions(allRecipes(state), have, 8);
     const staples = allIngredients().filter(
-      (d) => d.staple && !have.includes(d.key),
+      (d) => d.staple && !have.has(d.key),
     ).map((d) => ({
       key: d.key,
       unlocks: 0,
@@ -114,7 +115,7 @@ export default function ShoppingPage() {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, shopping, pantry, myRecipes, remoteRecipes]);
+  }, [hydrated, shopping, pantry, myRecipes, remoteRecipes, customIngredients]);
 
   const addOne = (item: ShoppingItem, name: string) => {
     haptic(12);
@@ -129,15 +130,39 @@ export default function ShoppingPage() {
    * це число означало б, що комора знову не знає, скільки чого вдома.
    */
   const moveToPantry = () => {
+    const addedAt = new Date().toISOString();
+    const cached = Object.values(useApp.getState().products);
     const items: PantryItem[] = done
       .filter((x) => x.key)
-      .map((x) => ({
-        key: x.key as string,
-        label: x.text,
-        amount: x.amount,
-        unit: x.unit,
-        addedAt: new Date().toISOString(),
-      }));
+      .map((x) => {
+        const key = x.key as string;
+        /*
+         * Товар підставляємо лише за точним збігом назви з карткою в кеші, чий
+         * тип годиться для рядка (B6): «Молоко Галичина 2,5%» у списку — це та
+         * картка. Жодного «схоже»: список пишуть руками, і «молоко» не означає
+         * конкретної пачки. І нічого не вчимо — рядок списку не доказ.
+         */
+        const text = x.text?.trim().toLocaleLowerCase("uk");
+        const product = text
+          ? cached.find(
+              (p) =>
+                !p.archived &&
+                !p.mergedInto &&
+                p.name.trim().toLocaleLowerCase("uk") === text &&
+                satisfies(p.typeKey, key),
+            )
+          : undefined;
+        return {
+          // Кожна покупка — свій рядок комори; однакові пачки складе сам addPantry/importPantry.
+          id: newId(),
+          key: product?.typeKey ?? key,
+          ...(product ? { productId: product.id } : {}),
+          label: x.text,
+          amount: x.amount,
+          unit: x.unit,
+          addedAt,
+        };
+      });
 
     haptic(16);
     if (items.length > 0) importPantry(items);

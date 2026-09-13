@@ -1,8 +1,10 @@
 "use client";
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { CustomIngredientRow } from "./supabase/api";
 import { getSupabase } from "./supabase/client";
 import { useApp } from "./store";
+import { isRecipeInFlight } from "./sync";
 import type { AppNotification } from "./types";
 
 /**
@@ -93,8 +95,28 @@ export function subscribeRealtime(userId: string, handlers: Handlers): () => voi
     /* Рецепти перечитуємо цілком, а не патчимо рядком: у стрічці показуються
        лічильники з вʼюхи recipes_with_stats, яких у сирій події немає. */
     .on("postgres_changes", { event: "*", schema: "public", table: "recipes" }, (payload) => {
+      const row = payload.new as { id?: string; author_id?: string } | null;
+      const id = row?.id ?? (payload.old as { id?: string } | null)?.id;
+      /*
+       * Власні рецепти й рецепти сімʼї лежать у myRecipes, а екрани беруть саме
+       * ту копію, не стрічку. Без перечитування особистого правка чи нове фото
+       * з іншого пристрою чи від іншого учасника не зʼявлялись до перезапуску.
+       * А старе фото тепер ще й прибирається зі сховища: застаріла копія
+       * показувала б порожню рамку.
+       *
+       * Власний запис цього пристрою пропускаємо: поки він у дорозі (і ще
+       * трохи після), подія — майже напевно відлуння його ж, а стан і так
+       * локальний. Решту своїх подій — з іншого пристрою — перечитуємо.
+       */
+      const { myRecipes, familyMembers } = useApp.getState();
+      const known = id ? myRecipes.some((r) => r.id === id) : false;
+      // Новий рецепт ще не має копії — впізнаємо за автором: сам або сімʼя.
+      const fresh =
+        !!row?.author_id &&
+        (row.author_id === userId || familyMembers.some((m) => m.userId === row.author_id));
+      if ((known || fresh) && !(id && isRecipeInFlight(id))) userState();
+
       if (payload.eventType === "DELETE") {
-        const id = (payload.old as { id?: string } | null)?.id;
         if (id) {
           const store = useApp.getState();
           store.setCommunity({
@@ -107,15 +129,31 @@ export function subscribeRealtime(userId: string, handlers: Handlers): () => voi
       community();
     })
 
-    // Спільні комора й план — щоб холодильник сімʼї сходився в обох.
+    /*
+     * Спільні комора й план — щоб холодильник сімʼї сходився в обох. Перечитування
+     * комори на подію докачує лише картки товарів, яких ще немає в кеші (A7):
+     * таблиць товарів у публікації навмисно немає, а зміну типу картки тригер
+     * products_type_to_pantry однаково приносить сюди подіями рядків комори.
+     */
     .on("postgres_changes", { event: "*", schema: "public", table: "pantry_items" }, userState)
     .on("postgres_changes", { event: "*", schema: "public", table: "plan_slots" }, userState)
     // І список покупок: один пішов у магазин, другий дописує з дому.
     .on("postgres_changes", { event: "*", schema: "public", table: "shopping_items" }, userState)
 
-    /* Продукт, дописаний людиною, приїжджає разом зі спільнотою: поки він не
-       долетів, рецепт із ним показує сирий ключ замість назви. */
-    .on("postgres_changes", { event: "*", schema: "public", table: "custom_ingredients" }, community)
+    /*
+     * Дописаний тип приїжджає готовим рядком — латаємо реєстр без перечитування
+     * всієї спільноти (A7): з вікі-правкою типів (I3) подій стало більше, а
+     * чотириста рецептів на кожну — марна мережа. Рядок без ключа чи назви
+     * (видалення, якого в нас не буває, або урізана подія) — старим шляхом.
+     */
+    .on("postgres_changes", { event: "*", schema: "public", table: "custom_ingredients" }, (payload) => {
+      const row = payload.new as (Partial<CustomIngredientRow> & { key?: string; label?: string }) | null;
+      if (payload.eventType !== "DELETE" && row?.key && row.label) {
+        useApp.getState().upsertCustomIngredientRow(row as CustomIngredientRow);
+        return;
+      }
+      community();
+    })
 
     // Хтось увійшов або вийшов із сімʼї — змінюється сам склад спільних даних.
     .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, family)

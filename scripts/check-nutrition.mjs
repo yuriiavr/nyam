@@ -244,6 +244,43 @@ const afterMidnight = nutrition.dayTotals(
 );
 check("страва по опівночі — сьогоднішня", afterMidnight.meals, 1);
 
+/*
+ * Різновид без власних чисел — не дірка в калоріях. Дописана «Моцарела
+ * домашня» з батьком «Твердий сир» і без КБЖВ рахується за сиром, а штука —
+ * за вагою штуки сиру. Власні числа різновиду, коли вони є, важливіші.
+ */
+// Через аліас, а не шлях: jiti тримає окремий екземпляр модуля на кожне
+// написання імпорту, а nutrition.ts бачить реєстр саме «@/data/ingredients».
+const ingredients = await jiti.import("@/data/ingredients");
+ingredients.setCustomIngredients([
+  { key: "own_syr_domashnii", label: "Сир домашній", emoji: "🧀", cat: "dairy", aliases: [], defaultUnit: "g", parent: "syr" },
+  {
+    key: "own_moloko_kozyne",
+    label: "Молоко козяче",
+    emoji: "🥛",
+    cat: "dairy",
+    aliases: [],
+    defaultUnit: "ml",
+    parent: "moloko",
+    nutrition: { kcal: 68, protein: 3.6, fat: 4.1, carbs: 4.5 },
+  },
+]);
+check("КБЖВ різновиду без чисел — від батька", nutrition.recipeNutrition({
+  ...recipe,
+  servings: 1,
+  ingredients: [{ key: "own_syr_domashnii", amount: 100, unit: "g" }],
+}).total.kcal, 380);
+check("вага штуки — від батька (сир: 20 г)", nutrition.ingredientGrams({ key: "own_syr_domashnii", amount: 3, unit: "pcs" }), 60);
+check("власні числа різновиду важливіші", nutrition.recipeNutrition({
+  ...recipe,
+  servings: 1,
+  ingredients: [{ key: "own_moloko_kozyne", amount: 100, unit: "ml" }],
+}).total.kcal, 68);
+check("вбудований різновид без ваги штуки теж успадковує (пармезан → сир)", nutrition.ingredientGrams({ key: "parmezan", amount: 2, unit: "pcs" }), 40);
+// Власна вага штуки важливіша за батьківську: чері не важать по 120 г, як помідор.
+check("10 помідорів чері = 150 г, а не 1,2 кг", nutrition.ingredientGrams({ key: "pomidory_cherri", amount: 10, unit: "pcs" }), 150);
+ingredients.setCustomIngredients([]);
+
 console.log("── Ціна страви ──");
 
 // Літр молока за 50 грн — це 0,05 грн за грам (мілілітр рахуємо як грам).
@@ -269,6 +306,26 @@ check("найдорожче — курка", c.top[0].key, "kurka");
 const half = cost.recipeCost(recipe, [priced[0]]);
 check("покриття за половиною цін", half.coverage, 0.5);
 check("рахуємо лише відоме", half.total, 36);
+
+// Ціну дає і різновид: безлактозне з чека оцінює рецепт, якому треба молоко.
+{
+  const milkDish = { ...recipe, ingredients: [{ key: "moloko", amount: 500, unit: "ml" }] };
+  const lf = cost.recipeCost(milkDish, [
+    { key: "moloko_bezlaktozne", amount: 900, unit: "ml", addedAt: today, pricePerGram: 0.06 },
+  ]);
+  check("ціна з різновиду", lf?.total, 30);
+  // Коли є і звичайне, і різновид, — ціна того, що списання взяло б першим: точного типу.
+  const both = cost.recipeCost(milkDish, [
+    { key: "moloko_bezlaktozne", amount: 900, unit: "ml", addedAt: today, pricePerGram: 0.06 },
+    { key: "moloko", amount: 900, unit: "ml", addedAt: today, pricePerGram: 0.04 },
+  ]);
+  check("спершу точний тип", both?.total, 20);
+  // А навпаки — ні: рецепту з безлактозним ціна звичайного молока не годиться.
+  check("звичайне не оцінює безлактозне", cost.recipeCost(
+    { ...recipe, ingredients: [{ key: "moloko_bezlaktozne", amount: 500, unit: "ml" }] },
+    [{ key: "moloko", amount: 900, unit: "ml", addedAt: today, pricePerGram: 0.04 }],
+  ), null);
+}
 
 // Порожня комора — числа немає взагалі, а не нуль.
 check("без цін немає числа", cost.recipeCost(recipe, []), null);

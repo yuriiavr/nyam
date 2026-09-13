@@ -6,9 +6,13 @@ import {
   CAT_LABEL,
   CAT_ORDER,
   allIngredients,
+  ancestors,
+  ing,
+  isOwnKey,
   searchIngredients,
 } from "@/data/ingredients";
 import type { IngredientCat, IngredientDef } from "@/lib/types";
+import { EditTypeButton } from "./EditTypeButton";
 import { Sheet } from "./ui";
 
 /**
@@ -34,6 +38,9 @@ export function IngredientPicker({
   query: controlledQuery,
   onQueryChange,
   results,
+  placeholder = "Помідор, курка, рис…",
+  pickIcon = true,
+  editOwn = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -48,6 +55,18 @@ export function IngredientPicker({
   query?: string;
   onQueryChange?: (v: string) => void;
   results?: IngredientDef[];
+  placeholder?: string;
+  /*
+   * «+» на кожному продукті читається як «додати в комору». Коли пікер лише
+   * обирає тип (батька нового типу), плюс збиває з толку — тоді його немає.
+   */
+  pickIcon?: boolean;
+  /**
+   * Олівець біля дописаних типів — правка для всіх з історією (F7). Вимикаємо
+   * там, де пікер сам живе всередині правки типу (батько, обʼєднання): третій
+   * аркуш «Редагувати тип» поверх двох лише заплутав би.
+   */
+  editOwn?: boolean;
 }) {
   const [localQuery, setLocalQuery] = useState("");
   const q = controlledQuery ?? localQuery;
@@ -55,7 +74,8 @@ export function IngredientPicker({
 
   const list = useMemo(() => {
     const found = q.trim() ? (results ?? searchIngredients(q)) : allIngredients();
-    return found.filter((d) => !exclude.includes(d.key));
+    // Обʼєднаний дописаний тип — лише псевдонім переможця: обирати його не можна, лише переможця.
+    return found.filter((d) => !exclude.includes(d.key) && !d.mergedInto);
   }, [q, results, exclude]);
 
   const grouped = useMemo(() => {
@@ -76,7 +96,7 @@ export function IngredientPicker({
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Помідор, курка, рис…"
+            placeholder={placeholder}
             className="h-full flex-1 text-[15px]"
           />
           {q && (
@@ -141,23 +161,49 @@ export function IngredientPicker({
                 {CAT_LABEL[cat]}
               </h3>
               <div className="flex flex-wrap gap-2">
-                {items.map((def) => (
-                  <button
-                    key={def.key}
-                    onClick={() => {
-                      onPick(def);
-                      // Рядок пошуку скидаємо разом із вибором: продукт уже
-                      // додано, і наступного разу аркуш має відкритись чистим.
-                      setQ("");
-                      onClose();
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"
-                  >
-                    <span>{def.emoji}</span>
-                    {def.label}
-                    <Plus size={13} className="text-brand" />
-                  </button>
-                ))}
+                {items.map((def) => {
+                  const own = editOwn && isOwnKey(def.key);
+                  const pick = (
+                    <button
+                      key={def.key}
+                      onClick={() => {
+                        onPick(def);
+                        // Рядок пошуку скидаємо разом із вибором: продукт уже
+                        // додано, і наступного разу аркуш має відкритись чистим.
+                        setQ("");
+                        onClose();
+                      }}
+                      className={
+                        own
+                          ? "inline-flex items-center gap-1.5 py-2 pl-3 pr-1 text-[13px] font-semibold"
+                          : "inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"
+                      }
+                    >
+                      <span>{def.emoji}</span>
+                      {def.label}
+                      {/* Різновид видно одразу: «Молоко безлактозне › Молоко» — і
+                          ясно, що рецепти з молоком його теж рахують. */}
+                      {ancestors(def.key).length > 0 && (
+                        <span className="text-[11px] font-normal text-faint">
+                          › {ing(ancestors(def.key)[0]).label}
+                        </span>
+                      )}
+                      {pickIcon && <Plus size={13} className="text-brand" />}
+                    </button>
+                  );
+                  // Дописаний тип: вибір і олівець — дві окремі кнопки в одному чипі (кнопка в кнопці недійсна).
+                  return own ? (
+                    <span
+                      key={def.key}
+                      className="inline-flex items-center rounded-full border border-line bg-surface pr-1 active:bg-surface-2"
+                    >
+                      {pick}
+                      <EditTypeButton typeKey={def.key} icon />
+                    </span>
+                  ) : (
+                    pick
+                  );
+                })}
               </div>
             </div>
           ))}

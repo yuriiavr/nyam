@@ -49,12 +49,21 @@ export async function POST(request: Request): Promise<Response> {
     .select("endpoint", { count: "exact", head: true })
     .eq("user_id", userId);
 
-  const { sent, pruned } = await sendPush([userId], {
+  const { sent, pruned, failed, error } = await sendPush([userId], {
     title: "Ням на звʼязку",
     body: "Якщо ти це бачиш — сповіщення працюють.",
     url: "/settings",
     tag: "test",
   });
 
-  return Response.json({ ok: true, sent, pruned, devices: count ?? 0 });
+  // Статуси відмов — друга половина відповіді: пристрій у базі є, а служба
+  // пуша його не прийняла, і чому саме.
+  return Response.json({
+    ok: true,
+    sent,
+    pruned,
+    devices: count ?? 0,
+    failed,
+    ...(error ? { error } : {}),
+  });
 }

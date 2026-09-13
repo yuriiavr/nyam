@@ -1,4 +1,5 @@
-import { ing } from "@/data/ingredients";
+import { ing, typeValue } from "@/data/ingredients";
+import type { Product } from "./product-types";
 import type { CookEvent, Nutrition, Recipe, RecipeIngredient, Unit } from "./types";
 import { quantityOf, unitDef } from "./units";
 import { dateKey } from "./utils";
@@ -50,18 +51,41 @@ export function ingredientGrams(item: RecipeIngredient): number | null {
   // завищує приблизно на 8% — прийнятна похибка для домашнього обліку.
   if (def.base === "ml") return q.amount * def.factor;
 
+  // Вага штуки й склянки — з найближчого типу, що її знає: дописаний
+  // різновид без ваги штуки важить як його батько.
   if (q.unit === "pcs") {
-    const perPiece = ing(item.key).gramsPerPiece;
+    const perPiece = typeValue(item.key, "gramsPerPiece");
     return perPiece ? q.amount * perPiece : null;
   }
 
   // Склянки й ложки — за щільністю конкретного продукту, якщо вона відома.
   const fraction = CUP_FRACTION[q.unit];
-  const perCup = ing(item.key).gramsPerCup;
+  const perCup = typeValue(item.key, "gramsPerCup");
   if (fraction != null && perCup) return q.amount * perCup * fraction;
 
   const grams = GRAMS_PER_UNIT[q.unit];
   return grams ? q.amount * grams : null;
+}
+
+/**
+ * КБЖВ на 100 г для того, що людина тримає в руках (D10): етикетка картки
+ * товару → довідник самого типу → найближчий предок, що знає. «Молоко
+ * безлактозне Галичина» з етикеткою рахується за етикеткою, без неї — як
+ * безлактозне молоко, а дописаний різновид без чисел — як його батько.
+ */
+export function nutritionFor(
+  key: string,
+  product?: Pick<Product, "nutrition"> | null,
+): Nutrition | undefined {
+  return product?.nutrition ?? typeValue(key, "nutrition");
+}
+
+/** Вага штуки за тим самим порядком: картка → тип → предок. */
+export function gramsPerPieceFor(
+  key: string,
+  product?: Pick<Product, "gramsPerPiece"> | null,
+): number | undefined {
+  return product?.gramsPerPiece ?? typeValue(key, "gramsPerPiece");
 }
 
 export interface RecipeNutrition {
@@ -85,8 +109,9 @@ export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
 
   for (const item of recipe.ingredients) {
     const def = ing(item.key);
-    // Етикетка конкретного товару точніша за довідник по категорії.
-    const nut = item.nutrition ?? def.nutrition;
+    // Етикетка конкретного товару точніша за довідник по категорії, а
+    // довідник самого типу — за батьківський (typeValue йде вгору по дереву).
+    const nut = item.nutrition ?? typeValue(item.key, "nutrition");
     const grams = ingredientGrams(item);
     const q = quantityOf(item);
 

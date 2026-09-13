@@ -1,0 +1,24 @@
+#!/bin/sh
+# Коміт у main одразу йде на GitHub, а там пуш запускає деплой на Vercel
+# (.github/workflows/deploy.yml).
+# Вмикається через npm install (scripts/install-hooks.mjs).
+#
+# Один раз без пушу:  SKIP_DEPLOY=1 git commit ...
+
+[ -n "$SKIP_DEPLOY" ] && exit 0
+
+# Відʼєднаний HEAD — це rebase, bisect або checkout коміту: там нічого пушити.
+branch=$(git symbolic-ref --quiet --short HEAD) || exit 0
+[ "$branch" = "main" ] || exit 0
+
+# Посеред rebase чи cherry-pick коміти ще не остаточні.
+git_dir=$(git rev-parse --git-dir)
+for f in rebase-merge rebase-apply CHERRY_PICK_HEAD REVERT_HEAD; do
+  [ -e "$git_dir/$f" ] && exit 0
+done
+
+echo "→ Пушу main на GitHub — звідти почнеться деплой"
+if ! git push --quiet origin main; then
+  echo "✗ Пуш не вдався (причина вище). Коміт лишився локально — запушиш вручну." >&2
+fi
+exit 0

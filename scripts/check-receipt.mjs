@@ -25,9 +25,12 @@ const {
   normalizeReceiptLine,
   matchReceiptName,
   isNonFood,
+  expandAbbreviation,
+  foldHomoglyphs,
   lineQuantity,
   packSize,
   lookupableBarcode,
+  geminiFailure,
 } = await jiti.import(path.join(root, "src/lib/receipt.ts"));
 
 let pass = 0;
@@ -173,6 +176,27 @@ byName("Гор.шоколад 25г", "shokolad");
 byName("Мор.морожена суміш", null);
 byName("Слив.масло 200г", "maslo");
 
+/*
+ * Різновид типу. «БЕЗЛАКТ.» розкривається однозначно, бо слово «безлактозне»
+ * є в каталозі лише в безлактозного молока (фразою, не окремим синонімом), а
+ * «б/лак» — касовий дріб. Звичайне пастеризоване лишається молоком.
+ */
+byName("МОЛОКО БЕЗЛАКТ.ГАЛИЧИНА 2,5% 900Г", "moloko_bezlaktozne");
+byName("Молоко б/лак Галичина 2,5% 900г", "moloko_bezlaktozne");
+byName("Молоко без лактози 2,5% 900г", "moloko_bezlaktozne");
+check("«безлакт.» розкривається однозначно", expandAbbreviation("безлакт"), "безлактозне");
+// Без крапки, зліплене з сусідами — так пише реальна каса.
+byName("МолокГалБезл900", "moloko_bezlaktozne");
+byName("Молок Гал Безл 900", "moloko_bezlaktozne");
+// «Мол950Ул» не розібрати ні як молоко, ні як щось інше — такий рядок
+// впізнається навчанням (назва з чека → товар), а тут лише «БЛак» розкрито.
+check("«БЛак» розкрито", normalizeReceiptLine("Мол950УлГаличБЛак2.5").split(" ").includes("безлактозне"), true);
+// Безлактозного кефіру в каталозі немає: лишається кефіром, а не молоком.
+byName("КефірБезл", "kefir");
+// «Безлюдна» чи «безладно» цілим словом «безл» не є — нічого не розкриваємо.
+check("«безл» лише цілим словом", normalizeReceiptLine("Вода Безлюдна 1,5"), "вода безлюдна");
+check("латинська «o» у кириличному слові", foldHomoglyphs("молокo"), "молоко");
+
 // Цифра 3 — це цифра, а не буква «з»: «300г» не має ставати «з00г».
 check("цифри не гомогліфи", normalizeReceiptLine("Печиво вівсяне 300г"), "печиво вівсяне");
 
@@ -196,6 +220,10 @@ nonFood("Зуб.паста 75мл");
 food("Крем-сир Філадельфія 175г");
 food("Оцет бальзамічний 250мл");
 food("Мед квітковий 400г");
+// «Лак» ловить лак для волосся, але не лактозу: безлактозне молоко — їжа.
+nonFood("Лак для волосся 250мл");
+food("Молоко без лактози");
+food("МОЛОКО БЕЗЛАКТ.ГАЛИЧИНА 2,5% 900Г");
 
 console.log("── Скільки принесли ──");
 
@@ -246,6 +274,147 @@ check("справжній EAN-8", lookupableBarcode("40084725"), "40084725");
 check("внутрішній код мережі", lookupableBarcode("2065509500008"), null);
 check("артикул на 12 цифр", lookupableBarcode("250015026841"), null);
 check("зіпсована контрольна цифра", lookupableBarcode("4820000431027"), null);
+
+console.log("── Відмова розпізнавання фото ──");
+
+/*
+ * Те, що людина прочитає після невдалого фото. Раніше все, крім 429, ставало
+ * «спробуй за кілька хвилин» — зокрема й відкликаний ключ, який сам не мине.
+ */
+const google = (code, status, message, reason) =>
+  JSON.stringify({
+    error: {
+      code,
+      status,
+      message,
+      details: reason
+        ? [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason, domain: "googleapis.com" }]
+        : undefined,
+    },
+  });
+const failure = (what, status, body, expected) =>
+  check(what, geminiFailure(status, body).reason, expected);
+
+// Справжня відповідь, яку віддавав відкликаний ключ у вересні 2026.
+const revoked = google(
+  401,
+  "UNAUTHENTICATED",
+  "The bound service account is deleted or disabled. The service account bound to the API key must be active.",
+  "ACCOUNT_STATE_INVALID",
+);
+failure("відкликаний ключ", 401, revoked, "misconfigured");
+check(
+  "у журналі видно, що саме з ключем",
+  geminiFailure(401, revoked).cause.includes("UNAUTHENTICATED/ACCOUNT_STATE_INVALID"),
+  true,
+);
+failure(
+  "недійсний ключ — 400, а не 401",
+  400,
+  google(400, "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.", "API_KEY_INVALID"),
+  "misconfigured",
+);
+failure(
+  "API вимкнене в проєкті",
+  403,
+  google(403, "PERMISSION_DENIED", "Generative Language API has not been used in project 1", "SERVICE_DISABLED"),
+  "misconfigured",
+);
+failure(
+  "модель зникла",
+  404,
+  google(404, "NOT_FOUND", "models/gemini-3.1-flash-lite is not found for API version v1beta"),
+  "misconfigured",
+);
+// Запит не пасує до моделі — так 3.5 відповідає на thinkingBudget. Теж не мине саме.
+failure(
+  "поле, якого модель не знає",
+  400,
+  google(400, "INVALID_ARGUMENT", "Unable to submit request because thinking_budget is not supported by this model."),
+  "misconfigured",
+);
+// Скарга на саму картинку — тут новий знімок справді допоможе.
+failure(
+  "картинка не відкрилась",
+  400,
+  google(400, "INVALID_ARGUMENT", "Unable to process input image. Please retry or report in https://ai.google.dev"),
+  "unreadable",
+);
+/*
+ * 429 від Google — квота проєкту, а не спроби людини, тож «throttled» («забагато
+ * спроб») тут не буває ніколи. Тексти — у форматі, яким Gemini відповідає на
+ * вичерпану квоту: «limit: 0» стоїть далеко за двохсотим символом.
+ */
+const quota = (metric, limit, quotaId, { details = true } = {}) =>
+  JSON.stringify({
+    error: {
+      code: 429,
+      status: "RESOURCE_EXHAUSTED",
+      message:
+        "You exceeded your current quota, please check your plan and billing details. For more " +
+        "information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. " +
+        "To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. \n" +
+        `* Quota exceeded for metric: generativelanguage.googleapis.com/${metric}, limit: ${limit}, ` +
+        "model: gemini-3.1-flash-lite\nPlease retry in 41.7s.",
+      details: details
+        ? [
+            {
+              "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+              violations: [
+                {
+                  quotaMetric: `generativelanguage.googleapis.com/${metric}`,
+                  quotaId,
+                  quotaDimensions: { location: "global", model: "gemini-3.1-flash-lite" },
+                  ...(limit === 0 ? {} : { quotaValue: String(limit) }),
+                },
+              ],
+            },
+            { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "41s" },
+          ]
+        : undefined,
+    },
+  });
+failure(
+  "хвилинна квота — мине сама, людина не винна",
+  429,
+  quota("generate_content_free_tier_requests", 15, "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"),
+  "upstream",
+);
+failure(
+  "хвилинна квота на токени — теж мине",
+  429,
+  quota("generate_content_paid_tier_input_token_count", 4000000, "GenerateContentInputTokensPerModelPerMinute"),
+  "upstream",
+);
+// Новий ключ із проєкту без оплати: моделі безкоштовно не дають зовсім.
+failure(
+  "квота з нулем — налаштування, а не черга",
+  429,
+  quota("generate_content_free_tier_requests", 0, "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"),
+  "misconfigured",
+);
+failure(
+  "квота з нулем без деталей — видно лише з тексту",
+  429,
+  quota("generate_content_free_tier_requests", 0, "", { details: false }),
+  "misconfigured",
+);
+failure(
+  "добова квота вичерпана — до завтра не мине",
+  429,
+  quota("generate_content_free_tier_requests", 1000, "GenerateRequestsPerDayPerProjectPerModel-FreeTier"),
+  "misconfigured",
+);
+failure("квота без жодних подробиць", 429, google(429, "RESOURCE_EXHAUSTED", "Quota exceeded"), "upstream");
+check(
+  "у журналі видно, що це квота",
+  geminiFailure(429, quota("generate_content_free_tier_requests", 0, "")).cause.startsWith("429 RESOURCE_EXHAUSTED"),
+  true,
+);
+failure("збій у Google", 503, google(503, "UNAVAILABLE", "The model is overloaded."), "upstream");
+failure("не JSON від балансувальника", 502, "<html>Bad Gateway</html>", "upstream");
+failure("порожнє тіло", 500, "", "upstream");
+failure("тіло null", 500, "null", "upstream");
 
 console.log(`\nПройдено: ${pass}, провалено: ${fail}`);
 process.exit(fail ? 1 : 0);

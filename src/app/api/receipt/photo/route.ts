@@ -1,4 +1,9 @@
-import type { Receipt, ReceiptLine } from "@/lib/receipt";
+import {
+  geminiFailure,
+  type Receipt,
+  type ReceiptFailure,
+  type ReceiptLine,
+} from "@/lib/receipt";
 import { GEMINI_MODEL, GEMINI_THINKING } from "@/lib/vision";
 
 /**
@@ -136,18 +141,63 @@ async function userFromRequest(request: Request, left: () => number): Promise<st
   }
 }
 
-function fail(reason: string, status = 200) {
+/**
+ * Відмова зі справжнім HTTP-статусом.
+ *
+ * Раніше статус за замовчуванням був 200, і в журналах Vercel кожна невдала
+ * спроба виглядала успішною: відкликаний ключ ламав розпізнавання всім, а
+ * графік помилок лишався зеленим. Клієнт читає причину з тіла за будь-якого
+ * статусу, тож людині від цього нічого не міняється — міняється тим, хто
+ * дивиться в журнал.
+ */
+function fail(reason: ReceiptFailure, status: number) {
   return Response.json({ ok: false, reason }, { status });
 }
 
+/**
+ * Статус на відмову Gemini. 503 — сервіс у нас вимкнений, доки хтось не
+ * виправить налаштування; 502 — Google відповів збоєм чи перевантаженням
+ * (його 429 — теж сюди: це квота проєкту, а не спроби людини), і це може
+ * минути.
+ */
+const UPSTREAM_STATUS: Partial<Record<ReceiptFailure, number>> = {
+  misconfigured: 503,
+  unreadable: 422,
+};
+
+/** Більше рядків з одного знімка не беремо — див. стелю відповіді нижче. */
+const MAX_LINES = 120;
+
+/**
+ * Скільки токенів дозволено відповіді моделі.
+ *
+ * Стеля мусить вміщати MAX_LINES, інакше вона обрізала б чеки, які ми самі
+ * готові прийняти. Рядок JSON — пʼять ключів і касова назва кирилицею —
+ * це 45–55 токенів (звичайний чек дає вісім сотень, див. src/lib/vision.ts),
+ * тож 120 рядків — до 6600. Звідси 8192, а не 4096: за тією ж оцінкою 4096
+ * закінчились би десь на вісімдесятому рядку великого тижневого чека.
+ * Запас ще й на роздуми 3.5, якщо перейдемо на неї: `thinkingLevel: minimal`
+ * рахується в ту саму стелю.
+ *
+ * Без стелі взагалі модель, що пішла по колу, крутилась би до дедлайну, і за
+ * кожен токен того кола ми б платили. Із 8192 найгірший випадок — близько
+ * $0,012 за спробу при цінах 3.1. Число оцінене, а не виміряне: коли буде
+ * живий ключ, перевір на довгому чеку через `npm run check:gemini -- чек.jpg`
+ * (друкує вихідні токени).
+ */
+const MAX_OUTPUT_TOKENS = 8192;
+
 export async function POST(request: Request) {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) return fail("nokey");
+  if (!key) {
+    console.error("[receipt-photo] немає GEMINI_API_KEY");
+    return fail("nokey", 503);
+  }
 
   /*
    * Спільний дедлайн на весь маршрут. Інакше повільна перевірка сесії
    * додавалася б до очікування моделі, разом вони перевалювали б за
-   * клієнтські 55 секунд — і людина бачила б «немає звʼязку» на відповідь,
+   * клієнтські 55 секунд — і людина бачила б «не відповідає» на відповідь,
    * яка вже прийшла й за яку вже заплачено.
    */
   const deadline = Date.now() + 45_000;
@@ -162,16 +212,17 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { image?: string };
     image = body.image ?? "";
   } catch {
-    return fail("unreadable");
+    return fail("unreadable", 400);
   }
 
   // Приймаємо і data:URL, і чистий base64 — залежить від того, звідки прийшло.
   const match = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(image);
   const mime = match ? match[1] : "image/jpeg";
   const data = match ? match[2] : image;
-  if (!data) return fail("unreadable");
-  if (data.length > MAX_BASE64) return fail("toobig");
+  if (!data) return fail("unreadable", 400);
+  if (data.length > MAX_BASE64) return fail("toobig", 413);
 
+  let text: string;
   try {
     const res = await fetch(`${ENDPOINT}/${GEMINI_MODEL}:generateContent`, {
       method: "POST",
@@ -191,52 +242,92 @@ export async function POST(request: Request) {
           responseSchema: SCHEMA,
           // Роздуми вимкнені — чому саме так, див. src/lib/vision.ts.
           thinkingConfig: GEMINI_THINKING,
+          // Стеля відповіді — чому саме така, див. MAX_OUTPUT_TOKENS.
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
         },
       }),
     });
 
     if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      console.warn(`[receipt-photo] ${res.status}: ${detail.slice(0, 300)}`);
-      return fail(res.status === 429 ? "throttled" : "upstream");
+      const { reason, cause } = geminiFailure(res.status, await res.text().catch(() => ""));
+      /*
+       * error, а не warn: відкликаний ключ ламає розпізнавання всім одразу,
+       * і в журналі це має бути видно без пошуку. Модель пишемо поруч —
+       * 404 найчастіше означає саме її, а не ключ.
+       */
+      console.error(`[receipt-photo] Gemini ${GEMINI_MODEL} → ${reason}: ${cause}`);
+      return fail(reason, UPSTREAM_STATUS[reason] ?? 502);
     }
 
     const json = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      candidates?: Array<{
+        finishReason?: string;
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+      promptFeedback?: { blockReason?: string };
     };
-    const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    if (!text.trim()) return fail("unreadable");
-
-    const parsed = JSON.parse(text) as {
-      store?: string;
-      lines?: Array<Partial<ReceiptLine>>;
-    };
+    const candidate = json.candidates?.[0];
 
     /*
-     * Чистимо те, що прийшло. Модель просили не вигадувати, але перевірити
-     * дешевше, ніж довіряти: рядок без назви не товар, а відʼємна кількість
-     * не буває.
+     * Чим закінчилась відповідь — до розбору, а не після. Обрізаний на стелі
+     * JSON інакше падав би в JSON.parse і ставав «розпізнавання не відповідає»,
+     * хоча відповіло воно цілком — просто не тим. SAFETY та інші означають:
+     * з цього знімка чека не вийшло, і допоможе новий знімок, а не очікування.
+     *
+     * MAX_TOKENS окремо: стеля вміщає більше рядків, ніж ми приймаємо, тож
+     * уперлась у неї не «фото без чека», а завеликий чек чи модель, що пішла
+     * по колу. Сказати «не видно чека» людині з цілком розбірливим довгим
+     * чеком — і вона перезнімала б його цілим, щоразу з тим самим кінцем.
      */
-    const lines: ReceiptLine[] = (parsed.lines ?? [])
-      .filter((l) => typeof l.name === "string" && l.name.trim().length > 1)
-      .slice(0, 120)
-      .map((l) => ({
-        name: (l.name as string).trim(),
-        qty: typeof l.qty === "number" && l.qty > 0 ? l.qty : 1,
-        measure: typeof l.measure === "string" ? l.measure.trim() || undefined : undefined,
-        price: typeof l.price === "number" && l.price >= 0 ? l.price : undefined,
-        sum: typeof l.sum === "number" && l.sum >= 0 ? l.sum : undefined,
-      }));
+    const stopped = json.promptFeedback?.blockReason ?? candidate?.finishReason;
+    if (stopped && stopped !== "STOP") {
+      console.warn(`[receipt-photo] відповідь не завершена: ${stopped}`);
+      return fail(stopped === "MAX_TOKENS" ? "toolong" : "unreadable", 422);
+    }
 
-    if (lines.length === 0) return fail("noitems");
-
-    const receipt: Receipt = {
-      store: typeof parsed.store === "string" ? parsed.store.trim() || undefined : undefined,
-      lines,
-    };
-    return Response.json({ ok: true, receipt });
+    text = candidate?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   } catch (error) {
-    console.warn("[receipt-photo]", error);
-    return fail("upstream");
+    const timedOut = (error as Error | null)?.name === "TimeoutError";
+    const what = timedOut ? "не встиг за дедлайн" : "недосяжний";
+    console.error(`[receipt-photo] Gemini ${what}:`, error);
+    return fail("upstream", timedOut ? 504 : 502);
   }
+
+  if (!text.trim()) return fail("unreadable", 422);
+
+  let parsed: { store?: string; lines?: Array<Partial<ReceiptLine>> };
+  try {
+    parsed = (JSON.parse(text) as typeof parsed | null) ?? {};
+  } catch {
+    // Відповідь завершена, а JSON битий — схема цього не допускає, але
+    // сервіс не наш. Новий знімок тут допоможе швидше за очікування.
+    // Самого тексту в журнал не пишемо: це чужі покупки.
+    console.warn(`[receipt-photo] модель повернула не JSON (${text.length} симв.)`);
+    return fail("unreadable", 422);
+  }
+
+  /*
+   * Чистимо те, що прийшло. Модель просили не вигадувати, але перевірити
+   * дешевше, ніж довіряти: рядок без назви не товар, а відʼємна кількість
+   * не буває.
+   */
+  const lines: ReceiptLine[] = (Array.isArray(parsed.lines) ? parsed.lines : [])
+    .filter((l) => typeof l?.name === "string" && l.name.trim().length > 1)
+    .slice(0, MAX_LINES)
+    .map((l) => ({
+      name: (l.name as string).trim(),
+      qty: typeof l.qty === "number" && l.qty > 0 ? l.qty : 1,
+      measure: typeof l.measure === "string" ? l.measure.trim() || undefined : undefined,
+      price: typeof l.price === "number" && l.price >= 0 ? l.price : undefined,
+      sum: typeof l.sum === "number" && l.sum >= 0 ? l.sum : undefined,
+    }));
+
+  // Модель подивилась і товарів не знайшла — це відповідь, а не збій сервісу.
+  if (lines.length === 0) return fail("noitems", 422);
+
+  const receipt: Receipt = {
+    store: typeof parsed.store === "string" ? parsed.store.trim() || undefined : undefined,
+    lines,
+  };
+  return Response.json({ ok: true, receipt });
 }

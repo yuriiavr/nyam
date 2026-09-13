@@ -1,7 +1,7 @@
 import { DRINKS, type DrinkDef, type DrinkKind } from "@/data/drinks";
-import { ing, isSeasoning } from "@/data/ingredients";
+import { canonicalKey, ing } from "@/data/ingredients";
 import { servingKcal } from "./nutrition";
-import type { AppState } from "./store";
+import { pantryTypes, type AppState } from "./store";
 import type { Course, Recipe } from "./types";
 import { dateKey } from "./utils";
 
@@ -169,7 +169,8 @@ export function suggestPairs(
   const mine = coreKeys(recipe);
   const kcal = servingKcal(recipe);
   const heavy = kcal != null && kcal > 500;
-  const pantry = new Set(state.pantry.map((p) => p.key));
+  // Разом із загальнішими типами: безлактозне молоко вдома — це й «Молоко».
+  const pantry = pantryTypes(state);
 
   const scored: Pairing[] = [];
 
@@ -236,7 +237,7 @@ export function suggestPairs(
     }
 
     // 6. Те, що вже є вдома, краще за те, по що треба йти.
-    const missing = [...theirs].filter((key) => !pantry.has(key)).length;
+    const missing = [...theirs].filter((key) => !pantry.has(canonicalKey(key))).length;
     score += Math.max(0, 12 - missing * 4);
     if (missing === 0 && pantry.size > 0) {
       reasons.push({ weight: 80, text: "усе вже є в коморі" });
@@ -288,7 +289,7 @@ export function suggestDrinks(
 ): DrinkPick[] {
   const course = courseOf(recipe);
   const hour = now.getHours();
-  const pantry = new Set(state.pantry.map((p) => p.key));
+  const pantry = pantryTypes(state);
   const kcal = servingKcal(recipe);
   const heavy = (kcal != null && kcal > 500) || recipe.moods.includes("hearty");
   const cuisine = recipe.cuisine.toLowerCase();
@@ -302,7 +303,7 @@ export function suggestDrinks(
     const reasons: Array<{ weight: number; text: string }> = [];
 
     // Те, що вже стоїть у холодильнику, краще за те, по що треба йти.
-    const home = drink.ingredient ? pantry.has(drink.ingredient) : false;
+    const home = drink.ingredient ? pantry.has(canonicalKey(drink.ingredient)) : false;
     if (home) {
       score += 30;
       reasons.push({ weight: 90, text: "вже є в коморі" });

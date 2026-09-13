@@ -35,13 +35,23 @@ export function PairingSuggestions({
   const remoteRecipes = useApp((s) => s.remoteRecipes);
   const cooked = useApp((s) => s.cooked);
   const pantry = useApp((s) => s.pantry);
+  /*
+   * Каталог дописаних — теж залежність: новий батько в дописаному типі міняє,
+   * що «вже є в коморі», хоч сама комора не змінилась.
+   */
+  const customIngredients = useApp((s) => s.customIngredients);
+  /*
+   * Картки товарів: правка типу картки переписує тип рядків комори (D4), і
+   * «вже є» мусить перерахуватись від неї, навіть коли масив комори той самий.
+   */
+  const products = useApp((s) => s.products);
 
   const pairs = useMemo(() => {
     if (!hydrated) return [];
     const snapshot = useApp.getState();
     return suggestPairs(snapshot, recipe, allRecipes(snapshot), limit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, recipe.id, limit, myRecipes, remoteRecipes, cooked, pantry]);
+  }, [hydrated, recipe.id, limit, myRecipes, remoteRecipes, cooked, pantry, customIngredients, products]);
 
   const heading = PAIR_HEADING[courseOf(recipe)];
   if (!heading || pairs.length === 0) return null;
@@ -84,12 +94,14 @@ export function DrinkPicks({
 }) {
   const hydrated = useApp((s) => s.hydrated);
   const pantry = useApp((s) => s.pantry);
+  const customIngredients = useApp((s) => s.customIngredients);
+  const products = useApp((s) => s.products);
 
   const picks = useMemo(() => {
     if (!hydrated) return [];
     return suggestDrinks(useApp.getState(), recipe, limit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, recipe.id, limit, pantry]);
+  }, [hydrated, recipe.id, limit, pantry, customIngredients, products]);
 
   if (picks.length === 0) return null;
 

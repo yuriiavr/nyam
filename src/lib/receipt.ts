@@ -1,4 +1,6 @@
-import { INGREDIENTS, findIngredient } from "@/data/ingredients";
+import { INGREDIENTS, findIngredient, ing, knownIngredient } from "@/data/ingredients";
+import { normalizeEan } from "./ean";
+import type { ProductHints, ReceiptDraftProductFields } from "./product-types";
 import type { IngredientDef, Unit } from "./types";
 import { sumQuantities, unitDef } from "./units";
 
@@ -211,7 +213,7 @@ const HOMOGLYPH: Record<string, string> = {
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 
-function foldHomoglyphs(token: string): string {
+export function foldHomoglyphs(token: string): string {
   // Чіпаємо лише мішанину: «milk» має лишитись латиницею, бо це синонім.
   if (!CYRILLIC.test(token) || !/[a-z]/.test(token)) return token;
   return token.replace(/[a-z]/g, (ch) => HOMOGLYPH[ch] ?? ch);
@@ -231,6 +233,18 @@ const SLASH: Record<string, string> = {
   "в/г": "",
   "п/е": "",
   "б/а": "",
+  "б/лак": "безлактозне",
+};
+
+/*
+ * Скорочення без крапки, які каса ліпить до сусідніх слів: «МолокГалБезл900»,
+ * «Мол950УлГаличБЛак2.5». Крапки немає — розкриття за початком слова (нижче)
+ * їх не бачить, а однозначні вони й самі: «безл» на чеку — завжди безлактозне.
+ * Лише цілим словом і лише такі, що не збігаються з початком жодної їжі.
+ */
+const WHOLE: Record<string, string> = {
+  безл: "безлактозне",
+  блак: "безлактозне",
 };
 
 /** Слова, які є на кожному другому чеку й нічого не кажуть про продукт. */
@@ -296,7 +310,7 @@ const CATALOG_WORDS: Map<string, Set<string>> = (() => {
  *
  * Дволітерні не чіпаємо взагалі: з «п.» чи «к.» починається пів каталогу.
  */
-function expandAbbreviation(token: string): string {
+export function expandAbbreviation(token: string): string {
   if (token.length < 3) return token;
 
   const owners = new Set<string>();
@@ -366,6 +380,10 @@ function receiptTokens(raw: string, expand: boolean): string[] {
         if (SLASH[token]) out.push(SLASH[token]);
         return;
       }
+      if (expand && token in WHOLE) {
+        out.push(WHOLE[token]);
+        return;
+      }
 
       if (expand && index < pieces.length - 1) {
         /*
@@ -398,7 +416,13 @@ function receiptTokens(raw: string, expand: boolean): string[] {
  */
 export function isNonFood(name: string): boolean {
   const words = [...receiptTokens(name, true), ...receiptTokens(name, false)];
-  if (NON_FOOD.some((stop) => words.some((word) => word.startsWith(stop)))) return true;
+  /*
+   * «Лак» ловить лак для волосся й нігтів, але той самий початок має й
+   * «лактоза»: «Молоко без лактози» ставало нехарчовим і зникало з чека.
+   */
+  const stops = (word: string, stop: string) =>
+    word.startsWith(stop) && !(stop === "лак" && word.startsWith("лакт"));
+  if (NON_FOOD.some((stop) => words.some((word) => stops(word, stop)))) return true;
   // Пари для слів, які поодинці означають їжу: «зуб» — це ще й зубатка.
   return NON_FOOD_PAIRS.some((pair) => pair.every((word) => words.includes(word)));
 }
@@ -521,27 +545,29 @@ export function lineQuantity(line: ReceiptLine): { amount: number; unit: Unit } 
  *
  * Частина мереж кладе в чек справжній EAN — тоді нерозпізнану назву рятує
  * той самий пошук, що й сканер штрихкодів. Але поруч у тому ж полі бувають
- * внутрішні артикули, і йти з ними в Open Food Facts безглуздо: коди, що
- * починаються з 2, зарезервовані під внутрішні потреби магазину, а решту
- * відсіює контрольна цифра.
+ * внутрішні артикули, і йти з ними в базу чи Open Food Facts безглуздо.
+ *
+ * Самі правила — одні на весь застосунок і дзеркало SQL normalize_ean
+ * (src/lib/ean.ts): внутрішні префікси 2…/02…/04…, заглушки кас із нулів,
+ * контрольна цифра. Тут лише одне своє: у полі коду чека мають бути самі
+ * цифри — normalizeEan витягає цифри з будь-якого рядка, а «АРТ-12345670» у
+ * чеку — артикул, не EAN-8.
  */
 export function lookupableBarcode(code: string | undefined): string | null {
-  if (!code || !/^\d+$/.test(code)) return null;
-  if (code.length !== 13 && code.length !== 8) return null;
-  if (code.startsWith("2")) return null;
-
-  const digits = [...code].map(Number);
-  const check = digits.pop() as number;
-  // Множники чергуються, і в EAN-8 та EAN-13 ряд починається з різного боку.
-  const weights = code.length === 13 ? [1, 3] : [3, 1];
-  const sum = digits.reduce((acc, digit, i) => acc + digit * weights[i % 2], 0);
-  return (10 - (sum % 10)) % 10 === check ? code : null;
+  const trimmed = code?.trim();
+  if (!trimmed || !/^\d{8,13}$/.test(trimmed)) return null;
+  return normalizeEan(trimmed);
 }
 
 /* ── Готова до підтвердження позиція ──────────────────────────────────── */
 
-/** Рядок чека, зіставлений із каталогом, — те, що бачить людина перед «Додати». */
-export interface ReceiptDraft {
+/**
+ * Рядок чека, зіставлений із каталогом, — те, що бачить людина перед «Додати».
+ *
+ * `resolution`, `hints`, `choice` (I5) — що сказала база, що вичитано з назви і
+ * що людина з рядком зробила; від цього залежить, чого вчимо спільну базу.
+ */
+export interface ReceiptDraft extends ReceiptDraftProductFields {
   /** Стабільний ключ для React: у чеку бувають два однакові рядки. */
   id: string;
   line: ReceiptLine;
@@ -553,16 +579,37 @@ export interface ReceiptDraft {
 }
 
 /**
+ * Підказки з назви (productHints з src/lib/product-hints.ts), передані ззовні.
+ *
+ * Параметром, а не імпортом: product-hints сам спирається на цей модуль
+ * (matchReceiptName, packSize), і прямий імпорт звідси склав би коло, у якому
+ * його таблиця брендів рахувалась би раніше, ніж тут зʼявились двійники літер.
+ */
+export type ReceiptHintsFn = (raw: string, baseTypeKey?: string, extraBrands?: readonly string[], measure?: string) => ProductHints;
+
+/**
  * Перетворює чек на список позицій для підтвердження.
  *
  * Нічого не додаємо мовчки: касова назва зіставляється з каталогом лише
  * приблизно, і остаточне рішення — за людиною, яка цей чек тримає в руках.
+ *
+ * З `hints` тип уточнюється ознаками з назви («МолокГалБезл900» — не просто
+ * молоко, а безлактозне), а упаковка без одиниці («Масл180») стає кількістю,
+ * якщо каса не сказала міри сама. Без `hints` — рівно колишня евристика.
  */
-export function receiptDrafts(lines: ReceiptLine[]): ReceiptDraft[] {
+export function receiptDrafts(
+  lines: ReceiptLine[],
+  hints?: ReceiptHintsFn,
+  extraBrands: readonly string[] = [],
+): ReceiptDraft[] {
   return lines.map((line, index) => {
     const nonFood = isNonFood(line.name);
-    const ingredient = nonFood ? null : matchReceiptName(line.name);
-    const quantity = ingredient ? lineQuantity(line) : null;
+    const matched = nonFood ? null : matchReceiptName(line.name);
+    const hinted = !nonFood && hints ? hints(line.name, matched?.key, extraBrands, line.measure) : undefined;
+    // Уточнення лише вниз по дереву (product-hints сам цього тримається) і лише до відомого типу.
+    const refined = hinted?.typeKey && knownIngredient(hinted.typeKey) ? ing(hinted.typeKey) : null;
+    const ingredient = refined ?? matched;
+    const quantity = ingredient ? draftQuantity(line, hinted) : null;
 
     return {
       id: `${index}:${line.name}`,
@@ -571,8 +618,23 @@ export function receiptDrafts(lines: ReceiptLine[]): ReceiptDraft[] {
       nonFood,
       amount: quantity?.amount,
       unit: quantity?.unit,
+      ...(hinted ? { hints: hinted } : {}),
     };
   });
+}
+
+/**
+ * Кількість рядка з підказками (B2.5): каса знає кг/л — як на касі; ваговий
+ * товар — кілограми з каси; упаковка з назви × кількість; інакше lineQuantity.
+ */
+function draftQuantity(line: ReceiptLine, hints: ProductHints | undefined): { amount: number; unit: Unit } | null {
+  if (!hints) return lineQuantity(line);
+  const measure = line.measure?.toLowerCase().replace(/\./g, "").trim();
+  const till = measure ? MEASURE_UNIT[measure] : undefined;
+  if (till && till !== "pcs") return tidy(line.qty, till);
+  if (hints.weighed) return line.qty > 0 ? tidy(line.qty, "kg") : null;
+  if (hints.packAmount != null && hints.packUnit) return tidy(hints.packAmount * (line.qty > 0 ? line.qty : 1), hints.packUnit);
+  return lineQuantity(line);
 }
 
 /* ── Запит до нашого проксі ───────────────────────────────────────────── */
@@ -590,11 +652,190 @@ export type ReceiptFailure =
   /** На фото не видно чека. */
   | "unreadable"
   /** Знімок завеликий навіть після стиснення. */
-  | "toobig";
+  | "toobig"
+  /**
+   * Ключ є, але сервіс його не приймає: відкликаний, модель зникла, запит
+   * не пасує до моделі, квоти немає або вона вичерпана до завтра. Окремо
+   * від «upstream», бо тут чекати кілька хвилин марно — поки хтось не
+   * полагодить налаштування, кожна спроба закінчиться так само.
+   */
+  | "misconfigured"
+  /**
+   * Модель уперлась у стелю відповіді: або чек на півтори сотні рядків, або
+   * вона пішла по колу. І там, і там допомагає знімок меншого шматка.
+   */
+  | "toolong"
+  /** Людина сама передумала чекати — показувати нема чого. */
+  | "cancelled";
 
 export type ReceiptResult =
   | { ok: true; receipt: Receipt }
   | { ok: false; reason: ReceiptFailure };
+
+/** Причини з деталей помилки Google, які означають «ключ не годиться». */
+const KEY_TROUBLE = new Set([
+  "API_KEY_INVALID",
+  "API_KEY_EXPIRED",
+  "ACCOUNT_STATE_INVALID",
+  "API_KEY_SERVICE_BLOCKED",
+  "SERVICE_DISABLED",
+]);
+
+/**
+ * Що означає відмова Gemini: для людини — причина, для журналу — подробиці.
+ *
+ * Раніше будь-що, крім 429, ставало «розпізнавання не відповідає, спробуй за
+ * кілька хвилин». Саме так виглядав відкликаний ключ: Google відповідав 401
+ * за чверть секунди, а людині радили чекати того, що само не мине. Тому
+ * ділимо на те, що минає (5xx, обрив), і те, що без нас не мине: 401, 403,
+ * 404 і 400.
+ *
+ * 400 — теж налаштування, а не випадковість: так Google відповідає і на
+ * недійсний ключ, і на запит, що не пасує до моделі (3.5 на `thinkingBudget`,
+ * див. src/lib/vision.ts). Виняток — коли скаржаться на саму картинку: це вже
+ * про знімок, і новий знімок справді може допомогти.
+ *
+ * 429 від Google — не «забагато спроб» від людини: цей текст належить нашому
+ * власному лімітові на користувача, а квота Google спільна на весь проєкт.
+ * Хвилинна квота минає сама, тож це «upstream» — «спробуй за кілька хвилин».
+ * А квота з нулем (проєкт без оплати, де моделі безкоштовно не дають) чи
+ * добова, вже вичерпана, за кілька хвилин не мине — це налаштування, як і
+ * відкликаний ключ. Інакше кожна людина чула б, що це вона натискала
+ * забагато, і палила б свої дванадцять спроб на те, що від неї не залежить.
+ *
+ * `cause` іде лише в журнал сервера. Ключа в ньому немає: Google не
+ * повторює ключ у тексті помилки, а заголовків запиту ми туди не пишемо.
+ */
+export function geminiFailure(
+  status: number,
+  body: string,
+): { reason: ReceiptFailure; cause: string } {
+  let error: {
+    status?: string;
+    message?: string;
+    details?: Array<{
+      reason?: string;
+      violations?: Array<{ quotaId?: string; quotaValue?: string | number }>;
+    }>;
+  } = {};
+  try {
+    error = (JSON.parse(body) as { error?: typeof error } | null)?.error ?? {};
+  } catch {
+    // Не JSON — проксі чи балансувальник по дорозі. Лишається сам статус.
+  }
+
+  const why = error.details?.map((d) => d.reason).find(Boolean) ?? "";
+  const fullMessage = (error.message ?? body).replace(/\s+/g, " ").trim();
+  const message = fullMessage.slice(0, 200);
+  const label = [error.status, why].filter(Boolean).join("/");
+  const cause = `${status}${label ? ` ${label}` : ""}: ${message}`;
+
+  if (status === 429) {
+    /*
+     * Дивимось і в QuotaFailure, і в текст: деталі Google додає не завжди, а
+     * «limit: 0» у тексті стоїть далеко за двохсотим символом — тому шукаємо
+     * в повному повідомленні, а не в обрізаному для журналу.
+     */
+    const violations = error.details?.flatMap((d) => d.violations ?? []) ?? [];
+    const wontPass =
+      violations.some((v) => String(v.quotaValue) === "0" || /PerDay/i.test(v.quotaId ?? "")) ||
+      /\blimit: ?0\b|per ?day/i.test(fullMessage);
+    return { reason: wontPass ? "misconfigured" : "upstream", cause };
+  }
+  if (status === 401 || status === 403 || status === 404) return { reason: "misconfigured", cause };
+  if (status === 400) {
+    const aboutImage = !KEY_TROUBLE.has(why) && /image|base64|inline.?data|mime/i.test(message);
+    return { reason: aboutImage ? "unreadable" : "misconfigured", cause };
+  }
+  return { reason: "upstream", cause };
+}
+
+/**
+ * Таймаут разом із кнопкою «Скасувати».
+ *
+ * AbortSignal.any є не скрізь: Safari отримав його лише в 17.4, а телефони в
+ * людей оновлюються повільно. Без запасного шляху скасування на старішому
+ * iPhone просто нічого б не робило.
+ */
+function withTimeout(ms: number, signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(ms);
+  if (!signal) return timeout;
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([signal, timeout]);
+
+  const both = new AbortController();
+  // Причину передаємо далі: саме за нею таймаут відрізняється від «передумав».
+  const relay = (from: AbortSignal) => () => both.abort(from.reason);
+  if (signal.aborted) both.abort(signal.reason);
+  signal.addEventListener("abort", relay(signal), { once: true });
+  timeout.addEventListener("abort", relay(timeout), { once: true });
+  return both.signal;
+}
+
+/**
+ * Запит до власного маршруту чека — спільний для QR і фото.
+ *
+ * Головне тут — не звалювати все на звʼязок. «Немає звʼязку» лише тоді, коли
+ * відповіді не було взагалі. Вийшов час — мовчить сервіс, а не мережа.
+ * Прийшла відповідь, але не JSON — це Vercel відрізав запит сам (413 за
+ * завелике тіло, 504 за задовгу функцію), і звʼязок якраз був.
+ */
+async function askProxy(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<ReceiptResult> {
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, signal: withTimeout(timeoutMs, signal) });
+  } catch (error) {
+    if (signal?.aborted) return { ok: false, reason: "cancelled" };
+    if ((error as Error | null)?.name === "TimeoutError") return { ok: false, reason: "upstream" };
+    return { ok: false, reason: "offline" };
+  }
+
+  try {
+    const json = (await res.json()) as ReceiptResult | null;
+    if (!json || (!res.ok && !("reason" in json))) return { ok: false, reason: "upstream" };
+    return json;
+  } catch {
+    if (signal?.aborted) return { ok: false, reason: "cancelled" };
+    return { ok: false, reason: res.status === 413 ? "toobig" : "upstream" };
+  }
+}
+
+/**
+ * Чек із фотографії — коли QR немає або він не читається.
+ *
+ * Повертає рівно те саме, що й пошук за QR, тож далі працює той самий код:
+ * зіставлення касових назв, підтвердження людиною, запис у комору. Модель
+ * лише замінює очі там, де в чека немає машинного коду.
+ *
+ * `signal` — це кнопка «Скасувати»: до хвилини очікування без права
+ * передумати виглядали як застосунок, що завис.
+ */
+export async function readReceiptPhoto(
+  image: string,
+  token: string | null,
+  signal?: AbortSignal,
+): Promise<ReceiptResult> {
+  return askProxy(
+    "/api/receipt/photo",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ image }),
+    },
+    // Фото читається довше за запит до податкової: модель дивиться на
+    // картинку, а не дістає готовий рядок із бази.
+    55_000,
+    signal,
+  );
+}
 
 /**
  * Питає чек у податкової через власний маршрут.
@@ -604,50 +845,15 @@ export type ReceiptResult =
  * ендпоїнт публічний, а доступ до чека дає сам чек: без точної суми,
  * хвилини й номера каси нічого не знайдеться.
  */
-/**
- * Чек із фотографії — коли QR немає або він не читається.
- *
- * Повертає рівно те саме, що й пошук за QR, тож далі працює той самий код:
- * зіставлення касових назв, підтвердження людиною, запис у комору. Модель
- * лише замінює очі там, де в чека немає машинного коду.
- */
-export async function readReceiptPhoto(
-  image: string,
-  token: string | null,
+export async function fetchReceipt(
+  query: ReceiptQuery,
+  signal?: AbortSignal,
 ): Promise<ReceiptResult> {
-  try {
-    const res = await fetch("/api/receipt/photo", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ image }),
-      // Фото читається довше за запит до податкової: модель дивиться на
-      // картинку, а не дістає готовий рядок із бази.
-      signal: AbortSignal.timeout(55_000),
-    });
-    const json = (await res.json()) as ReceiptResult;
-    if (!res.ok && !("reason" in json)) return { ok: false, reason: "upstream" };
-    return json;
-  } catch {
-    return { ok: false, reason: "offline" };
-  }
-}
-
-export async function fetchReceipt(query: ReceiptQuery): Promise<ReceiptResult> {
   const params = new URLSearchParams(query as unknown as Record<string, string>);
-
-  try {
-    const res = await fetch(`/api/receipt?${params}`, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(25_000),
-    });
-    const json = (await res.json()) as ReceiptResult;
-    if (!res.ok && !("reason" in json)) return { ok: false, reason: "upstream" };
-    return json;
-  } catch {
-    return { ok: false, reason: "offline" };
-  }
+  return askProxy(
+    `/api/receipt?${params}`,
+    { headers: { Accept: "application/json" } },
+    25_000,
+    signal,
+  );
 }

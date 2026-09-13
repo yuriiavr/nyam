@@ -61,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
   const who = (actor as { name?: string } | null)?.name ?? "Хтось";
   const dish = (recipe as { title?: string } | null)?.title;
 
-  const { sent } = await sendPush([event.user_id], {
+  const { sent, failed, error } = await sendPush([event.user_id], {
     title: `${who} ${wording}`,
     body: dish ?? "",
     url: event.recipe_id ? `/recipe/${event.recipe_id}` : "/notifications",
@@ -69,5 +69,11 @@ export async function POST(request: Request): Promise<Response> {
     tag: `${event.type}:${event.recipe_id ?? "app"}`,
   });
 
-  return Response.json({ ok: true, sent });
+  /*
+   * Причини відмов — у відповідь. Цю відповідь база складає в
+   * net._http_response, і там її можна прочитати одним select, не маючи
+   * доступу до журналів Vercel. Голе «sent: 0» не відрізняло «нікому
+   * надсилати» від «служба Apple відмовила».
+   */
+  return Response.json({ ok: true, sent, failed, ...(error ? { error } : {}) });
 }

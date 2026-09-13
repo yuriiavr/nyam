@@ -36,6 +36,16 @@ export default function HomePage() {
   const cooked = useApp((s) => s.cooked);
   const myRecipes = useApp((s) => s.myRecipes);
   const pantry = useApp((s) => s.pantry);
+  // Добірка «для тебе» дивиться в комору з родоводом типів — а він міняється
+  // разом із каталогом дописаних продуктів.
+  const customIngredients = useApp((s) => s.customIngredients);
+  /*
+   * Картки товарів (products) навмисно НЕ в залежностях: вартості й «є 1,9 л»
+   * тут немає, а тип рядка після правки картки стор переписує в самій коморі —
+   * новий масив pantry і так перерахує добірку. Зайвий перерахунок тут
+   * шкодить: у «Для тебе» є випадковий шум, і кеш карток, що оновлюється при
+   * кожному завантаженні, тасував би картки під пальцем.
+   */
 
   /*
    * У стрічку заходять частіше, ніж будь-куди, і чекають там свіже. Але
@@ -59,7 +69,7 @@ export default function HomePage() {
     );
     return { trending, forYou, feed: [...following, ...rest].slice(0, 14) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, likes, saved, cooked, followingIds, myRecipes, pantry]);
+  }, [hydrated, likes, saved, cooked, followingIds, myRecipes, pantry, customIngredients]);
 
   if (!hydrated || !data) return <HomeSkeleton />;
 

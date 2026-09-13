@@ -2,10 +2,12 @@
 
 import * as api from "./supabase/api";
 import { friendlyError, getSupabase, isSupabaseConfigured } from "./supabase/client";
-import { useApp } from "./store";
+import { fetchProductsByIds } from "./supabase/products-api";
+import { useApp, type RemoteUserState } from "./store";
+import { disablePush } from "./push";
 import { subscribeRealtime, unsubscribeRealtime } from "./realtime";
-import { pushCustomIngredient, setSyncFamily, setSyncUser } from "./sync";
-import type { IngredientDef, Recipe } from "./types";
+import { isRecipeInFlight, pushCustomIngredientsInOrder, setSyncFamily, setSyncUser } from "./sync";
+import type { IngredientDef, Product, Recipe } from "./types";
 import { newId } from "./utils";
 
 /**
@@ -45,7 +47,8 @@ async function loadCommunity(myId: string | null) {
     const known = new Set(custom.map((d) => d.key));
     const unsynced = useApp.getState().customIngredients.filter((d) => !known.has(d.key));
     store.setCustomIngredients([...unsynced, ...custom]);
-    for (const def of unsynced) pushCustomIngredient(def);
+    // Одним викликом і по черзі: різновид не ляже в базу раніше за свого батька.
+    pushCustomIngredientsInOrder(unsynced);
 
     store.setCommunity(data);
     return true;
@@ -60,7 +63,31 @@ async function loadCommunity(myId: string | null) {
  * Локальні id можуть бути не-UUID (створені в старих версіях) — таким видаємо нові.
  */
 async function migrateLocalRecipes(userId: string, remoteIds: Set<string>): Promise<Recipe[]> {
-  const local = useApp.getState().myRecipes.filter((r) => !remoteIds.has(r.id));
+  const { myRecipes, unsyncedRecipes, unsyncedImages } = useApp.getState();
+  const local = myRecipes.filter(
+    (r) =>
+      !remoteIds.has(r.id) &&
+      /*
+       * Рецепт із позначкою недоставленої правки чи з записом у дорозі шле
+       * sync — зі своєю чергою, фото і позначкою (див. applyRemoteUserState).
+       * Друга, паралельна відправка тут вантажила б те саме фото двічі.
+       */
+      !unsyncedRecipes[r.id] &&
+      !unsyncedImages[r.id] &&
+      !isRecipeInFlight(r.id) &&
+      /*
+       * Власний рецепт, який уже побував у базі (має updated_at), а тепер його
+       * там немає, — видалений на іншому пристрої. Переносити його — означає
+       * воскресити для всіх: так і було, щойно цей пристрій перечитував базу.
+       */
+      !(r.authorId === userId && (r as api.StampedRecipe).updatedAt) &&
+      /*
+       * Чужий рецепт (сімʼї), якого вже не видно, — не наш, щоб «переносити»:
+       * upsert від свого імені або відбивався б RLS, або, якщо автор його
+       * видалив, тихо привласнював би копію.
+       */
+      !(UUID_RE.test(r.authorId) && r.authorId !== userId),
+  );
   if (local.length === 0) return [];
 
   const uploaded: Recipe[] = [];
@@ -91,6 +118,39 @@ async function migrateLocalRecipes(userId: string, remoteIds: Set<string>): Prom
     }
   }
   return uploaded;
+}
+
+/**
+ * Знімок особистого разом із картками, на які посилається комора (A7, D4).
+ *
+ * Картки тягнемо ДО того, як знімок ляже в стан: інакше рядок на мить показав
+ * би назву типу («Молоко») замість «Галичина 2,5%» і перестрибнув би.
+ *
+ * - `revalidate: true` (повне завантаження, refreshIfStale, сімʼя) — усі
+ *   картки комори заново: так приїжджають перейменування й нові упаковки;
+ * - `revalidate: false` (подія realtime) — лише ті, яких у кеші ще немає; немає
+ *   таких — жодного запиту. Зміну типу картки realtime і так приносить рядками
+ *   комори (тригер products_type_to_pantry), а назва оновиться на повному.
+ *
+ * Картки не вдалось прочитати — знімок однаково застосовуємо: комора без
+ * назв товарів краща за комору, що не оновилась.
+ */
+async function withProducts(
+  userState: Omit<RemoteUserState, "products" | "productsComplete">,
+  revalidate: boolean,
+): Promise<RemoteUserState> {
+  const referenced = [...new Set(userState.pantry.flatMap((row) => (row.productId ? [row.productId] : [])))];
+  const cached = useApp.getState().products;
+  const wanted = revalidate ? referenced : referenced.filter((id) => !cached[id]);
+  if (wanted.length === 0) return { ...userState, products: [], productsComplete: revalidate };
+  try {
+    const products: Product[] = await fetchProductsByIds(wanted);
+    return { ...userState, products, productsComplete: revalidate };
+  } catch (error) {
+    console.warn("[session] картки товарів не вдалося прочитати", error);
+    // Кеш не підрізаємо: без відповіді не знаємо, що з нього ще потрібне.
+    return { ...userState, products: [], productsComplete: false };
+  }
 }
 
 /** Посилання на знімок із Google: у метаданих воно лежить під двома назвами. */
@@ -124,9 +184,12 @@ async function loadUserData(userId: string, email: string, photo?: string) {
     ]);
 
     const remoteIds = new Set(myRecipes.map((r) => r.id));
-    const migrated = await migrateLocalRecipes(userId, remoteIds);
+    const [migrated, withCards] = await Promise.all([
+      migrateLocalRecipes(userId, remoteIds),
+      withProducts(userState, true),
+    ]);
 
-    store.applyRemoteUserState(userState, [...migrated, ...myRecipes]);
+    store.applyRemoteUserState(withCards, [...migrated, ...myRecipes]);
 
     // Спільноту перечитуємо, щоб побачити щойно перенесені рецепти.
     await loadCommunity(userId);
@@ -138,7 +201,8 @@ async function loadUserData(userId: string, email: string, photo?: string) {
     // рецепт зʼявлялись би лише після перезапуску застосунку.
     subscribeRealtime(userId, {
       reloadCommunity: () => void loadCommunity(userId),
-      reloadUserState: () => void refreshUserState(),
+      // Подія realtime — лише відсутні картки, без перечитування всіх (A7).
+      reloadUserState: () => void refreshUserState({ revalidateProducts: false }),
       reloadFamily: () => void refreshFamily(),
     });
   } catch (error) {
@@ -172,8 +236,13 @@ async function loadFamily(userId: string): Promise<string[]> {
   }
 }
 
-/** Перечитує особисті та спільні дані, не чіпаючи сімʼю й спільноту. */
-export async function refreshUserState(): Promise<void> {
+/**
+ * Перечитує особисті та спільні дані, не чіпаючи сімʼю й спільноту.
+ *
+ * `revalidateProducts` — чи перечитати всі картки комори (true, типово) чи
+ * лише докачати відсутні (false — так кличе realtime на кожну подію).
+ */
+export async function refreshUserState(opts: { revalidateProducts?: boolean } = {}): Promise<void> {
   const store = useApp.getState();
   const account = store.account;
   if (!account) return;
@@ -187,7 +256,7 @@ export async function refreshUserState(): Promise<void> {
       api.fetchUserState(account.id, memberIds),
       api.fetchMyRecipes(account.id, memberIds),
     ]);
-    store.applyRemoteUserState(userState, myRecipes);
+    store.applyRemoteUserState(await withProducts(userState, opts.revalidateProducts ?? true), myRecipes);
   } catch (error) {
     console.warn("[session] не вдалося оновити особисті дані", error);
   }
@@ -204,7 +273,8 @@ export async function refreshFamily(): Promise<void> {
     api.fetchUserState(account.id, memberIds),
     api.fetchMyRecipes(account.id, memberIds),
   ]);
-  store.applyRemoteUserState(userState, myRecipes);
+  // Склад сімʼї змінився — з ним і комора, тож картки перечитуємо всі.
+  store.applyRemoteUserState(await withProducts(userState, true), myRecipes);
 }
 
 export async function refreshNotifications(): Promise<void> {
@@ -300,6 +370,17 @@ export interface AuthResult {
 export async function signOut(): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
+  /*
+   * Сповіщення цього пристрою знімаємо ДО виходу, поки сесія ще жива: рядок
+   * підписки база дозволяє видалити лише власнику. Після виходу він лишався б
+   * у базі, телефон і далі отримував би сповіщення попереднього акаунта, а
+   * наступний, хто увійде, не зміг би записати цей пристрій на себе.
+   *
+   * Відповідь про сповіщення (pushOffer) при цьому лишається: вона про
+   * пристрій, а не про акаунт. Хто вмикав, після входу отримає пропозицію
+   * знову — цього разу вже без вікна дозволу.
+   */
+  await disablePush().catch(() => undefined);
   await sb.auth.signOut();
 }
 

@@ -11,7 +11,6 @@ import {
   Info,
   LogOut,
   Moon,
-  Share,
   Smartphone,
   Sparkles,
   Sun,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { InstallGuide } from "@/components/PushOffer";
 import { TopBar } from "@/components/TopBar";
 import { Avatar, Button, Card, useToast } from "@/components/ui";
 import { disablePush, enablePush, pushConfigured, pushState, pushSupported } from "@/lib/push";
@@ -27,10 +27,12 @@ import { useApp } from "@/lib/store";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   canInstall,
-  isIos,
+  currentAppleDevice,
+  currentInstallEnvironment,
   isStandalone,
   onInstallAvailability,
   promptInstall,
+  type InstallEnvironment,
 } from "@/lib/pwa";
 import { haptic, plural } from "@/lib/utils";
 
@@ -47,13 +49,12 @@ export default function SettingsPage() {
   const familyMembers = useApp((st) => st.familyMembers);
 
   const [installable, setInstallable] = useState(false);
-  const [standalone, setStandalone] = useState(false);
-  const [ios, setIos] = useState(false);
+  /** Де відкрито. До ефекту — «встановлено», щоб картка не блимала на першому кадрі. */
+  const [env, setEnv] = useState<InstallEnvironment>("standalone");
 
   useEffect(() => {
     setInstallable(canInstall());
-    setStandalone(isStandalone());
-    setIos(isIos());
+    setEnv(currentInstallEnvironment());
     return onInstallAvailability(setInstallable);
   }, []);
 
@@ -96,25 +97,30 @@ export default function SettingsPage() {
 
       {/* Встановлення. Коли застосунок уже на телефоні, розповідати про це
           нема сенсу — прибираємо секцію цілком. */}
-      {!standalone && (
-  <section className="px-4 pt-4">
+      {env !== "standalone" && (
+        <section className="px-4 pt-4">
           <Card className="p-4">
             <div className="flex items-center gap-2">
               <Smartphone size={17} className="text-brand" />
-              <h2 className="font-display text-[16px] font-bold">Застосунок на телефоні</h2>
+              <h2 className="font-display text-[16px] font-bold">{installCardTitle(env)}</h2>
             </div>
 
-            {ios ? (
+            {/*
+              iPhone, iPad і вбудовані браузери — ті самі кроки, що й в аркуші
+              при першому відкритті: там їх показують один раз, а тут вони
+              лишаються для тих, хто закрив аркуш і захотів пізніше.
+            */}
+            {env === "ios-safari" || env === "ipad-safari" || env === "ios-other-browser" || env === "in-app" ? (
               <>
-                <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                  На iPhone встановлення робиться вручну: натисни{" "}
-                  <Share size={13} className="inline align-text-bottom" /> «Поділитись» унизу Safari →
-                  «На екран «Домів»».
-                </p>
-                <div className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] leading-relaxed text-muted">
-                  Після цього Ням відкриватиметься на весь екран, без адресного рядка, і працюватиме
-                  офлайн.
+                <div className="mt-3">
+                  <InstallGuide env={env} signedIn compact />
                 </div>
+                {env !== "in-app" && (
+                  <div className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] leading-relaxed text-muted">
+                    Після цього Ням відкриватиметься на весь екран, без адресного рядка, і
+                    працюватиме офлайн.
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -246,6 +252,21 @@ export default function SettingsPage() {
   );
 }
 
+/**
+ * Заголовок картки встановлення — з правильним пристроєм.
+ *
+ * Раніше завжди «на телефоні»: і на iPad, і в Chrome на компʼютері, де
+ * телефона немає взагалі. Кличеться лише після ефекту (до нього секція
+ * схована), тож рядок браузера тут уже справжній.
+ */
+function installCardTitle(env: InstallEnvironment): string {
+  if (env === "in-app") return "Відкрий Ням у браузері";
+  const device = currentAppleDevice();
+  if (device === "iPad") return "Застосунок на iPad";
+  if (device === "iPhone") return "Застосунок на телефоні";
+  return "Ням як застосунок";
+}
+
 /** Стан підключення до бекенду і кнопка виходу. */
 function AccountCard() {
   const account = useApp((s) => s.account);
@@ -312,12 +333,13 @@ function AccountCard() {
  * Дозвіл питаємо лише у відповідь на натиск: браузери карають за питання без
  * приводу, а людина, яку спитали зненацька, тисне «ні» — і назавжди.
  *
- * На айфоні пуш працює тільки в застосунку, доданому на екран «Домів». Це не
+ * На айфоні пуш працює тільки в застосунку, доданому на Початковий екран. Це не
  * наша вигадка й не вада — просто так влаштований iOS, і сказати про це
  * чесніше, ніж мовчки показувати перемикач, який нічого не вмикає.
  */
 function PushCard() {
   const account = useApp((s) => s.account);
+  const setPushOffer = useApp((s) => s.setPushOffer);
   const toast = useToast();
 
   const [on, setOn] = useState(false);
@@ -342,7 +364,9 @@ function PushCard() {
   if (!account || !isSupabaseConfigured) return null;
 
   const supported = pushSupported() && configured;
-  const iosNotInstalled = isIos() && !isStandalone();
+  /** iPhone чи iPad у вкладці — назву пристрою кажемо точно, а не завжди «iPhone». */
+  const apple = currentAppleDevice();
+  const iosNotInstalled = apple !== null && !isStandalone();
 
   /**
    * Пробне сповіщення — єдиний чесний спосіб перевірити ланцюг.
@@ -377,6 +401,13 @@ function PushCard() {
       if (on) {
         await disablePush();
         setOn(false);
+        /*
+         * Запамʼятовуємо саме «вимкнено»: дозвіл після відписки лишається, і
+         * без цього запису пристрій виглядав би як «дозволено, але не
+         * підписано» — і пропозиція на старті вже наступного запуску
+         * перепитала б те, від чого людина щойно відмовилась.
+         */
+        setPushOffer("off");
         toast("Сповіщення вимкнено", "🔕");
         return;
       }
@@ -385,9 +416,14 @@ function PushCard() {
       if (result.state === "on") {
         setOn(true);
         setKnown(true);
+        setPushOffer("enabled");
         toast("Сповіщення увімкнено", "🔔");
       } else if (result.state === "denied") {
-        toast("Дозвіл не надано — увімкни в налаштуваннях телефона", "🔕");
+        toast("Сповіщення заблоковано — увімкни їх у налаштуваннях телефона", "🔕");
+      } else if (result.state === "dismissed") {
+        // Вікно просто закрили — нічого не заблоковано, і в налаштування
+        // телефона відправляти нема за чим.
+        toast("Дозвіл не надано — можна спробувати ще раз", "🔕");
       } else {
         // Кажемо, що саме не вийшло: інакше порожня таблиця підписок виглядає
         // як «мабуть, телефон не підтримує».
@@ -406,15 +442,18 @@ function PushCard() {
           <h2 className="font-display text-[16px] font-bold">Сповіщення</h2>
         </div>
 
+        {/* Про таймер — тепер можна: дзвінок шле сервер, а не сторінка (див. /api/push/timers). */}
         <p className="mt-2 text-[13px] leading-relaxed text-muted">
-          Нагадаємо, коли продукт у коморі доживає останній день, і скажемо про коментар до
-          твого рецепта. Приходить на цей пристрій, навіть коли застосунок закрито.
+          Продзвонимо, коли вийде таймер готування, нагадаємо, коли продукт у коморі доживає
+          останній день, і скажемо про коментар до твого рецепта. Приходить на цей пристрій,
+          навіть коли застосунок закрито.
         </p>
 
         {iosNotInstalled ? (
           <p className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] leading-relaxed text-muted">
-            На iPhone сповіщення працюють лише в застосунку, доданому на екран «Домів».
-            Додай Ням туди — і перемикач зʼявиться.
+            На {apple} сповіщення працюють лише в застосунку, доданому на Початковий екран.
+            {/* Без назви картки: у вбудованому браузері вона зветься інакше, а кроки там свої. */}
+            Додай Ням туди (кроки — у картці вище) — і перемикач зʼявиться.
           </p>
         ) : !ready ? (
           <p className="mt-3 rounded-2xl bg-surface-2 p-3 text-[12.5px] text-muted">
