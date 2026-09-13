@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, Reorder, useDragControls } from "framer-motion";
 import {
   Camera,
   Check,
@@ -103,7 +103,7 @@ function RecipeForm() {
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
-  const [steps, setSteps] = useState<RecipeStep[]>([{ text: "" }]);
+  const [steps, setSteps] = useState<FormStep[]>([{ uid: newId(), text: "" }]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
@@ -134,7 +134,9 @@ function RecipeForm() {
         setCostLevel(r.costLevel);
         setKcal(r.kcal ? String(r.kcal) : "");
         setIngredients(r.ingredients);
-        setSteps(r.steps.length ? r.steps : [{ text: "" }]);
+        setSteps(
+          (r.steps.length ? r.steps : [{ text: "" }]).map((step) => ({ ...step, uid: newId() })),
+        );
       }
     }
     setLoaded(true);
@@ -162,7 +164,10 @@ function RecipeForm() {
     setSaving(true);
     haptic([16, 40, 16]);
 
-    const cleanSteps = steps.filter((s) => s.text.trim());
+    // Ключ порядку — суто екранна річ: у рецепт він не їде.
+    const cleanSteps: RecipeStep[] = steps
+      .filter((s) => s.text.trim())
+      .map(({ uid: _uid, ...step }) => step);
     const base = {
       title: title.trim(),
       description: description.trim() || "Без опису — але точно смачно.",
@@ -583,62 +588,30 @@ function RecipeForm() {
       {/* Кроки */}
       <section className="px-4 pt-6">
         <h2 className="mb-2.5 font-display text-[16px] font-bold">Кроки приготування</h2>
-        <div className="flex flex-col gap-3">
+        {/*
+          Порядок кроків міняється перетягуванням за ручку праворуч. Саме за
+          ручку, а не за картку: усередині текстові поля, і тягнути треба
+          вміти так, щоб при цьому можна було й слово виділити.
+        */}
+        <Reorder.Group
+          axis="y"
+          values={steps}
+          onReorder={setSteps}
+          className="flex flex-col gap-3"
+        >
           {steps.map((step, i) => (
-            <Card key={i} className="p-3">
-              <div className="flex items-start gap-2.5">
-                <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full brand-gradient text-[12px] font-extrabold text-brand-ink">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <textarea
-                    value={step.text}
-                    onChange={(e) =>
-                      setSteps((prev) =>
-                        prev.map((s, j) => (j === i ? { ...s, text: e.target.value } : s)),
-                      )
-                    }
-                    placeholder={`Що робимо на кроці ${i + 1}?`}
-                    rows={2}
-                    className="w-full resize-none rounded-xl bg-surface-2 p-3 text-[14px] leading-relaxed"
-                  />
-
-                  <div className="mt-2 flex items-center gap-2">
-                    <TimerInput
-                      seconds={step.timerSec}
-                      onChange={(timerSec) =>
-                        setSteps((prev) => prev.map((s, j) => (j === i ? { ...s, timerSec } : s)))
-                      }
-                    />
-                    {steps.length > 1 && (
-                      <button
-                        onClick={() => setSteps((prev) => prev.filter((_, j) => j !== i))}
-                        aria-label="Видалити крок"
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-faint"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
-                  </div>
-
-                  <input
-                    value={step.tip ?? ""}
-                    onChange={(e) =>
-                      setSteps((prev) =>
-                        prev.map((s, j) =>
-                          j === i ? { ...s, tip: e.target.value || undefined } : s,
-                        ),
-                      )
-                    }
-                    placeholder="💡 Порада до кроку (необовʼязково)"
-                    className="mt-2 h-9 w-full rounded-xl bg-surface-2 px-3 text-[13px]"
-                  />
-                </div>
-                <GripVertical size={16} className="mt-2 shrink-0 text-faint" />
-              </div>
-            </Card>
+            <StepCard
+              key={step.uid}
+              step={step}
+              index={i}
+              removable={steps.length > 1}
+              onChange={(patch) =>
+                setSteps((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)))
+              }
+              onRemove={() => setSteps((prev) => prev.filter((_, j) => j !== i))}
+            />
           ))}
-        </div>
+        </Reorder.Group>
 
         <Button
           variant="secondary"
@@ -646,7 +619,7 @@ function RecipeForm() {
           className="mt-3"
           onClick={() => {
             haptic(10);
-            setSteps((p) => [...p, { text: "" }]);
+            setSteps((p) => [...p, { uid: newId(), text: "" }]);
           }}
         >
           <Plus size={17} />
@@ -764,6 +737,89 @@ function RecipeForm() {
 }
 
 /* ── Допоміжні ────────────────────────────────────────────────────────── */
+
+/** Крок у формі. `uid` живе лише тут — щоб React не плутав кроки місцями. */
+type FormStep = RecipeStep & { uid: string };
+
+/**
+ * Крок рецепта з ручкою для перенесення.
+ *
+ * Окремим компонентом не заради ладу, а тому, що кожному перетягуваному
+ * елементу потрібні власні керування: тягнути можна лише за ручку, інакше
+ * спроба виділити слово в тексті кроку зсувала б сам крок.
+ */
+function StepCard({
+  step,
+  index,
+  removable,
+  onChange,
+  onRemove,
+}: {
+  step: FormStep;
+  index: number;
+  removable: boolean;
+  onChange: (patch: Partial<RecipeStep>) => void;
+  onRemove: () => void;
+}) {
+  const controls = useDragControls();
+
+  return (
+    <Reorder.Item
+      value={step}
+      dragListener={false}
+      dragControls={controls}
+      className="rounded-xl3 border border-line bg-surface p-3 shadow-[var(--shadow-card)]"
+    >
+      <div className="flex items-start gap-2.5">
+        <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full brand-gradient text-[12px] font-extrabold text-brand-ink">
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <textarea
+            value={step.text}
+            onChange={(e) => onChange({ text: e.target.value })}
+            placeholder={`Що робимо на кроці ${index + 1}?`}
+            rows={2}
+            className="w-full resize-none rounded-xl bg-surface-2 p-3 text-[14px] leading-relaxed"
+          />
+
+          <div className="mt-2 flex items-center gap-2">
+            <TimerInput seconds={step.timerSec} onChange={(timerSec) => onChange({ timerSec })} />
+            {removable && (
+              <button
+                onClick={onRemove}
+                aria-label={`Видалити крок ${index + 1}`}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-faint"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
+
+          <input
+            value={step.tip ?? ""}
+            onChange={(e) => onChange({ tip: e.target.value || undefined })}
+            placeholder="💡 Порада до кроку (необовʼязково)"
+            className="mt-2 h-9 w-full rounded-xl bg-surface-2 px-3 text-[13px]"
+          />
+        </div>
+
+        <button
+          onPointerDown={(e) => {
+            haptic(8);
+            controls.start(e);
+          }}
+          aria-label={`Перенести крок ${index + 1}`}
+          // touch-none обовʼязкове: інакше браузер вважає рух пальця
+          // прокруткою сторінки й перетягування не починається зовсім.
+          className="mt-1 grid h-9 w-7 shrink-0 cursor-grab touch-none place-items-center text-faint active:cursor-grabbing"
+        >
+          <GripVertical size={16} />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
+}
 
 /**
  * Таймер кроку: число плюс міра.
