@@ -29,15 +29,48 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Секрет вставляють руками з буфера — і разом із ним летять пробіл,
+      # перенос рядка чи лапки з .env. Vercel CLI на таке каже лише «Could not
+      # retrieve Project Settings», без жодного натяку, що саме не так. Тому тут
+      # значення очищаємо й перевіряємо самі, а причину пишемо словами. Значень
+      # не виводимо: очищені теж маскуємо, бо GitHub маскує лише сирі секрети.
       - name: Check secrets
         run: |
+          clean() { printf '%s' "$1" | tr -d '\r\n"'"'" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
-            if [ -z "$(printenv "$name")" ]; then
+            raw="$(printenv "$name")"
+            if [ -z "$raw" ]; then
               echo "::error::Немає секрету $name — див. коментар на початку .github/workflows/deploy.yml"
               missing=1
+              continue
             fi
+            value="$(clean "$raw")"
+            [ "$value" != "$raw" ] && echo "::warning::У секреті $name були пробіли, лапки чи перенос рядка — прибрано"
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+            export "$name=$value"
           done
-          [ -z "$missing" ]
+          [ -z "$missing" ] || exit 1
+
+          case "$VERCEL_TOKEN" in vcp_*) ;; *) echo "::warning::VERCEL_TOKEN зазвичай починається з vcp_ — чи це точно токен?";; esac
+          case "$VERCEL_ORG_ID" in team_*) ;; *) echo "::error::VERCEL_ORG_ID має бути Team ID (team_…), а не назва команди чи Project ID"; bad=1;; esac
+          case "$VERCEL_PROJECT_ID" in prj_*) ;; *) echo "::error::VERCEL_PROJECT_ID має починатися з prj_ — чи не переплутано з ORG_ID?"; bad=1;; esac
+          [ -z "$bad" ] || exit 1
+
+          status=$(curl -s -o project.json -w '%{http_code}' \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID")
+          if [ "$status" != "200" ]; then
+            code=$(node -e "try{console.log(require('./project.json').error.code)}catch{console.log('?')}")
+            case "$status" in
+              401|403) echo "::error::Vercel відмовив токену ($status $code): токен недійсний, прострочений або не має доступу до команди VERCEL_ORG_ID";;
+              404) echo "::error::Vercel не знайшов проєкт (404 $code): VERCEL_PROJECT_ID не з цієї команди або з помилкою";;
+              *) echo "::error::Vercel відповів $status $code на запит проєкту";;
+            esac
+            exit 1
+          fi
+          rm -f project.json
+          echo "Секрети в порядку: токен бачить проєкт."
 
       - uses: actions/checkout@v4
 
