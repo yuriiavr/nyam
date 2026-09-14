@@ -7,10 +7,34 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
 /**
+ * Чи адреса — справжня http(s)-адреса, а не просто непорожній рядок.
+ *
+ * Саме це перевіряє createClient, і саме на цьому він кидає виняток. А
+ * порожнім значення буває не лише тоді, коли його забули: Vercel не віддає
+ * `vercel pull` значень, позначених sensitive, — замість них у файл їде рядок
+ * `[SENSITIVE]`, і збірка вшиває його в бандл як справжню адресу. Так і
+ * сталось: застосунок у проді назавжди лишався на заставці, бо createClient
+ * падав ще до того, як хтось встигав спитати про сесію.
+ *
+ * Ключі з префіксом NEXT_PUBLIC_ позначати sensitive не можна за визначенням
+ * (префікс означає «віддати у браузер»), але помилку в налаштуваннях має
+ * ловити код, а не людина за крутілкою.
+ */
+function isHttpUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Чи налаштовано бекенд. Якщо ні — застосунок працює в локальному режимі
  * (localStorage + демо-спільнота), як і раніше.
  */
-export const isSupabaseConfigured = Boolean(url && key);
+export const isSupabaseConfigured = isHttpUrl(url) && Boolean(key);
 
 let cached: SupabaseClient | null = null;
 
@@ -18,7 +42,18 @@ export function getSupabase(): SupabaseClient | null {
   if (!isSupabaseConfigured) return null;
   if (typeof window === "undefined") return null;
   if (!cached) {
-    cached = createClient(url!, key!, {
+    cached = create(url!, key!);
+  }
+  return cached;
+}
+
+/**
+ * Створює клієнт і НЕ кидає: єдиний виняток звідси зупиняв увесь запуск.
+ * Не вийшло — застосунок піде далі без бекенду й скаже про це словами.
+ */
+function create(url: string, key: string): SupabaseClient | null {
+  try {
+    return createClient(url, key, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -33,8 +68,10 @@ export function getSupabase(): SupabaseClient | null {
        */
       global: { fetch: guardStaleWrites },
     });
+  } catch (error) {
+    console.error("[supabase] клієнта не вдалося створити", error);
+    return null;
   }
-  return cached;
 }
 
 /** Людською мовою — щоб не показувати користувачу сирі коди Postgres. */

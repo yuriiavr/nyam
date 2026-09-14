@@ -84,6 +84,35 @@ jobs:
       - name: Pull Vercel settings and env
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
+      # Значення, позначене у Vercel як sensitive, прочитати назад не можна:
+      # `vercel pull` пише замість нього рядок [SENSITIVE], а збірка вшиває цей
+      # рядок у бандл як справжнє значення (vercel/vercel#17514). Для серверних
+      # ключів це байдуже — їх підставляє Vercel уже під час роботи. А от усе з
+      # префіксом NEXT_PUBLIC_ Next замінює текстом ще на збірці, тож заглушка
+      # доїжджає до браузера: саме так застосунок одного разу поїхав у прод із
+      # адресою Supabase "[SENSITIVE]" і назавжди лишився на заставці.
+      #
+      # Такі змінні sensitive і не мають бути: префікс NEXT_PUBLIC_ означає
+      # «віддати у браузер», ховати там нічого. Тож краще не зібратись зовсім,
+      # ніж зібрати застосунок, який не вмикається.
+      - name: Check pulled env
+        run: |
+          file=.vercel/.env.production.local
+          if [ ! -f "$file" ]; then
+            echo "::error::vercel pull не залишив $file — змінних середовища у збірки немає"
+            exit 1
+          fi
+          redacted=$(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)="\?\[SENSITIVE\]"\?$/\1/p' "$file")
+          [ -n "$redacted" ] || exit 0
+          public=$(printf '%s\n' "$redacted" | grep '^NEXT_PUBLIC_' || true)
+          server=$(printf '%s\n' "$redacted" | grep -v '^NEXT_PUBLIC_' || true)
+          [ -z "$server" ] || echo "::notice::Серверні змінні позначено sensitive (це нормально): $(printf '%s ' $server)"
+          if [ -n "$public" ]; then
+            echo "::error::Vercel не віддав значень: $(printf '%s ' $public)"
+            echo "::error::Ці змінні позначено sensitive — зніми позначку (Vercel → проєкт → Settings → Environment Variables, створи їх наново як звичайні) і запусти деплой ще раз"
+            exit 1
+          fi
+
       - name: Build
         run: vercel build --prod --token="$VERCEL_TOKEN"
 

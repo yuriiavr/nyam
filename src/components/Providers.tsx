@@ -114,9 +114,16 @@ function useBackend() {
   useEffect(() => {
     if (!hydrated) return;
     let dispose: (() => void) | undefined;
-    initSession().then((fn) => {
-      dispose = fn;
-    });
+    initSession()
+      .then((fn) => {
+        dispose = fn;
+      })
+      /*
+       * initSession ловить усе сама, але це остання точка, де відхилений
+       * проміс ще можна перехопити. Далі — лише «unhandled rejection» у
+       * консолі й заставка, що не зникне ніколи.
+       */
+      .catch(() => useApp.getState().setAuthChecked(true));
     return () => dispose?.();
   }, [hydrated]);
 

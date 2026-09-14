@@ -289,7 +289,15 @@ export async function refreshNotifications(): Promise<void> {
 
 let initialised = false;
 
-/** Викликається один раз при старті застосунку. */
+/**
+ * Викликається один раз при старті застосунку.
+ *
+ * Що б тут не сталось, authChecked має стати true: доки він false, воротар
+ * тримає заставку — і будь-який виняток на шляху лишає людину назавжди з
+ * крутілкою, без екрана входу, без помилки, без жодного натяку. Саме так
+ * виглядав деплой із порожнім NEXT_PUBLIC_SUPABASE_URL: createClient кинув
+ * «Invalid supabaseUrl», проміс відхилився нікуди, і застосунок не вмикався.
+ */
 export async function initSession(): Promise<() => void> {
   if (!isSupabaseConfigured) {
     // Без бекенду входу не існує — воротар покаже, чого бракує.
@@ -297,11 +305,33 @@ export async function initSession(): Promise<() => void> {
     useApp.getState().setAuthChecked(true);
     return () => {};
   }
+  /*
+   * Повторний виклик (строгий режим dev) authChecked не чіпає: перший ще
+   * вантажить дані, і «перевірку завершено» тут означало б блиск екрана
+   * входу перед тим, хто насправді має живу сесію.
+   */
   if (initialised) return () => {};
   initialised = true;
 
+  try {
+    return await openSession();
+  } catch (error) {
+    console.error("[session] сесію не вдалося підняти", error);
+    useApp.getState().setSyncStatus("error", friendlyError(error));
+    useApp.getState().setAuthChecked(true);
+    return () => {};
+  }
+}
+
+/** Власне робота: сесія, дані, підписка на зміни входу. */
+async function openSession(): Promise<() => void> {
   const sb = getSupabase();
-  if (!sb) return () => {};
+  if (!sb) {
+    // Налаштування є, а клієнта немає — про причину вже сказано в консолі.
+    useApp.getState().setSyncStatus("offline");
+    useApp.getState().setAuthChecked(true);
+    return () => {};
+  }
 
   const { data } = await sb.auth.getSession();
   const session = data.session;
