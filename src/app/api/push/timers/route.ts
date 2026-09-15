@@ -10,6 +10,7 @@ import {
   TIMER_LEAD_MS,
   TIMER_PUSH_COLUMNS,
   TIMER_TTL_SEC,
+  timerTag,
   type TimerPushRow,
 } from "@/lib/timer-push";
 
@@ -83,11 +84,12 @@ export async function POST(request: Request): Promise<Response> {
             body: row.body,
             url: row.url ?? "/",
             /*
-             * Той самий тег, що й у місцевого будильника на сторінці
-             * готування: коли встигли обидва, на екрані одне сповіщення, а не
-             * два однакових.
+             * Той самий тег, що й у місцевого будильника цього таймера: коли
+             * встигли обидва, на екрані одне сповіщення, а не два однакових.
+             * А в різних таймерів теги різні — два «час вийшов» поспіль не
+             * ховаються один під одним.
              */
-            tag: "nyam-timer",
+            tag: timerTag(row.id),
             requireInteraction: true,
             vibrate: [200, 100, 200, 100, 300],
           },

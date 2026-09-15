@@ -11,6 +11,7 @@ import {
   Minus,
   Pencil,
   Plus,
+  RotateCcw,
   Share2,
   ShoppingBasket,
   Star,
@@ -20,6 +21,7 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useNow } from "@/components/CookingHost";
 import { DrinkPicks, PairingSuggestions } from "@/components/Pairings";
 import { RecipeMedia, RecipeRow } from "@/components/RecipeCard";
 import {
@@ -34,6 +36,7 @@ import {
 import { canonicalKey, ing, satisfies } from "@/data/ingredients";
 import type { Product } from "@/lib/product-types";
 import type { PantryItem, Recipe, RecipeComment } from "@/lib/types";
+import { endSession, isStarted, timerLeft, timersByUrgency, useCooking } from "@/lib/cooking";
 import { matchRecipe } from "@/lib/matching";
 import { availableFor } from "@/lib/pantry";
 import { itemsForRecipe } from "@/lib/shopping";
@@ -50,6 +53,7 @@ import {
   compactNumber,
   plural,
   DIFFICULTY_LABEL,
+  formatClock,
   formatMinutes,
   haptic,
   MEAL_LABEL,
@@ -94,6 +98,10 @@ export default function RecipePage() {
   const addShopping = useApp((s) => s.addShopping);
   const hydrated = useApp((s) => s.hydrated);
   const toast = useToast();
+  /** Готування цього рецепта, яке почали й не закінчили (src/lib/cooking.ts). */
+  const cooking = useCooking((s) => s.sessions[params.id]);
+  const cookTimer = cooking ? timersByUrgency(cooking)[0] : undefined;
+  const cookNow = useNow(cookTimer?.timer.deadline != null, 500);
 
   const [servings, setServings] = useState<number | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
@@ -561,17 +569,49 @@ export default function RecipePage() {
         </section>
       )}
 
-      {/* Липка кнопка «Готувати» */}
+      {/*
+        Липка кнопка «Готувати». Готування, яке лишили посеред кроків, —
+        «Продовжити» з тим самим кроком і таймерами; поруч «скинути», щоб
+        почати наново. Над панеллю «готуєш зараз», якщо вона є (--cook-dock).
+      */}
       <div
-        className="fixed inset-x-0 z-30 mx-auto w-full max-w-[560px] px-4"
-        style={{ bottom: "calc(84px + env(safe-area-inset-bottom))" }}
+        className="fixed inset-x-0 z-30 mx-auto flex w-full max-w-[560px] gap-2 px-4"
+        style={{ bottom: "calc(84px + env(safe-area-inset-bottom) + var(--cook-dock, 0px))" }}
       >
-        <Link href={`/recipe/${recipe.id}/cook`}>
+        <Link href={`/recipe/${recipe.id}/cook`} className="min-w-0 flex-1">
           <Button full size="lg" className="shadow-[var(--shadow-pop)]">
             <ChefHat size={19} />
-            Готувати покроково
+            {cooking && isStarted(cooking) ? (
+              <span className="truncate">
+                Продовжити
+                {cooking.step >= 0 ? ` · крок ${cooking.step + 1}` : ""}
+                {cookTimer &&
+                  (cookTimer.timer.rangAt != null
+                    ? " · час вийшов"
+                    : ` · ${formatClock(timerLeft(cookTimer.timer, cookNow))}`)}
+              </span>
+            ) : (
+              "Готувати покроково"
+            )}
           </Button>
         </Link>
+        {cooking && isStarted(cooking) && (
+          <Button
+            variant="secondary"
+            size="lg"
+            className="glass w-14 shrink-0 border border-line px-0 shadow-[var(--shadow-pop)]"
+            aria-label="Скинути готування й почати спочатку"
+            onClick={() => {
+              const timers = Object.keys(cooking.timers).length;
+              const note = timers > 0 ? " Таймери цього рецепта зупиняться." : "";
+              if (!confirm(`Скинути готування «${recipe.title}»?${note}`)) return;
+              endSession(recipe.id);
+              toast("Готування скинуто", "↩️");
+            }}
+          >
+            <RotateCcw size={18} />
+          </Button>
+        )}
       </div>
       <div className="h-16" />
 

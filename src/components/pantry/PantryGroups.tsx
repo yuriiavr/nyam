@@ -493,7 +493,7 @@ export function ActionToast({
 
   return (
     <div
-      style={{ bottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + 12px)` }}
+      style={{ bottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + var(--cook-dock, 0px) + 12px)` }}
       className="pointer-events-none fixed inset-x-0 z-[45] flex justify-center px-4"
     >
       <AnimatePresence>

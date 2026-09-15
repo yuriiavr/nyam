@@ -15,374 +15,44 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { cookPath, useNow } from "@/components/CookingHost";
 import { Button, EmptyState, Sheet, Stars, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
-import type { Consumed } from "@/lib/pantry";
-import { enablePushFromTimer, pushServerReady } from "@/lib/push";
-import { recipeById, useApp } from "@/lib/store";
 import {
-  cancelTimerPush,
-  fetchTimerPushes,
-  hasPushSubscription,
-  scheduleTimerPush,
-  TimerPushError,
-  type TimerPush,
-} from "@/lib/supabase/api";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { TIMER_STALE_MS } from "@/lib/timer-push";
+  anyRunning,
+  endSession,
+  isRunning,
+  leaveSession,
+  openSession,
+  pauseTimer,
+  resetTimer,
+  setCustomTime,
+  setStep,
+  startedSessions,
+  startTimer,
+  stepSeconds,
+  timerLeft,
+  timersByUrgency,
+  toggleChecked,
+  useCooking,
+  type CookSession,
+  type StepTimer,
+} from "@/lib/cooking";
+import type { Consumed } from "@/lib/pantry";
+import { enablePushFromTimer } from "@/lib/push";
+import { recipeById, useApp } from "@/lib/store";
 import type { PantryItem } from "@/lib/types";
-import { formatClock, haptic } from "@/lib/utils";
-
-/* ── Будильник із сервера ─────────────────────────────────────────────────
- *
- * На iPhone застосунок з екрана «Домів», щойно його згорнули, заморожується
- * цілком: setInterval не доходить до нуля, і будильник дзвонив лише тоді,
- * коли застосунок відкривали знову. Пуш із сервера приходить і в закритий,
- * тож запущений таймер ще й записує в базу «коли дзвонити» і «куди» — підписку
- * саме цього пристрою (timer_pushes), а сервер у ту секунду надсилає туди
- * сповіщення з тим самим тегом, що й місцевий будильник: встигли обидва — на
- * екрані одне. Інші пристрої акаунта мовчать: макарони на цій плиті.
- *
- * Пауза, скидання, інший крок, «Готово!» і вихід хрестиком будильник
- * скасовують. А от просто піти зі сторінки — ні: зварити макарони можна й
- * гортаючи стрічку, і дзвінок тоді потрібен якраз найбільше. Щоб при
- * поверненні не лишився «привид» — будильник на сервері при таймері, якого на
- * екрані вже немає, — запущений таймер памʼятається в localStorage, і
- * сторінка, відкрита знову, підхоплює його: той самий крок, той самий відлік,
- * той самий рядок у базі. Саме localStorage: iPhone вивантажує згорнутий
- * застосунок без попередження, а sessionStorage зникає разом із ним — і
- * будильник у базі лишався б таким, якого вже ніщо не скасує.
- *
- * Якщо ж і сховище загубилось (стерли дані сайту, застосунок перевстановили),
- * сторінка питає базу, чи немає будильників цього рецепта на цьому пристрої,
- * про які ніхто не памʼятає. Такі не чіпаємо одразу — вони можуть бути
- * правдою, макарони ж варяться, — а прибираємо при першій дії з таймером:
- * старт, пауза, скидання, хрестик, «Готово!». Таймер на сторінці один, тож
- * екран тоді — остаточна правда, але лише для свого пристрою: будильник
- * телефона, заблокованого біля плити, ноутбук не бачить і не скасовує.
- */
-
-/**
- * Скільки часу після дедлайну означає «повернулись, коли давно продзвонило».
- *
- * Тоді системне сповіщення вже не показуємо — але лише коли будильник точно
- * лежав на сервері: серверне, найімовірніше, щойно було, і друге таке саме
- * лише задзвонило б ще раз.
- */
-const CAUGHT_UP_MS = 3000;
-
-/**
- * Скільки після строку ще є сенс скасовувати будильник.
- *
- * Здоровий сервер забирає рядок за 2 секунди до строку, і скасовувати вже
- * нічого. Але розсилка, що відстала, ще може надіслати будильник, прострочений
- * до TIMER_STALE_MS (10 хвилин), — стільки й чекаємо. Саме число, а не копія:
- * межа, до якої сервер ще дзвонить, і межа, до якої є сенс скасовувати, — одна.
- */
-const CANCEL_USEFUL_MS = TIMER_STALE_MS;
-
-/** Будильники, які просили поставити в цій сесії, — з моментом дзвінка. */
-const fireAtOf = new Map<string, number>();
-
-/**
- * Будильники, запис яких почався. Рядок міг дійти до бази, навіть коли
- * відповідь загубилась, — тож скасовувати треба кожен такий, а не лише
- * підтверджені.
- */
-const tried = new Set<string>();
-
-/** Будильники, запис яких база підтвердила: сервер про них точно знає. */
-const written = new Set<string>();
+import { cn, formatClock, haptic } from "@/lib/utils";
 
 /*
- * Запис і скасування — по черзі, в тому порядку, в якому їх попросили.
- * Запити летять незалежно, і «пауза» одразу після «старту» могла б дійти до
- * бази раніше за сам запис — тоді на сервері лишився б будильник на паузі.
- * Черга спільна на весь модуль: переживає й перехід між сторінками. Кожен
- * запит у ній обмежений у часі (див. api.ts), щоб один завислий не тримав
- * за собою скасування.
+ * Сторінка готування — лише екран. Крок, позначені продукти, свій час і
+ * таймери живуть у src/lib/cooking.ts, а ведуться й дзвонять у CookingHost —
+ * тож вийти звідси можна будь-коли: хрестиком, навігацією, закривши
+ * застосунок. Повернення відкриває той самий крок, а таймери весь цей час
+ * ідуть. Таймер належить кроку: перейшов на наступний — попередній рахує
+ * далі, і його видно в рядку таймерів угорі.
  */
-let alarmQueue: Promise<void> = Promise.resolve();
-
-function queueAlarm(op: () => Promise<void>): void {
-  alarmQueue = alarmQueue.then(op).catch((error: unknown) => {
-    // Будильник із сервера — підстраховка, а не головний дзвінок: місцевий
-    // таймер працює й без нього, тож людині про збій не кажемо.
-    if (process.env.NODE_ENV !== "production") console.warn("[timer-push]", error);
-  });
-}
-
-/* ── Скасування, що не дійшли ─────────────────────────────────────────── */
-
-/*
- * Скасування спершу записуємо в localStorage, а вже потім шлемо. Кухонний
- * Wi-Fi пропав якраз на паузі — і забуте скасування означало б «час вийшов»
- * для таймера, що давно стоїть. Тож зі списку воно зникає лише тоді, коли
- * база відповіла; до того повторюємо: щойно мережа повернулась, застосунок
- * знову на екрані, раз на 10 секунд — і при наступному відкритті сторінки,
- * якщо застосунок устигли закрити.
- */
-interface PendingCancel {
-  id: string;
-  /** Після цього скасовувати пізно: див. CANCEL_USEFUL_MS. */
-  until: number;
-}
-
-const CANCELS_KEY = "nyam-timer-cancels";
-const RETRY_MS = 10_000;
-
-/** Скасування, що вже стоять у черзі, — щоб повтор не ставив їх удруге. */
-const cancelling = new Set<string>();
-let retryTimer: ReturnType<typeof setTimeout> | null = null;
-let retriesHooked = false;
-
-function readCancels(): PendingCancel[] {
-  try {
-    const list = JSON.parse(localStorage.getItem(CANCELS_KEY) ?? "[]") as unknown;
-    if (!Array.isArray(list)) return [];
-    const now = Date.now();
-    return list.filter(
-      (c): c is PendingCancel =>
-        typeof c?.id === "string" && typeof c?.until === "number" && c.until > now,
-    );
-  } catch {
-    return [];
-  }
-}
-
-function writeCancels(list: PendingCancel[]): void {
-  try {
-    if (list.length) localStorage.setItem(CANCELS_KEY, JSON.stringify(list));
-    else localStorage.removeItem(CANCELS_KEY);
-  } catch {
-    /* приватний режим — лишається повтор, поки сторінка жива */
-  }
-}
-
-/** Скасовує будильник, поставлений у цій сесії чи знайдений у базі. */
-function cancelAlarm(id: string): void {
-  const fireAt = fireAtOf.get(id);
-  if (fireAt == null) return;
-  const list = readCancels();
-  if (!list.some((c) => c.id === id)) {
-    writeCancels([...list, { id, until: fireAt + CANCEL_USEFUL_MS }]);
-  }
-  flushCancels(id);
-}
-
-function flushCancels(only?: string): void {
-  // Без входу RLS видалить нуль рядків і відповість «успіх» — і скасування
-  // зникло б зі списку, так і не спрацювавши.
-  if (!isSupabaseConfigured || !useApp.getState().account) return;
-  hookRetries();
-
-  const list = readCancels();
-  writeCancels(list); // заразом викидаємо прострочені
-  for (const { id } of list) {
-    if ((only && id !== only) || cancelling.has(id)) continue;
-    cancelling.add(id);
-    queueAlarm(async () => {
-      try {
-        // Поставлений у цій сесії, але до запису так і не дійшло (пуш цьому
-        // пристрою недоступний) — у базі нема чого видаляти. Решту, зокрема
-        // спадок попередньої сесії, видаляємо завжди: зайве видалення нічого
-        // не коштує.
-        if (!fireAtOf.has(id) || tried.has(id)) await cancelTimerPush(id);
-        forgetCancel(id);
-      } catch (error) {
-        // Відмова бази (4xx) не мине від повтору — скажімо, таблиці немає.
-        if (error instanceof TimerPushError && error.rejected) forgetCancel(id);
-        else retrySoon();
-        throw error;
-      } finally {
-        cancelling.delete(id);
-      }
-    });
-  }
-}
-
-function forgetCancel(id: string): void {
-  tried.delete(id);
-  written.delete(id);
-  writeCancels(readCancels().filter((c) => c.id !== id));
-}
-
-function retrySoon(): void {
-  if (retryTimer) return;
-  retryTimer = setTimeout(() => {
-    retryTimer = null;
-    flushCancels();
-  }, RETRY_MS);
-}
-
-/** Раз на весь застосунок: слухачі живуть і після виходу зі сторінки готування. */
-function hookRetries(): void {
-  if (retriesHooked) return;
-  retriesHooked = true;
-  window.addEventListener("online", () => flushCancels());
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") flushCancels();
-  });
-}
-
-/* ── Запис ────────────────────────────────────────────────────────────── */
-
-/**
- * Будильник, яким його знає мить старту. Без адреси пристрою: її дізнаємось
- * лише в мить запису — до вікна дозволу підписки ще могло не бути зовсім.
- */
-type AlarmDraft = Omit<TimerPush, "endpoint">;
-
-/**
- * Ставить будильник на сервері.
- *
- * `push` готують у мить старту — з адресою й текстом саме того відліку. Другий
- * виклик приходить аж після вікна дозволу й підписки, коли людина могла вже
- * піти на іншу сторінку, і адреса, прочитана тоді, вела б натиск на сповіщення
- * не туди.
- *
- * `current` — чи цей відлік досі живий: перевірки, що ставити є сенс, чекають
- * мережі, а за цей час таймер могли поставити на паузу.
- */
-function armAlarm(push: AlarmDraft, recipeId: string, current: () => boolean): void {
-  fireAtOf.set(push.id, Date.parse(push.fireAt));
-  queueAlarm(async () => {
-    if (!current()) return;
-    const endpoint = await alarmEndpoint();
-    if (!endpoint || !current()) return;
-
-    const first = !tried.has(push.id);
-    tried.add(push.id);
-    try {
-      await scheduleTimerPush({ ...push, endpoint });
-    } catch (error) {
-      // Відмова означає «цей запис не пройшов», а не «рядка немає»: повторний
-      // запис того самого будильника міг упасти після першого, що дійшов.
-      if (error instanceof TimerPushError && error.rejected && first) tried.delete(push.id);
-      throw error;
-    }
-    written.add(push.id);
-
-    // Позначка й для збереженого відліку: сторінка, відкрита знову, має знати,
-    // чи сервер уже дзвонив за неї (див. finish).
-    const saved = readRun(recipeId);
-    if (saved?.alarmId === push.id && !saved.armed) saveRun(recipeId, { ...saved, armed: true });
-  });
-}
-
-/** Скільки чекати відповіді про ключі сервера, перш ніж вирішити «не дійде». */
-const REACH_TIMEOUT_MS = 5000;
-
-/** uuid для рядка. randomUUID немає поза https — а телефон у локальній мережі саме там. */
-function newAlarmId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-/**
- * Адреса, за якою пуш дійде саме до цього пристрою, — або null, якщо не дійде.
- *
- * Сервер дзвонить лише на пристрій, записаний у рядку будильника, тож мало
- * того, що браузер підписаний: цю підписку мусить знати база, і саме від
- * імені поточного акаунта. На спільному телефоні підписка браузера могла
- * лишитись записаною на іншу людину — тоді сервер не знайшов би її серед
- * наших і не надіслав би нічого, а тригер у базі такий запис і не прийме.
- * Сервер без ключів теж не надішле нічого, а рядки кликали б його даремно.
- * Будильник на сторінці працює в усіх цих випадках однаково.
- */
-async function alarmEndpoint(): Promise<string | null> {
-  if (!("Notification" in window) || Notification.permission !== "granted") return null;
-  const endpoint = await deviceEndpoint();
-  if (!endpoint) return null;
-
-  // Жоден із двох запитів сам не здається ніколи, а стоять вони в черзі перед паузою.
-  const ready = await Promise.race([
-    Promise.all([pushServerReady(), hasPushSubscription(endpoint)]).then(
-      ([key, known]) => key && known,
-      () => false,
-    ),
-    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), REACH_TIMEOUT_MS)),
-  ]);
-  return ready ? endpoint : null;
-}
-
-/**
- * Адреса пуш-підписки цього браузера — лише те, що знає він сам, без мережі.
- *
- * Нею будильник у базі й позначає пристрій: і для запису (alarmEndpoint), і
- * для пошуку загублених — щоб не зачепити будильник іншого пристрою акаунта.
- */
-async function deviceEndpoint(): Promise<string | null> {
-  if (!("PushManager" in window)) return null;
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration();
-    return (await reg?.pushManager.getSubscription())?.endpoint ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Текст будильника — один для місцевого й серверного, щоб заміна була непомітна. */
-function alarmText(recipeTitle: string, stepIndex: number): string {
-  const title = recipeTitle.length > 60 ? `${recipeTitle.slice(0, 59)}…` : recipeTitle;
-  return `Час вийшов — перевір страву. «${title}», крок ${stepIndex + 1}`;
-}
-
-/** Запущений таймер, який переживає вихід зі сторінки. */
-interface SavedRun {
-  step: number;
-  deadline: number;
-  /** Повний час кроку — щоб «скинути» після повернення давало свій час, а не авторський. */
-  base: number;
-  alarmId: string | null;
-  /** База підтвердила запис будильника — сервер продзвонить і без сторінки. */
-  armed: boolean;
-}
-
-const runKey = (recipeId: string) => `nyam-cook-timer:${recipeId}`;
-
-/*
- * localStorage, а не sessionStorage — див. нагорі файлу. Застарілим відлік
- * стати не може: той, чий строк минув, при відкритті сторінки просто
- * викидається.
- */
-function readRun(recipeId: string): SavedRun | null {
-  try {
-    const raw = localStorage.getItem(runKey(recipeId));
-    if (!raw) return null;
-    const run = JSON.parse(raw) as Partial<SavedRun>;
-    if (
-      typeof run.step !== "number" ||
-      typeof run.deadline !== "number" ||
-      typeof run.base !== "number"
-    ) {
-      return null;
-    }
-    return {
-      step: run.step,
-      deadline: run.deadline,
-      base: run.base,
-      alarmId: typeof run.alarmId === "string" ? run.alarmId : null,
-      armed: run.armed === true,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function saveRun(recipeId: string, run: SavedRun | null): void {
-  try {
-    if (run) localStorage.setItem(runKey(recipeId), JSON.stringify(run));
-    else localStorage.removeItem(runKey(recipeId));
-  } catch {
-    /* приватний режим — тоді просто не відновимо */
-  }
-}
 
 export default function CookPage() {
   const params = useParams<{ id: string }>();
@@ -402,25 +72,11 @@ export default function CookPage() {
     [hydrated, params.id, myRecipes, remoteRecipes],
   );
 
-  const [step, setStep] = useState(-1); // -1 = екран підготовки
-  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const ready = useCooking((s) => s.ready);
+  const session = useCooking((s) => s.sessions[params.id]);
   const [done, setDone] = useState(false);
   const [rating, setRating] = useState(0);
-
-  /* Таймер.
-     Лічильник тримаємо не як «мінус секунда щотику», а як абсолютний момент
-     завершення. Браузер у фоні душить setInterval (аж до повної зупинки), і
-     на старій схемі таймер «ставав на паузу», коли вийти із застосунку.
-     З дедлайном час іде за годинником, а тік лише перемальовує число. */
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const [running, setRunning] = useState(false);
-  const deadlineRef = useRef<number | null>(null);
-  const firedRef = useRef(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  /** Будильник на сервері для поточного відліку (див. нагорі файлу). */
-  const alarmIdRef = useRef<string | null>(null);
-  /** Відлік, збережений до виходу зі сторінки, — чекає, поки крок стане тим самим. */
-  const restoreRef = useRef<SavedRun | null>(null);
+  const [timerSheet, setTimerSheet] = useState(false);
 
   // Не давати екрану гаснути
   const wakeRef = useRef<WakeLockSentinel | null>(null);
@@ -447,283 +103,52 @@ export default function CookPage() {
     };
   }, []);
 
+  /*
+   * Відкриваємо готування — або підхоплюємо те, що лишили. Після «Готово!»
+   * сесії вже немає, і відкривати її наново не можна.
+   *
+   * `?step=` приходить зі сповіщення «час вийшов», коли застосунок був
+   * закритий: одразу на крок, чий таймер продзвонив. Читаємо раз і прибираємо
+   * з адреси, щоб оновлення сторінки не перекидало туди знову.
+   */
+  const urlStepRead = useRef(false);
+  useEffect(() => {
+    if (!recipe || !ready || done) return;
+    openSession(recipe);
+    if (urlStepRead.current) return;
+    urlStepRead.current = true;
+    const raw = new URLSearchParams(window.location.search).get("step");
+    if (raw == null) return;
+    const step = Number(raw);
+    if (Number.isInteger(step) && step >= 0 && step < recipe.steps.length) setStep(recipe.id, step);
+    router.replace(cookPath(recipe.id));
+  }, [recipe, ready, done, router]);
+
+  const step = session?.step ?? -1;
   const currentStep = recipe && step >= 0 ? recipe.steps[step] : null;
-
   /*
-   * Власний час для кроку, заданий на ходу. Рецепт каже «варити 10 хвилин»,
-   * але макарони бувають різні, і міняти заради цього сам рецепт безглуздо:
-   * зміна живе рівно стільки, скільки триває це готування.
+   * Нуль у customSec — це «Без таймера», а не таймер на нуль секунд: інакше
+   * замість кнопки «Поставити таймер» лишався мертвий червоний 0:00.
    */
-  const [customSec, setCustomSec] = useState<Record<number, number>>({});
-  const [timerSheet, setTimerSheet] = useState(false);
-  // Нуль у customSec — це «Без таймера», а не таймер на нуль секунд: інакше
-  // замість кнопки «Поставити таймер» лишався мертвий червоний 0:00.
-  const baseSec = step in customSec ? customSec[step] || null : (currentStep?.timerSec ?? null);
+  const baseSec = session ? stepSeconds(session, recipe, step) : null;
+  const timer: StepTimer | undefined = session?.timers[step];
+  const running = isRunning(timer);
+  const ticking = useCooking((s) => anyRunning(s.sessions));
+  const now = useNow(ticking);
+  const remaining = timer ? timerLeft(timer, now) : baseSec;
 
-  /** Будильники цього рецепта й пристрою в базі, про які не памʼятає жоден екран (див. нагорі файлу). */
-  const lostRef = useRef<string[]>([]);
-
-  /*
-   * Прибирає загублені будильники — теж через чергу: пошук у базі міг ще не
-   * повернутись, і тоді список прочитаємо вже після нього, а не порожнім.
-   */
-  const dropLost = useCallback(() => {
-    queueAlarm(async () => {
-      for (const id of lostRef.current.splice(0)) cancelAlarm(id);
-    });
-  }, []);
-
-  /** Відлік зупинено назовсім: ні дзвінка з сервера, ні відновлення при поверненні. */
-  const dropRun = useCallback(() => {
-    const id = alarmIdRef.current;
-    alarmIdRef.current = null;
-    if (id) cancelAlarm(id);
-    dropLost();
-    saveRun(params.id, null);
-  }, [dropLost, params.id]);
-
-  /*
-   * Повернення на сторінку, де лишили запущений таймер.
-   *
-   * Раз на рецепт: список рецептів у сховищі оновлюється й сам, і кожне
-   * оновлення не має перекидати людину на збережений крок.
-   */
-  const restoredFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!recipe || restoredFor.current === recipe.id) return;
-    restoredFor.current = recipe.id;
-
-    const saved = readRun(params.id);
-    if (!saved) return;
-
-    if (saved.deadline - Date.now() < 1000) {
-      // Час уже вийшов — відновлювати нічого. Будильник на сервері не чіпаємо:
-      // якщо він ще не продзвонив, то продзвонить за мить, і це правда.
-      saveRun(params.id, null);
-      return;
-    }
-
-    // Чи дійшов запис до бази, не знаємо напевно — тож скасовувати вважаємо
-    // за потрібне, а «сервер уже продзвонив» — лише з підтвердженням.
-    if (saved.alarmId) {
-      fireAtOf.set(saved.alarmId, saved.deadline);
-      tried.add(saved.alarmId);
-      if (saved.armed) written.add(saved.alarmId);
-    }
-
-    const savedStep = recipe.steps[saved.step];
-    if (!savedStep) {
-      // Рецепт за цей час змінився, і кроку більше немає — дзвонити нема про що.
-      saveRun(params.id, null);
-      if (saved.alarmId) cancelAlarm(saved.alarmId);
-      return;
-    }
-
-    restoreRef.current = saved;
-    if (saved.base !== savedStep.timerSec) setCustomSec({ [saved.step]: saved.base });
-    setStep(saved.step);
-  }, [recipe, params.id]);
-
-  /*
-   * Звірка з базою — щойно відомий акаунт. Не одразу при відкритті: акаунт
-   * піднімається із сесії вже після першого рендеру, а без нього ні пошук, ні
-   * скасування не пройдуть RLS.
-   *
-   * Заразом доганяємо скасування, що не дійшли минулого разу: застосунок могли
-   * закрити раніше, ніж повернулась мережа.
-   */
-  const accountId = useApp((s) => s.account?.id ?? null);
-  const reconciledFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!recipe || !accountId || !isSupabaseConfigured) return;
-    const key = `${recipe.id}:${accountId}`;
-    if (reconciledFor.current === key) return;
-    reconciledFor.current = key;
-
-    flushCancels();
-    const url = window.location.pathname;
-    queueAlarm(async () => {
-      // Лише будильники цього пристрою (див. fetchTimerPushes). Браузер не
-      // підписаний — то й дзвонити сюди сервер не міг, шукати нічого.
-      const endpoint = await deviceEndpoint();
-      if (!endpoint) return;
-      for (const row of await fetchTimerPushes(url, endpoint)) {
-        // Про цей будильник сесія знає сама: відновлений відлік, щойно
-        // запущений або вже скасовуваний.
-        if (fireAtOf.has(row.id)) continue;
-        fireAtOf.set(row.id, row.fireAt);
-        tried.add(row.id);
-        lostRef.current.push(row.id);
-      }
-    });
-  }, [recipe, accountId]);
-
-  // Скидаємо таймер при зміні кроку — або підхоплюємо збережений відлік.
-  useEffect(() => {
-    const restore = restoreRef.current;
-    if (restore && restore.step === step) {
-      restoreRef.current = null;
-      alarmIdRef.current = restore.alarmId;
-      deadlineRef.current = restore.deadline;
-      firedRef.current = false;
-      setRemaining(Math.max(0, Math.ceil((restore.deadline - Date.now()) / 1000)));
-      setRunning(true);
-      return;
-    }
-    // Крок чи його час змінили посеред відліку — старий будильник уже ні до чого.
-    if (deadlineRef.current != null) dropRun();
-    setRunning(false);
-    deadlineRef.current = null;
-    firedRef.current = false;
-    setRemaining(baseSec);
-  }, [step, baseSec, dropRun]);
-
-  const finish = useCallback(() => {
-    if (firedRef.current) return;
-    firedRef.current = true;
-    const deadline = deadlineRef.current;
-    setRunning(false);
-    deadlineRef.current = null;
-    setRemaining(0);
-    haptic([200, 100, 200, 100, 300]);
-    toast("Час вийшов!", "⏰");
-    saveRun(params.id, null);
-
-    const id = alarmIdRef.current;
-    alarmIdRef.current = null;
-    const visible = document.visibilityState === "visible";
-    const late = deadline != null && Date.now() - deadline > CAUGHT_UP_MS;
-    /*
-     * Чи сервер уже продзвонив за нас. Питання не в тому, чи видно сторінку, а
-     * в тому, чи лежав будильник у базі: без нього (не ввійшли, пуш цьому
-     * пристрою недоступний, запис не пройшов) місцеве сповіщення — єдине, хоч
-     * би як пізно ми отямились. А з ним пізній тік у фоні — браузер будить
-     * приспану вкладку раз на хвилину — показав би «час вийшов» удруге, вже
-     * після того, як людина закрила серверний.
-     */
-    const serverRang = late && id != null && written.has(id);
-
-    /*
-     * Застосунок на екрані — дзвінок уже відбувся тут, і серверний був би
-     * другим. У фоні ж скасовуємо лише тоді, коли система справді показала
-     * місцеве сповіщення (нижче): згорнутому застосунку вона може й відмовити.
-     * А коли сервер уже продзвонив, у фоні не чіпаємо нічого: якщо розсилка
-     * забарилась, її будильник — останній, що лишився.
-     */
-    if (visible && id) cancelAlarm(id);
-    if (serverRang) return;
-
-    /*
-     * Просимо систему докласти голосу — на випадок, якщо застосунок згорнули.
-     *
-     * Через service worker, а не `new Notification()`: на телефоні той
-     * конструктор заборонений і кидає помилку, тобто цей будильник не дзвонив
-     * саме там, де він потрібен, — коли екран згас і застосунок у фоні.
-     *
-     * Без дозволу просто мовчимо: набридати запитом посеред готування не варто.
-     */
-    const body = recipe && step >= 0 ? alarmText(recipe.title, step) : "Час вийшов — перевір страву";
-    void (async () => {
-      try {
-        if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-        const reg = await navigator.serviceWorker?.getRegistration();
-        if (!reg) return;
-        await reg.showNotification("Ням", {
-          body,
-          icon: "/api/icon?size=192",
-          badge: "/api/icon?size=192",
-          tag: "nyam-timer",
-          requireInteraction: true,
-          // Вібрація в кишені важить більше за звук: на кухні шумно.
-          vibrate: [200, 100, 200, 100, 300],
-          data: { url: window.location.pathname },
-        } as NotificationOptions);
-        if (!visible && id) cancelAlarm(id);
-      } catch {
-        /* не критично: тост і вібрація вже спрацювали, а сервер ще продзвонить */
-      }
-    })();
-  }, [toast, params.id, recipe, step]);
-
-  /* Один тік: перерахунок від дедлайну. Частота 250 мс, щоб число не «стрибало»
-     через півсекунди після повернення у застосунок. */
-  const tick = useCallback(() => {
-    const deadline = deadlineRef.current;
-    if (deadline == null) return;
-    const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-    setRemaining(left);
-    if (left === 0) finish();
-  }, [finish]);
-
-  useEffect(() => {
-    if (!running) return;
-    intervalRef.current = setInterval(tick, 250);
-    // Повернення на вкладку — одразу підтягуємо реальний час, не чекаючи тіку.
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") tick();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [running, tick]);
-
-  /**
-   * Запускає або ставить на паузу, перераховуючи дедлайн.
-   *
-   * Стан читаємо з рендеру, а не з функції-оновлювача setRunning: тут
-   * побічні дії — запис у базу, вікно дозволу, — а оновлювач React вправі
-   * викликати двічі.
-   */
-  const toggleTimer = useCallback(() => {
+  /** Запускає або ставить на паузу таймер цього кроку. */
+  const toggleTimer = () => {
     haptic(12);
+    if (!recipe || !session) return;
     if (running) {
-      // Пауза: лишаємо на екрані те, що дійсно лишилось.
-      const deadline = deadlineRef.current;
-      if (deadline != null) {
-        setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
-      }
-      deadlineRef.current = null;
-      setRunning(false);
-      dropRun();
+      pauseTimer(recipe.id, step);
       return;
     }
 
-    const base = remaining && remaining > 0 ? remaining : (baseSec ?? 0);
-    if (base <= 0) return;
-    firedRef.current = false;
-    const deadline = Date.now() + base * 1000;
-    deadlineRef.current = deadline;
-    setRemaining(base);
-    setRunning(true);
-
-    // Новий відлік — новий рядок: після паузи дедлайн уже інший.
-    const id = newAlarmId();
-    alarmIdRef.current = id;
-    const current = () => alarmIdRef.current === id;
-
-    /*
-     * Будильник готуємо зараз, а не в мить запису: див. armAlarm. Лише з
-     * акаунтом — рядок у базі належить людині, і без входу його нікому
-     * записати.
-     */
-    const account = useApp.getState().account;
-    const push: AlarmDraft | null =
-      recipe && isSupabaseConfigured && account
-        ? {
-            id,
-            userId: account.id,
-            fireAt: new Date(deadline).toISOString(),
-            title: "Ням",
-            body: alarmText(recipe.title, step),
-            url: window.location.pathname,
-          }
-        : null;
-    if (push) armAlarm(push, params.id, current);
-    // Новий таймер на екрані — загублені будильники цього рецепта вже ні до чого.
-    dropLost();
-    saveRun(params.id, { step, deadline, base: baseSec ?? base, alarmId: id, armed: false });
+    const seconds = remaining && remaining > 0 ? remaining : (baseSec ?? timer?.base ?? 0);
+    if (seconds <= 0) return;
+    const rearm = startTimer(recipe.id, step, seconds, baseSec ?? timer?.base ?? seconds);
 
     // Дозвіл питаємо саме тут — у момент, коли користувач сам запускає
     // таймер, тобто запит очікуваний. Погодився — підписуємо й кажемо про це;
@@ -732,17 +157,17 @@ export default function CookPage() {
     try {
       enablePushFromTimer(() => {
         toast("Сповіщення увімкнено", "🔔");
-        /*
-         * Будильник на сервері ставився ще до відповіді у вікні дозволу — і
-         * тоді пристрій пуша не вмів, тож запис не відбувся. Тепер уміє:
-         * ставимо той самий рядок для цього ж відліку, якщо він ще йде.
-         */
-        if (push && current()) armAlarm(push, params.id, current);
+        rearm();
       });
     } catch {
       /* не критично */
     }
-  }, [running, remaining, baseSec, step, recipe, params.id, dropRun, dropLost, toast]);
+  };
+
+  const resetStepTimer = () => {
+    haptic(10);
+    if (recipe) resetTimer(recipe.id, step);
+  };
 
   /** Що списали з комори — показуємо на екрані завершення. */
   const [consumed, setConsumed] = useState<Consumed[]>([]);
@@ -760,58 +185,45 @@ export default function CookPage() {
     toast("Продукти повернуто в комору", "↩️");
   };
 
-  const resetTimer = useCallback(() => {
-    haptic(10);
-    setRunning(false);
-    deadlineRef.current = null;
-    firedRef.current = false;
-    setRemaining(baseSec ?? 0);
-    dropRun();
-  }, [baseSec, dropRun]);
-
-  /** Вихід хрестиком — свідомий: таймер цього готування більше не потрібен. */
+  /**
+   * Вихід хрестиком — не кінець готування: крок і таймери лишаються, а
+   * повернутись можна з панелі над навігацією чи зі сторінки рецепта.
+   */
   const exitCooking = () => {
-    if (deadlineRef.current != null) {
-      deadlineRef.current = null;
-      setRunning(false);
-    }
-    dropRun();
+    haptic(10);
+    const hadTimers = session ? Object.values(session.timers).some(isRunning) : false;
+    leaveSession(params.id);
+    if (hadTimers) toast("Таймери йдуть — повернешся з панелі внизу", "⏱️");
     router.push(`/recipe/${params.id}`);
   };
 
-  const goNext = useCallback(() => {
-    if (!recipe) return;
+  const goNext = () => {
+    if (!recipe || !session) return;
     haptic(12);
-    if (step + 1 >= recipe.steps.length) {
-      // Страва готова — відлік останнього кроку, якщо йшов, уже ні до чого.
-      if (deadlineRef.current != null) {
-        deadlineRef.current = null;
-        setRunning(false);
-      }
-      dropRun();
-      setDone(true);
-      markCooked(recipe.id);
-      // Комора має відповідати холодильнику: продукти, що пішли на страву,
-      // з неї зникають. Знімок «до» лишаємо, щоб списання можна було
-      // скасувати — помилитись кроком у готуванні легко.
-      // Знімок комори до списання — щоб було що повернути, якщо скасують.
-      const before = useApp.getState().pantry;
-      const changes = consumePantry(recipe);
-      if (changes.length > 0) {
-        setConsumed(changes);
-        // Лише зачеплені рядки і саме за id: ключ типу не розрізняє пачок (D9).
-        setPantryBefore(before.filter((p) => changes.some((c) => c.id === p.id)));
-      }
-      haptic([30, 60, 30, 60, 50]);
-    } else {
-      setStep((s) => s + 1);
+    if (step + 1 < recipe.steps.length) {
+      setStep(recipe.id, step + 1);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipe, step]);
+    // Страва готова — таймери цього рецепта, якщо ще йдуть, уже ні до чого.
+    setDone(true);
+    endSession(recipe.id);
+    markCooked(recipe.id);
+    // Комора має відповідати холодильнику: продукти, що пішли на страву,
+    // з неї зникають. Знімок «до» лишаємо, щоб списання можна було
+    // скасувати — помилитись кроком у готуванні легко.
+    const before = useApp.getState().pantry;
+    const changes = consumePantry(recipe);
+    if (changes.length > 0) {
+      setConsumed(changes);
+      // Лише зачеплені рядки і саме за id: ключ типу не розрізняє пачок (D9).
+      setPantryBefore(before.filter((p) => changes.some((c) => c.id === p.id)));
+    }
+    haptic([30, 60, 30, 60, 50]);
+  };
 
   const goPrev = () => {
     haptic(8);
-    setStep((s) => Math.max(-1, s - 1));
+    if (recipe) setStep(recipe.id, Math.max(-1, step - 1));
   };
 
   if (!hydrated) return <div className="min-h-dvh bg-bg" />;
@@ -901,9 +313,14 @@ export default function CookPage() {
     );
   }
 
+  // Сховище ще читається або сесія от-от відкриється.
+  if (!session) return <div className="min-h-dvh bg-bg" />;
+
   /* ── Підготовка ───────────────────────────────────────────────────── */
   if (step === -1) {
-    const allChecked = checked.size === recipe.ingredients.length;
+    // Рецепт могли змінити після того, як продукти позначили: рахуємо лише наявні.
+    const checkedCount = recipe.ingredients.filter((i) => session.checked.includes(i.key)).length;
+    const allChecked = checkedCount === recipe.ingredients.length;
     return (
       <div className="flex min-h-dvh flex-col">
         <CookHeader
@@ -911,6 +328,7 @@ export default function CookPage() {
           subtitle={recipe.title}
           onExit={exitCooking}
         />
+        <TimersStrip session={session} now={now} onStep={(n) => setStep(recipe.id, n)} />
 
         <div className="flex-1 px-4 pt-4">
           <p className="text-[13.5px] leading-relaxed text-muted">
@@ -920,18 +338,13 @@ export default function CookPage() {
           <div className="mt-4 flex flex-col gap-2">
             {recipe.ingredients.map((item) => {
               const def = ing(item.key);
-              const isChecked = checked.has(item.key);
+              const isChecked = session.checked.includes(item.key);
               return (
                 <button
                   key={item.key}
                   onClick={() => {
                     haptic(10);
-                    setChecked((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(item.key)) next.delete(item.key);
-                      else next.add(item.key);
-                      return next;
-                    });
+                    toggleChecked(recipe.id, item.key);
                   }}
                   className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${
                     isChecked ? "border-mint/40 bg-mint/8" : "border-line bg-surface"
@@ -958,12 +371,12 @@ export default function CookPage() {
         </div>
 
         <div className="pad-safe-b sticky bottom-0 glass border-t border-line p-4">
-          <Button full size="lg" onClick={() => setStep(0)}>
+          <Button full size="lg" onClick={() => setStep(recipe.id, 0)}>
             {allChecked ? "Все на місці — почали" : "Почати готувати"}
             <ChevronRight size={19} />
           </Button>
           <p className="mt-2 text-center text-[11.5px] text-muted">
-            {checked.size} з {recipe.ingredients.length} готово
+            {checkedCount} з {recipe.ingredients.length} готово
           </p>
         </div>
       </div>
@@ -988,6 +401,8 @@ export default function CookPage() {
           transition={{ type: "spring", stiffness: 200, damping: 30 }}
         />
       </div>
+
+      <TimersStrip session={session} now={now} onStep={(n) => setStep(recipe.id, n)} />
 
       <motion.div
         key={step}
@@ -1058,7 +473,7 @@ export default function CookPage() {
                 <SlidersHorizontal size={17} />
               </button>
               <button
-                onClick={resetTimer}
+                onClick={resetStepTimer}
                 aria-label="Скинути таймер"
                 className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2 text-muted"
               >
@@ -1074,6 +489,11 @@ export default function CookPage() {
             </motion.div>
           )}
         </AnimatePresence>
+        {running && (
+          <p className="mt-2 text-center text-[11.5px] text-faint">
+            Можна йти на інший крок чи вийти — таймер іде далі.
+          </p>
+        )}
       </motion.div>
 
       <div className="pad-safe-b sticky bottom-0 glass border-t border-line p-4">
@@ -1102,16 +522,120 @@ export default function CookPage() {
 
       {/* Свій час на цей крок */}
       <TimerSheet
+        // Свій ключ на крок — щоб поле показувало час саме цього кроку. Не голий
+        // step: той уже ключ картки кроку поруч, і React сплутав би їх.
+        key={`timer-sheet:${step}`}
         open={timerSheet}
         current={baseSec ?? currentStep?.timerSec ?? 0}
         onClose={() => setTimerSheet(false)}
         onApply={(seconds) => {
-          setCustomSec((prev) => ({ ...prev, [step]: seconds }));
+          setCustomTime(recipe.id, step, seconds);
           setTimerSheet(false);
           toast(seconds > 0 ? "Час оновлено" : "Таймер прибрано", "⏱️");
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Таймери, яких не видно на цьому екрані: інших кроків цього рецепта й інших
+ * рецептів, які готуєш паралельно. Натиск — туди, де таймер.
+ */
+function TimersStrip({
+  session,
+  now,
+  onStep,
+}: {
+  session: CookSession;
+  now: number;
+  onStep: (step: number) => void;
+}) {
+  const router = useRouter();
+  const sessions = useCooking((s) => s.sessions);
+
+  const own = timersByUrgency(session).filter((t) => t.step !== session.step);
+  const others = startedSessions(sessions).filter((s) => s.recipeId !== session.recipeId);
+  if (own.length === 0 && others.length === 0) return null;
+
+  return (
+    <div className="no-scrollbar flex gap-2 overflow-x-auto border-b border-line px-4 py-2.5">
+      {own.map(({ step, timer }) => (
+        <TimerChip
+          key={`step:${step}`}
+          label={`Крок ${step + 1}`}
+          timer={timer}
+          now={now}
+          onClick={() => {
+            haptic(8);
+            onStep(step);
+          }}
+        />
+      ))}
+      {others.map((other) => {
+        const top = timersByUrgency(other)[0];
+        const title = other.title.length > 16 ? `${other.title.slice(0, 15)}…` : other.title;
+        return (
+          <TimerChip
+            key={`recipe:${other.recipeId}`}
+            label={`${other.emoji} ${title}`}
+            timer={top?.timer}
+            fallback={other.step >= 0 ? `крок ${other.step + 1}` : "підготовка"}
+            now={now}
+            onClick={() => {
+              haptic(8);
+              router.push(cookPath(other.recipeId));
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function TimerChip({
+  label,
+  timer,
+  fallback,
+  now,
+  onClick,
+}: {
+  label: string;
+  timer: StepTimer | undefined;
+  fallback?: string;
+  now: number;
+  onClick: () => void;
+}) {
+  const rang = timer?.rangAt != null;
+  const going = isRunning(timer);
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[12.5px] font-bold",
+        rang
+          ? "border-berry/50 bg-berry/10 text-berry"
+          : going
+            ? "border-brand/40 bg-brand/10"
+            : "border-line bg-surface text-muted",
+      )}
+    >
+      <span>{label}</span>
+      {timer ? (
+        <span className="flex items-center gap-1 tabular-nums">
+          {rang ? (
+            "· час вийшов"
+          ) : (
+            <>
+              {going ? <Timer size={13} className="text-brand" /> : <Pause size={13} />}
+              {formatClock(timerLeft(timer, now))}
+            </>
+          )}
+        </span>
+      ) : (
+        fallback && <span className="font-semibold text-faint">· {fallback}</span>
+      )}
+    </button>
   );
 }
 

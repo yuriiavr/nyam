@@ -6,6 +6,7 @@ import { refreshFromServer } from "@/lib/session";
 import { usePathname } from "next/navigation";
 import { AuthScreen } from "./AuthScreen";
 import { BottomNav, NAV_HEIGHT, useNavHidden } from "./BottomNav";
+import { CookingHost } from "./CookingHost";
 import { PushOffer } from "./PushOffer";
 import { useApp } from "@/lib/store";
 
@@ -13,7 +14,8 @@ import { useApp } from "@/lib/store";
  * Оболонка застосунку: колонка шириною з телефон і нижня навігація.
  * Відступ знизу додається лише тоді, коли навігація справді на екрані —
  * інакше повноекранні режими (готування, створення рецепта) отримували б
- * порожню смугу під липкими кнопками.
+ * порожню смугу під липкими кнопками. Панель «готуєш зараз» над навігацією
+ * додає до відступу свою висоту — змінною --cook-dock (див. CookingHost).
  */
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
@@ -26,7 +28,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         style={
           navHidden
             ? undefined
-            : { paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom))` }
+            : { paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + var(--cook-dock, 0px))` }
         }
       >
         <AuthGate pathname={pathname}>
@@ -78,6 +80,9 @@ function AuthGate({ pathname, children }: { pathname: string; children: React.Re
   return (
     <>
       {children}
+      {/* Таймери готування ведуться на кожній сторінці, а не лише на сторінці
+          рецепта: вийшов із готування — макарони варяться далі. */}
+      <CookingHost />
       {/* Пропозиції ніколи не мають вискочити поверх заставки чи публічних
           сторінок; сповіщення — лише тут, у гілці з акаунтом. */}
       <PushOffer />

@@ -1503,40 +1503,39 @@ export async function cancelTimerPush(id: string): Promise<void> {
 }
 
 /**
- * Власні будильники, що ще не настали, для однієї сторінки й одного пристрою.
+ * Власні будильники цього пристрою, що ще не настали.
  *
- * Сторінка готування шукає так «загублені» будильники: ті, про які вже не
- * памʼятає жоден відкритий екран, — наприклад, після того як застосунок
- * вивантажили разом зі сховищем. Чужих RLS не покаже.
+ * Так CookingHost шукає «загублені» будильники: ті, про які не памʼятає
+ * сховище таймерів, — наприклад, після того як застосунок вивантажили разом
+ * зі сховищем. За адресою (url) знаходить рецепт і крок і повертає таймер на
+ * екран. Чужих RLS не покаже.
  *
- * Саме цього пристрою (endpoint), а не всього акаунта: знайдене сторінка
- * скасовує при першій дії з таймером. Без цієї умови ноутбук, на якому
- * просто глянули наступний крок і закрили хрестиком, скасував би будильник
- * телефона, що лежить заблокований біля плити, — а там, крім сервера,
- * дзвонити нікому. Будильник, записаний на чужу чи колишню підписку, сюди й
- * так дзвонити не міг би, тож губити тут нічого.
+ * Саме цього пристрою (endpoint), а не всього акаунта: знайдений будильник,
+ * чий крок на екрані вже зайнятий іншим таймером, скасовують. Без цієї умови
+ * ноутбук скасував би будильник телефона, що лежить заблокований біля плити,
+ * — а там, крім сервера, дзвонити нікому. Будильник, записаний на чужу чи
+ * колишню підписку, сюди й так дзвонити не міг би, тож губити тут нічого.
  *
  * endpoint у select коду не потрібен — він для npm run db:check: той звіряє
  * колонки з select-ів цього файлу зі схемою, і так побачить базу, на якій
  * timer-push.sql не перезапустили після появи колонки.
  */
 export async function fetchTimerPushes(
-  url: string,
   endpoint: string,
-): Promise<Array<{ id: string; fireAt: number }>> {
+): Promise<Array<{ id: string; fireAt: number; url: string | null }>> {
   const sb = getSupabase();
   if (!sb) return [];
   const { data, error, status } = await sb
     .from("timer_pushes")
-    .select("id,fire_at,endpoint")
-    .eq("url", url)
+    .select("id,fire_at,url,endpoint")
     .eq("endpoint", endpoint)
     .gt("fire_at", new Date().toISOString())
     .abortSignal(AbortSignal.timeout(TIMER_PUSH_TIMEOUT_MS));
   if (error) throw new TimerPushError(error.message, status);
-  return ((data ?? []) as Array<{ id: string; fire_at: string }>).map((row) => ({
+  return ((data ?? []) as Array<{ id: string; fire_at: string; url: string | null }>).map((row) => ({
     id: row.id,
     fireAt: Date.parse(row.fire_at),
+    url: row.url,
   }));
 }
 

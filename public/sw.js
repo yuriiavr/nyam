@@ -118,15 +118,22 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const wanted = new URL(target, self.location.origin);
       /*
        * Вікно, що вже стоїть на потрібній сторінці, лише піднімаємо. Перехід
-       * туди, де ти вже є, — це перезавантаження, а для будильника готування
-       * воно означало б: натиснув «час вийшов» — і опинився на початку
-       * рецепта, без кроку й таймера.
+       * туди, де ти вже є, — це перезавантаження, а заради «час вийшов» воно
+       * ні до чого.
+       *
+       * Адреса будильника готування несе ще й крок (?step=2), а сторінка
+       * готування тримає адресу без нього. Тоді вікну кажемо, на який крок
+       * перейти, — застосунок зробить це сам, без перезавантаження (див.
+       * CookingHost).
        */
       for (const client of windows) {
         const url = new URL(client.url);
-        if (url.pathname + url.search === target && "focus" in client) return client.focus();
+        if (url.pathname !== wanted.pathname || !("focus" in client)) continue;
+        if (url.search !== wanted.search) client.postMessage({ type: "nyam:open", url: target });
+        return client.focus();
       }
       // Уже відкритий застосунок не піднімаємо вдруге, а просто переводимо.
       for (const client of windows) {

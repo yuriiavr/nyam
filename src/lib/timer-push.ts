@@ -78,16 +78,24 @@ export const TIMER_TTL_SEC = 120;
 export const TIMER_STALE_MS = 10 * 60_000;
 
 /**
+ * Скільки будильників одного пристрою надсилати за один виклик розсилки.
+ *
+ * Таймерів тепер кілька — по кроку, і в двох рецептах разом, — і в кожного
+ * свій тег, тож два «час вийшов», що зійшлися в одну секунду, мають прийти
+ * обидва. Але рядки пише сам користувач, і сотня його будильників на ту саму
+ * секунду не має стати сотнею запитів до служби пуша: беремо кілька
+ * найпізніших, а решта — однаково шум. Із запасом на реальну кухню: чотири
+ * таймери, що скінчились у ті самі пʼять секунд, — це вже рідкість.
+ */
+export const TIMER_BURST_PER_DEVICE = 4;
+
+/**
  * Що з забраних будильників справді надіслати.
  *
- * По одному на пристрій — найпізніший. Усі будильники мають один тег, тож на
- * екрані однаково лишиться тільки останній, а кожен зайвий — це ще один
- * запит до служби пуша. Заразом це й запобіжник: рядки пише сам користувач, і
- * сотня його будильників на ту саму секунду не стане сотнею розсилок.
- *
- * Саме на пристрій, а не на людину: будильник тепер дзвонить лише там, де
- * його запустили, і таймер на ноутбуці не має зʼїсти таймер на телефоні, що
- * закінчився в ту саму секунду.
+ * На пристрій — не більше TIMER_BURST_PER_DEVICE, найпізніші. Саме на
+ * пристрій, а не на людину: будильник дзвонить лише там, де його запустили,
+ * і таймери на ноутбуці не мають зʼїсти таймер на телефоні, що закінчився в
+ * ту саму секунду.
  *
  * Чиста функція — щоб перевірити без бази й без мережі.
  */
@@ -95,7 +103,7 @@ export function pickDueTimers(
   rows: TimerPushRow[],
   now: number,
 ): { due: TimerPushRow[]; stale: number } {
-  const newest = new Map<string, TimerPushRow>();
+  const byDevice = new Map<string, TimerPushRow[]>();
   let stale = 0;
 
   for (const row of rows) {
@@ -107,9 +115,44 @@ export function pickDueTimers(
     }
     // Пробіл не трапляється ні в uuid, ні в адресі підписки — ключі не зіллються.
     const device = `${row.user_id} ${row.endpoint ?? ""}`;
-    const kept = newest.get(device);
-    if (!kept || Date.parse(kept.fire_at) < at) newest.set(device, row);
+    const list = byDevice.get(device);
+    if (list) list.push(row);
+    else byDevice.set(device, [row]);
   }
 
-  return { due: [...newest.values()], stale };
+  const due: TimerPushRow[] = [];
+  for (const list of byDevice.values()) {
+    list.sort((a, b) => Date.parse(b.fire_at) - Date.parse(a.fire_at));
+    due.push(...list.slice(0, TIMER_BURST_PER_DEVICE));
+  }
+  return { due, stale };
+}
+
+/**
+ * Тег сповіщення будильника: свій у кожного таймера, спільний для серверного
+ * й місцевого дзвінка того самого відліку — встигли обидва, на екрані одне.
+ * Ним же позначає сповіщення місцевий будильник (showLocalAlarm у src/lib/cook-alarms.ts).
+ */
+export function timerTag(id: string): string {
+  return `nyam-timer:${id}`;
+}
+
+/**
+ * Адреса будильника: куди веде натиск на сповіщення — і з чого загублений
+ * будильник повертають на екран (CookingHost): рецепт і крок записані в самій
+ * адресі. Тут, а не в cook-alarms.ts, — щоб npm run check:push звірив, що
+ * адреса читається назад.
+ */
+export function alarmUrl(recipeId: string, step: number): string {
+  return `/recipe/${recipeId}/cook?step=${step}`;
+}
+
+export function parseAlarmUrl(url: string | null | undefined): { recipeId: string; step: number } | null {
+  const match = url?.match(/^\/recipe\/([^/?#]+)\/cook\?step=(\d+)$/);
+  if (!match) return null;
+  try {
+    return { recipeId: decodeURIComponent(match[1]), step: Number(match[2]) };
+  } catch {
+    return null;
+  }
 }

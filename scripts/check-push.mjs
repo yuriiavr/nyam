@@ -381,8 +381,17 @@ console.log("── Очікування на вікно встановленн�
  */
 {
   const { readFileSync } = await import("node:fs");
-  const { pickDueTimers, TIMER_LEAD_MS, TIMER_STALE_MS, TIMER_TTL_SEC, TIMER_PUSH_COLUMNS } =
-    await jiti.import(path.join(root, "src/lib/timer-push.ts"));
+  const {
+    alarmUrl,
+    parseAlarmUrl,
+    pickDueTimers,
+    timerTag,
+    TIMER_BURST_PER_DEVICE,
+    TIMER_LEAD_MS,
+    TIMER_STALE_MS,
+    TIMER_TTL_SEC,
+    TIMER_PUSH_COLUMNS,
+  } = await jiti.import(path.join(root, "src/lib/timer-push.ts"));
 
   console.log("── Будильник: кому дзвонити ──");
 
@@ -405,20 +414,50 @@ console.log("── Очікування на вікно встановленн�
   check("константа: запас", TIMER_LEAD_MS, 2000);
   check("константа: прострочено після", TIMER_STALE_MS, 10 * 60_000);
   check("константа: строк життя в дорозі", TIMER_TTL_SEC, 120);
+  check("константа: будильників пристрою за виклик", TIMER_BURST_PER_DEVICE, 4);
 
   check("порожньо", pick([]), { due: [], stale: 0 });
   check("настав щойно", pick([alarm("a", "u1", 0)]), { due: ["a"], stale: 0 });
   check("ще в межах запасу — забираємо", pick([alarm("a", "u1", 1500)]), { due: ["a"], stale: 0 });
+  // Два таймери одного готування (макарони й соус) скінчились разом: у кожного свій тег, дзвонять обидва.
   check(
-    "той самий пристрій двічі — лише пізніший",
+    "той самий пристрій, два таймери — обидва",
     pick([alarm("a", "u1", -5000), alarm("b", "u1", 0)]),
-    { due: ["b"], stale: 0 },
+    { due: ["a", "b"], stale: 0 },
   );
-  check(
-    "порядок рядків не важить",
-    pick([alarm("b", "u1", 0), alarm("a", "u1", -5000)]),
-    { due: ["b"], stale: 0 },
-  );
+  {
+    const burst = Array.from({ length: 7 }, (_, i) => alarm(`t${i}`, "u1", -i * 1000));
+    check(
+      "забагато будильників пристрою разом — лише найпізніші",
+      pick(burst),
+      { due: burst.slice(0, TIMER_BURST_PER_DEVICE).map((r) => r.id).sort(), stale: 0 },
+    );
+    check(
+      "порядок рядків не важить",
+      pick([...burst].reverse()),
+      { due: burst.slice(0, TIMER_BURST_PER_DEVICE).map((r) => r.id).sort(), stale: 0 },
+    );
+    check(
+      "межа — на пристрій, а не на людину",
+      pick([...burst, alarm("l", "u1", -9000, LAPTOP)]).due.length,
+      TIMER_BURST_PER_DEVICE + 1,
+    );
+  }
+  // Спільний тег ховав би перший «час вийшов» під другим; однаковий у місцевого й серверного — склеює їх.
+  check("тег: свій у кожного таймера", timerTag("a") !== timerTag("b"), true);
+  check("тег: той самий для того самого будильника", timerTag("a"), timerTag("a"));
+
+  console.log("── Будильник: адреса рецепта й кроку ──");
+  const RECIPE = "3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0c";
+  // З адреси загублений будильник повертають на екран — вона мусить читатись назад.
+  check("адреса: туди й назад", parseAlarmUrl(alarmUrl(RECIPE, 2)), { recipeId: RECIPE, step: 2 });
+  check("адреса: демо-рецепт", parseAlarmUrl(alarmUrl("r1", 0)), { recipeId: "r1", step: 0 });
+  check("адреса: вміщується в межу timer_pushes_url_local", alarmUrl(RECIPE, 99).length <= 300, true);
+  // Будильник попередньої версії — без кроку: не наш, щоб судити.
+  check("адреса: стара, без кроку — не читається", parseAlarmUrl(`/recipe/${RECIPE}/cook`), null);
+  check("адреса: чужа сторінка — не читається", parseAlarmUrl("/pantry?step=1"), null);
+  check("адреса: зіпсований крок — не читається", parseAlarmUrl(`/recipe/${RECIPE}/cook?step=-1`), null);
+  check("адреса: null", parseAlarmUrl(null), null);
   // Телефон і ноутбук одного акаунта скінчили в ту саму секунду: дзвонять обидва, кожен собі.
   check(
     "два пристрої однієї людини — обидва",
@@ -543,7 +582,7 @@ console.log("── Очікування на вікно встановленн�
   check("SQL: кожен add column — if not exists", /add\s+column\s+(?!if\s+not\s+exists)/i.test(sql), false);
   check("SQL: жодного add constraint поза create table", /add\s+constraint/i.test(sql), false);
 
-  // Загублені будильники сторінка готування скасовує — тож шукати їх можна лише серед своїх.
+  // Загублений будильник на зайнятому кроці скасовують — тож шукати їх можна лише серед своїх.
   const api = readFileSync(path.join(root, "src/lib/supabase/api.ts"), "utf8");
   const lookup = api.match(/export async function fetchTimerPushes\(([\s\S]*?)\r?\n\}/)?.[1] ?? "";
   check("fetchTimerPushes знайдено", lookup.length > 0, true);
@@ -552,12 +591,20 @@ console.log("── Очікування на вікно встановленн�
     /\.eq\(\s*"endpoint"\s*,\s*endpoint\s*\)/.test(lookup),
     true,
   );
-  const cook = readFileSync(path.join(root, "src/app/recipe/[id]/cook/page.tsx"), "utf8");
+  const host = readFileSync(path.join(root, "src/components/CookingHost.tsx"), "utf8");
   check(
-    "сторінка готування без підписки загублених не шукає",
-    /const endpoint = await deviceEndpoint\(\);\s*if \(!endpoint\) return;\s*for \(const row of await fetchTimerPushes\(url, endpoint\)\)/.test(cook),
+    "застосунок без підписки загублених не шукає",
+    /const endpoint = await deviceEndpoint\(\);\s*if \(!endpoint\) return;\s*for \(const row of await fetchTimerPushes\(endpoint\)\)/.test(host),
     true,
   );
+  // Знайдений, але вже скасовуваний (пауза, що не дійшла через мережу) — не таймер, який треба повертати.
+  check(
+    "загублений будильник зі скасуванням у дорозі не повертається на екран",
+    /if \(knownAlarm\(row\.id\) \|\| cancelPending\(row\.id\)\) continue;/.test(host),
+    true,
+  );
+  const alarms = readFileSync(path.join(root, "src/lib/cook-alarms.ts"), "utf8");
+  check("місцевий будильник — з тегом timerTag", /tag:\s*timerTag\(id\)/.test(alarms), true);
 
   // push-server тягне "server-only" і web-push: чиста частина — лише напряму з timer-push.
   const pushServer = readFileSync(path.join(root, "src/lib/push-server.ts"), "utf8");
@@ -565,6 +612,7 @@ console.log("── Очікування на вікно встановленн�
 
   const route = readFileSync(path.join(root, "src/app/api/push/timers/route.ts"), "utf8");
   check("маршрут забирає колонки з TIMER_PUSH_COLUMNS", /\.select\(\s*TIMER_PUSH_COLUMNS\s*\)/.test(route), true);
+  check("серверний будильник — з тегом timerTag того самого рядка", /tag:\s*timerTag\(row\.id\)/.test(route), true);
   // Регрес, заради якого все це: будильник на всі пристрої акаунта замість одного.
   check(
     "маршрут дзвонить лише на пристрій таймера",

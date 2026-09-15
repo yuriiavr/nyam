@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ToastProvider, useToast } from "./ui";
 import { UpdateGate } from "./UpdateBanner";
 import { useApp } from "@/lib/store";
+import { useCooking } from "@/lib/cooking";
 import { initSession } from "@/lib/session";
 import { onSyncError } from "@/lib/sync";
 import { initInstallPrompt } from "@/lib/pwa";
@@ -96,6 +97,8 @@ function useRehydrate() {
   useEffect(() => {
     useApp.persist.rehydrate();
     if (!useApp.getState().hydrated) useApp.getState().setHydrated(true);
+    // Готування й таймери — окреме сховище цього пристрою (src/lib/cooking.ts).
+    void useCooking.persist.rehydrate();
   }, []);
 }
 
