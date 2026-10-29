@@ -440,6 +440,10 @@ export interface DiarySettings {
   userId: string;
   /** Ціль калорій на день. */
   kcalGoal?: number;
+  /** Цілі БЖВ на день, г. За ними помічник складає меню з рецептів. */
+  proteinGoal?: number;
+  fatGoal?: number;
+  carbsGoal?: number;
   /** Скільки людина зʼїдає відносно звичайної порції: 1,5 — у півтора раза більше. */
   appetite: number;
   /** Чи бачить сімʼя цей щоденник. */

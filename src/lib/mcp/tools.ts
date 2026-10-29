@@ -3,15 +3,28 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { findIngredient, ing, knownIngredient } from "@/data/ingredients";
 import {
+  addNutrition,
   forGrams,
   itemsNutrition,
   mealItem,
+  portionLabel,
   portionPresets,
   roundNutrition,
   scaleNutrition,
   SLOT_META,
+  ZERO,
 } from "@/lib/diary";
 import { estimateProduct, parseDish, type PantryChoice } from "@/lib/food-ai";
+import {
+  MENU_SLOTS,
+  menuDish,
+  planMenu,
+  scaleTargets,
+  slotShare,
+  type MenuDish,
+  type MenuPick,
+  type MenuTargets,
+} from "@/lib/menu";
 import {
   consumeRows,
   pantryDisplayName,
@@ -23,11 +36,14 @@ import {
   type ProductCache,
 } from "@/lib/pantry";
 import type { Product } from "@/lib/product-types";
-import type { MealSlot, Nutrition, PantryItem, PantryTaken, Unit } from "@/lib/types";
+import type { MealSlot, Nutrition, PantryItem, PantryTaken, PlanSlot, Unit } from "@/lib/types";
 import { formatNumber, formatQuantity } from "@/lib/units";
+import { plural } from "@/lib/utils";
 import {
   PANTRY_COLUMNS,
   PRODUCT_COLUMNS,
+  RECIPE_COLUMNS,
+  recipeFromRow,
   dayBounds,
   db,
   eatenAt,
@@ -120,16 +136,67 @@ function productLine(p: Product): string {
 const kcalLine = (n: Nutrition) =>
   `${Math.round(n.kcal)} ккал (Б ${formatNumber(n.protein, 1)} · Ж ${formatNumber(n.fat, 1)} · В ${formatNumber(n.carbs, 1)})`;
 
+/**
+ * Денні цілі людини з налаштувань щоденника (незадані — undefined) і апетит:
+ * скільки порцій рецепта вона зазвичай зʼїдає.
+ */
+async function goalsOf(userId: string): Promise<{ targets: MenuTargets; appetite: number }> {
+  const { data } = await db()
+    .from("diary_settings")
+    .select("kcal_goal,protein_goal,fat_goal,carbs_goal,appetite")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const pos = (v: unknown) => (v != null && Number(v) > 0 ? Number(v) : undefined);
+  return {
+    targets: {
+      kcal: pos(data?.kcal_goal),
+      protein: pos(data?.protein_goal),
+      fat: pos(data?.fat_goal),
+      carbs: pos(data?.carbs_goal),
+    },
+    appetite: pos(data?.appetite) ?? 1,
+  };
+}
+
+const hasTarget = (t: MenuTargets) => Boolean(t.kcal || t.protein || t.fat || t.carbs);
+
+/** «2000 ккал · Б 150 · Ж 70 · В 200» — лише задане. */
+const targetLine = (t: MenuTargets) =>
+  [
+    t.kcal ? `${Math.round(t.kcal)} ккал` : "",
+    t.protein ? `Б ${Math.round(t.protein)}` : "",
+    t.fat ? `Ж ${Math.round(t.fat)}` : "",
+    t.carbs ? `В ${Math.round(t.carbs)}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+const MACRO_NAMES = [
+  ["protein", "білки"],
+  ["fat", "жири"],
+  ["carbs", "вуглеводи"],
+] as const;
+
+/** «БЖВ: білки 80 з 150 г (лишилось 70), …» — лише для заданих цілей. */
+function macroGoalLine(sum: Nutrition, goals: MenuTargets): string {
+  const parts = MACRO_NAMES.flatMap(([k, name]) => {
+    const goal = goals[k];
+    if (!goal) return [];
+    const have = Math.round(sum[k]);
+    return [`${name} ${have} з ${goal} г (${have <= goal ? `лишилось ${goal - have}` : `понад на ${have - goal}`})`];
+  });
+  return parts.length ? `БЖВ: ${parts.join(", ")}.` : "";
+}
+
 /** Підсумок дня — те, що помічник скаже після запису. */
 async function dayTotal(userId: string, day: string, tz: string): Promise<{ kcal: number; goal?: number }> {
   const [from, to] = dayBounds(day, tz);
-  const [entries, settings] = await Promise.all([
+  const [entries, goals] = await Promise.all([
     db().from("food_log").select("kcal").eq("user_id", userId).gte("eaten_at", from).lt("eaten_at", to),
-    db().from("diary_settings").select("kcal_goal").eq("user_id", userId).maybeSingle(),
+    goalsOf(userId),
   ]);
   const kcal = Math.round((entries.data ?? []).reduce((s, r) => s + (Number(r.kcal) || 0), 0));
-  const goal = settings.data?.kcal_goal ? Number(settings.data.kcal_goal) : undefined;
-  return { kcal, goal };
+  return { kcal, goal: goals.targets.kcal };
 }
 
 const totalSentence = (t: { kcal: number; goal?: number }, today: boolean) =>
@@ -237,6 +304,55 @@ async function giveBack(userId: string, taken: readonly PantryTaken[]): Promise<
 
 const takenLine = (consumed: Consumed[]) =>
   consumed.map((c) => (c.left ? `${c.label} (лишилось ${c.left})` : `${c.label} (закінчився)`)).join(", ");
+
+/* ── Меню під ціль ────────────────────────────────────────────────────── */
+
+const WEEKDAY = ["нд", "пн", "вт", "ср", "чт", "пт", "сб"];
+
+/** «2026-11-03» плюс n днів. */
+function addDays(day: string, n: number): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/** «пн 03.11». */
+function dayName(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const weekday = WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${weekday} ${String(d).padStart(2, "0")}.${String(m).padStart(2, "0")}`;
+}
+
+/** «654 ккал · Б 26 · Ж 30 · В 71» — у меню без десятих: це план, а не етикетка. */
+const menuNutrition = (n?: Nutrition) =>
+  n
+    ? `${Math.round(n.kcal)} ккал · Б ${Math.round(n.protein)} · Ж ${Math.round(n.fat)} · В ${Math.round(n.carbs)}`
+    : "КБЖВ невідомі";
+
+const pickLine = (p: MenuPick) => `${p.dish.title}, ${portionLabel(p.portions)}${p.kept ? " (уже в плані)" : ""}`;
+
+/**
+ * Рецепти для меню: публічні й рецепти сімʼї (приватні теж — сімʼя їх і так
+ * бачить). Приховані людиною («не пропонувати») у добір не йдуть, але як уже
+ * заплановані впізнаються. `planned` — id із плану, яких може не бути серед
+ * свіжих 500.
+ */
+async function menuRecipes(userId: string, family: string[], planned: string[]) {
+  const visible = `is_public.eq.true,author_id.in.(${family.join(",")})`;
+  const [recipes, dismissed] = await Promise.all([
+    db().from("recipes").select(RECIPE_COLUMNS).or(visible).order("created_at", { ascending: false }).limit(500),
+    db().from("dismissed").select("recipe_id").eq("user_id", userId),
+  ]);
+  if (recipes.error) return null;
+  const rows = [...(recipes.data ?? [])];
+  const missing = [...new Set(planned)].filter((id) => UUID_RE.test(id) && !rows.some((r) => r.id === id));
+  if (missing.length) {
+    const { data } = await db().from("recipes").select(RECIPE_COLUMNS).or(visible).in("id", missing);
+    rows.push(...(data ?? []));
+  }
+  const dishes = new Map(rows.map((row) => [String(row.id), menuDish(recipeFromRow(row as Record<string, unknown>))]));
+  const hidden = new Set((dismissed.data ?? []).map((r) => String(r.recipe_id)));
+  return { dishes, candidates: [...dishes.values()].filter((d) => !hidden.has(d.id)) };
+}
 
 /* ── Інструменти ──────────────────────────────────────────────────────── */
 
@@ -651,7 +767,7 @@ export const TOOLS: ToolDef[] = [
     run: async (args, { userId }) => {
       const { tz, day } = when(args);
       const [from, to] = dayBounds(day, tz);
-      const [entries, settings] = await Promise.all([
+      const [entries, goals] = await Promise.all([
         db()
           .from("food_log")
           .select("id,slot,title,grams,share,kcal,protein,fat,carbs,eaten_at")
@@ -659,11 +775,12 @@ export const TOOLS: ToolDef[] = [
           .gte("eaten_at", from)
           .lt("eaten_at", to)
           .order("eaten_at"),
-        db().from("diary_settings").select("kcal_goal").eq("user_id", userId).maybeSingle(),
+        goalsOf(userId),
       ]);
       if (entries.error) return fail("Щоденник зараз не відповідає.");
       const list = entries.data ?? [];
-      const goal = settings.data?.kcal_goal ? Number(settings.data.kcal_goal) : undefined;
+      const targets = goals.targets;
+      const goal = targets.kcal;
       const sum = list.reduce<Nutrition>(
         (s, r) => ({
           kcal: s.kcal + (Number(r.kcal) || 0),
@@ -673,7 +790,12 @@ export const TOOLS: ToolDef[] = [
         }),
         { kcal: 0, protein: 0, fat: 0, carbs: 0 },
       );
-      if (list.length === 0) return text(`За ${day} записів немає.${goal ? ` Ціль — ${goal} ккал.` : ""}`, { entries: [] });
+      if (list.length === 0) {
+        return text(`За ${day} записів немає.${hasTarget(targets) ? ` Ціль — ${targetLine(targets)}.` : ""}`, {
+          entries: [],
+          goals: targets,
+        });
+      }
       const lines = SLOTS.flatMap((slot) => {
         const rows = list.filter((r) => r.slot === slot);
         if (!rows.length) return [];
@@ -686,10 +808,182 @@ export const TOOLS: ToolDef[] = [
       return text(
         [
           `Разом за ${day}: ${kcalLine(sum)}${goal ? `, ціль ${goal} — ${sum.kcal <= goal ? `лишилось ${Math.round(goal - sum.kcal)}` : `понад на ${Math.round(sum.kcal - goal)}`}` : ""}.`,
+          macroGoalLine(sum, targets),
           ...lines,
-        ].join("\n"),
-        { day, kcal: Math.round(sum.kcal), goal: goal ?? null, entries: list },
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        { day, kcal: Math.round(sum.kcal), goal: goal ?? null, goals: targets, entries: list },
       );
+    },
+  },
+
+  {
+    name: "plan_menu",
+    title: "Скласти меню під ціль",
+    description:
+      "Складає з рецептів Ням меню (сніданок, обід, вечеря) на день або тиждень так, щоб калорії й БЖВ були якомога ближче " +
+      "до цілі людини (Ням → Налаштування → Щоденник), і каже, скільки порцій кожної страви зʼїсти. " +
+      "Спершу виклич без save і перекажи меню; людина погодилась — той самий виклик із save: true запише його в план на тиждень " +
+      "(порцій план не зберігає — назви їх). «Інший варіант» — той самий виклик із variant на 1 більше. " +
+      "Те, що вже стоїть у плані на ці дні, лишається й зараховується в ціль; replace: true — скласти наново. " +
+      "Добрати решту сьогоднішнього дня: спершу get_diary, далі slots — прийоми, що попереду, а kcal/protein/fat/carbs — залишок.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        date: { type: "string", description: "Перший день меню, YYYY-MM-DD за часом людини. Не вказано — сьогодні." },
+        days: { type: "integer", minimum: 1, maximum: 7, description: "На скільки днів: 1 (типово), тиждень — 7." },
+        slots: {
+          type: "array",
+          items: { type: "string", enum: MENU_SLOTS },
+          description: "Які прийоми скласти: breakfast, lunch, dinner. Типово всі три.",
+        },
+        kcal: {
+          type: "number",
+          minimum: 0,
+          description:
+            "Ціль калорій саме на обрані прийоми за день. Не вказано жодного з kcal/protein/fat/carbs — денні цілі з налаштувань.",
+        },
+        protein: { type: "number", minimum: 0, description: "Ціль білків, г, на обрані прийоми за день." },
+        fat: { type: "number", minimum: 0, description: "Ціль жирів, г, на обрані прийоми за день." },
+        carbs: { type: "number", minimum: 0, description: "Ціль вуглеводів, г, на обрані прийоми за день." },
+        replace: { type: "boolean", description: "true — скласти наново й те, що вже заплановано на ці дні." },
+        save: { type: "boolean", description: "true — записати меню в план на тиждень. Лише після згоди людини." },
+        variant: { type: "integer", minimum: 0, maximum: 99, description: "Номер варіанта меню; інший — на 1 більше. Типово 0." },
+        timezone: TZ_SCHEMA,
+      },
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    run: async (args, { userId, origin }) => {
+      const tz = safeTz(args.timezone);
+      const start = typeof args.date === "string" && DAY_RE.test(args.date) ? args.date : localDay(new Date(), tz);
+      const count = Math.min(7, Math.max(1, Math.round(numArg(args.days)) || 1));
+      const days = Array.from({ length: count }, (_, i) => addDays(start, i));
+      const asked = Array.isArray(args.slots) ? MENU_SLOTS.filter((s) => (args.slots as unknown[]).includes(s)) : [];
+      const slots = asked.length ? asked : MENU_SLOTS;
+
+      // Ціль, названа вголос, — саме на ці прийоми; ні — денна з налаштувань, частка цих прийомів.
+      const said: MenuTargets = {};
+      for (const k of ["kcal", "protein", "fat", "carbs"] as const) {
+        const v = numArg(args[k]);
+        if (v > 0) said[k] = v;
+      }
+      const goals = await goalsOf(userId);
+      const target = hasTarget(said) ? said : scaleTargets(goals.targets, slotShare(slots));
+      if (!hasTarget(target)) {
+        return fail(
+          "Ціль не задана. Скажи, скільки калорій і білка на день, або задай цілі в Ням → Налаштування → Щоденник.",
+        );
+      }
+
+      const family = await familyOf(userId);
+      const { data: planned, error: planError } = await db()
+        .from("plan_slots")
+        .select("day,slot,recipe_id")
+        .in("user_id", family)
+        .gte("day", days[0])
+        .lte("day", days[days.length - 1]);
+      if (planError) return fail("План зараз не відповідає — спробуй ще раз.");
+      const keep = args.replace === true ? [] : (planned ?? []).filter((r) => slots.includes(r.slot as PlanSlot));
+      const recipes = await menuRecipes(userId, family, keep.map((r) => String(r.recipe_id)));
+      if (!recipes) return fail("Рецепти зараз не відповідають — спробуй ще раз.");
+      if (!recipes.candidates.some((d) => d.perServing && d.slots.length)) {
+        return fail("Немає рецептів із порахованими калоріями — додай рецепти в Ням.");
+      }
+
+      const kept: Record<string, Partial<Record<PlanSlot, MenuDish>>> = {};
+      for (const r of keep) {
+        const id = String(r.recipe_id);
+        const dish = recipes.dishes.get(id) ?? { id, title: "страва з плану", emoji: "🍽️", slots: [] };
+        (kept[String(r.day)] ??= {})[r.slot as PlanSlot] ??= dish;
+      }
+      const menu = planMenu({
+        dishes: recipes.candidates,
+        days,
+        slots,
+        target,
+        appetite: goals.appetite,
+        kept,
+        variant: Math.max(0, Math.round(numArg(args.variant)) || 0),
+      });
+
+      let saved = 0;
+      if (args.save === true) {
+        const rows = menu.flatMap((d) =>
+          d.picks.filter((p) => !p.kept).map((p) => ({ user_id: userId, day: d.day, slot: p.slot, recipe_id: p.dish.id })),
+        );
+        if (rows.length) {
+          // Слот плану один на сімʼю, як у застосунку (setPlanSlot): чужий запис на той самий прийом прибираємо.
+          const others = family.filter((id) => id !== userId);
+          if (others.length) {
+            const { error } = await db()
+              .from("plan_slots")
+              .delete()
+              .in("user_id", others)
+              .or(rows.map((r) => `and(day.eq.${r.day},slot.eq.${r.slot})`).join(","));
+            if (error) return fail("Не вдалося записати меню в план — спробуй ще раз.");
+          }
+          const { error } = await db().from("plan_slots").upsert(rows, { onConflict: "user_id,day,slot" });
+          if (error) return fail("Не вдалося записати меню в план — спробуй ще раз.");
+        }
+        saved = rows.length;
+      }
+
+      const lines =
+        menu.length === 1
+          ? [
+              `Меню на ${dayName(menu[0].day)}, ціль ${targetLine(menu[0].target)}:`,
+              ...menu[0].picks.map(
+                (p) => `${SLOT_META[p.slot].label}: ${pickLine(p)} — ${menuNutrition(p.nutrition)}.`,
+              ),
+              `Разом: ${menuNutrition(menu[0].total)}.`,
+            ]
+          : [
+              `Меню на ${menu.length} днів (${dayName(days[0])} — ${dayName(days[days.length - 1])}), ціль на день ${targetLine(target)}:`,
+              ...menu.map(
+                (d) =>
+                  `${dayName(d.day)}: ${d.picks
+                    .map((p) => `${SLOT_META[p.slot].label.toLowerCase()} — ${pickLine(p)}`)
+                    .join("; ")}. Разом ${menuNutrition(d.total)}.`,
+              ),
+              `У середньому за день: ${menuNutrition(
+                scaleNutrition(
+                  menu.reduce((sum, d) => addNutrition(sum, d.total), ZERO),
+                  1 / menu.length,
+                ),
+              )}.`,
+            ];
+      const empty = MENU_SLOTS.filter((s) => menu.some((d) => d.empty.includes(s)));
+      if (empty.length) {
+        lines.push(
+          `${empty.map((s) => SLOT_META[s].label).join(", ")}: немає рецептів із порахованими калоріями — ціль дня зменшено на цю частку.`,
+        );
+      }
+      const openUrl = saved ? `${origin}/plan` : null;
+      if (args.save !== true) lines.push("Це пропозиція — у план ще не записано.");
+      else if (saved) lines.push(`Записав у план на тиждень (${saved} ${plural(saved, "страва", "страви", "страв")}); порцій план не зберігає.`);
+      else lines.push("Нового в план записувати нічого — усе вже заплановано.");
+      if (openUrl) lines.push(`План (відкрий людині, вголос не читай): ${openUrl}`);
+
+      return text(lines.join("\n"), {
+        target,
+        days: menu.map((d) => ({
+          day: d.day,
+          target: d.target,
+          total: d.total,
+          empty: d.empty,
+          picks: d.picks.map((p) => ({
+            slot: p.slot,
+            recipe_id: p.dish.id,
+            title: p.dish.title,
+            portions: p.portions,
+            nutrition: p.nutrition ?? null,
+            kept: p.kept,
+          })),
+        })),
+        saved,
+        open_url: openUrl,
+      });
     },
   },
 

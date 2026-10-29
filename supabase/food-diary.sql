@@ -10,8 +10,8 @@
 --  Що тут:
 --  1. products.nutrition_source — звідки КБЖВ товару: з етикетки чи оцінка ШІ.
 --     Оцінку показуємо з позначкою «≈ ШІ», а етикетка її завжди перебʼє.
---  2. diary_settings — ціль калорій, «апетит» (скільки порцій людина зʼїдає
---     відносно інших) і чи видно щоденник сімʼї.
+--  2. diary_settings — ціль калорій і БЖВ, «апетит» (скільки порцій людина
+--     зʼїдає відносно інших) і чи видно щоденник сімʼї.
 --  3. meals — страва, яку приготували на кількох: рецепт або «запечена
 --     картопля з сосискою». Знає свій склад і КБЖВ усієї страви, а скільки з
 --     неї вже зʼїли, веде база — так видно залишок.
@@ -252,6 +252,10 @@ create table if not exists public.diary_settings (
   user_id     uuid primary key references public.profiles (id) on delete cascade,
   -- Ціль калорій на день; null — без цілі (щоденник просто рахує).
   kcal_goal   int check (kcal_goal is null or kcal_goal between 500 and 10000),
+  -- Цілі БЖВ на день, г; null — без цілі. За ними помічник складає меню з рецептів.
+  protein_goal int check (protein_goal is null or protein_goal between 1 and 1000),
+  fat_goal     int check (fat_goal is null or fat_goal between 1 and 1000),
+  carbs_goal   int check (carbs_goal is null or carbs_goal between 1 and 1000),
   -- Скільки людина зʼїдає відносно «звичайної» порції: 1,5 — у півтора раза більше.
   -- За ним застосунок пропонує, як поділити спільну страву.
   appetite    numeric(3,2) not null default 1 check (appetite between 0.25 and 4),
@@ -259,6 +263,12 @@ create table if not exists public.diary_settings (
   share_diary boolean not null default false,
   updated_at  timestamptz not null default now()
 );
+
+-- Базі, створеній до цілей БЖВ.
+alter table public.diary_settings
+  add column if not exists protein_goal int check (protein_goal is null or protein_goal between 1 and 1000),
+  add column if not exists fat_goal     int check (fat_goal is null or fat_goal between 1 and 1000),
+  add column if not exists carbs_goal   int check (carbs_goal is null or carbs_goal between 1 and 1000);
 
 alter table public.diary_settings enable row level security;
 

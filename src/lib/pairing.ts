@@ -1,5 +1,6 @@
 import { DRINKS, type DrinkDef, type DrinkKind } from "@/data/drinks";
 import { canonicalKey, ing } from "@/data/ingredients";
+import { courseOf } from "./course";
 import { servingKcal } from "./nutrition";
 import { pantryTypes, type AppState } from "./store";
 import type { Course, Recipe } from "./types";
@@ -89,26 +90,7 @@ export const PAIR_HEADING: Partial<Record<Course, string>> = {
   dessert: "До десерту",
 };
 
-/**
- * Чим страва є на столі.
- *
- * Поле необовʼязкове, і для рецептів, створених до його появи, частину
- * виводимо з того, що вже відомо. Здогадка свідомо обережна: коли ознак
- * немає, страва вважається самодостатньою й у підказки не лізе.
- */
-export function courseOf(recipe: Recipe): Course {
-  if (recipe.course) return recipe.course;
-
-  const text = `${recipe.title} ${recipe.tags.join(" ")}`.toLowerCase();
-  if (recipe.mealTypes.includes("drink")) return "drink";
-  if (recipe.mealTypes.includes("dessert")) return "dessert";
-  if (/суп|борщ|бульйон|юшка/.test(text)) return "soup";
-  if (/салат/.test(text)) return "salad";
-  if (/гарнір/.test(text)) return "side";
-  if (/соус|заправ/.test(text)) return "sauce";
-  if (recipe.mealTypes.includes("snack")) return "snack";
-  return "whole";
-}
+export { courseOf };
 
 export interface Pairing {
   recipe: Recipe;

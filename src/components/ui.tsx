@@ -734,16 +734,19 @@ export function QuantityInput({
  */
 export function MacroBar({
   nutrition,
+  goals,
   className,
 }: {
   nutrition: Nutrition;
+  /** Денні цілі БЖВ, г: є — підпис «Б 80 / 150 г». */
+  goals?: { protein?: number; fat?: number; carbs?: number };
   className?: string;
 }) {
   const shares = macroShares(nutrition);
   const parts = [
-    { key: "protein", share: shares.protein, grams: nutrition.protein, label: "Б", color: "var(--macro-protein)" },
-    { key: "fat", share: shares.fat, grams: nutrition.fat, label: "Ж", color: "var(--macro-fat)" },
-    { key: "carbs", share: shares.carbs, grams: nutrition.carbs, label: "В", color: "var(--macro-carbs)" },
+    { key: "protein", share: shares.protein, grams: nutrition.protein, goal: goals?.protein, label: "Б", color: "var(--macro-protein)" },
+    { key: "fat", share: shares.fat, grams: nutrition.fat, goal: goals?.fat, label: "Ж", color: "var(--macro-fat)" },
+    { key: "carbs", share: shares.carbs, grams: nutrition.carbs, goal: goals?.carbs, label: "В", color: "var(--macro-carbs)" },
   ];
 
   return (
@@ -762,7 +765,8 @@ export function MacroBar({
           <span key={p.key}>
             {i > 0 && " · "}
             <span className="font-bold" style={{ color: p.color }}>
-              {p.label} {p.grams} г
+              {p.label} {p.grams}
+              {p.goal ? ` / ${p.goal}` : ""} г
             </span>
           </span>
         ))}

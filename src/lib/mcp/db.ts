@@ -2,8 +2,10 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isCourse } from "@/lib/course";
+import { aiNutritionOf } from "@/lib/nutrition";
 import type { Product } from "@/lib/product-types";
-import type { MealSlot, PantryItem } from "@/lib/types";
+import type { MealSlot, PantryItem, Recipe } from "@/lib/types";
 
 /**
  * База для голосового помічника.
@@ -159,6 +161,40 @@ export function pantryToDbRow(item: PantryItem, owner: string): Record<string, u
     added_at: item.addedAt,
     expires_at: item.expiresAt ?? null,
     price_per_gram: item.pricePerGram ?? null,
+  };
+}
+
+/* ── Рецепти ──────────────────────────────────────────────────────────── */
+
+export const RECIPE_COLUMNS = "id,author_id,title,emoji,meal_types,course,tags,servings,kcal,ai_nutrition,ingredients";
+
+/**
+ * Рецепт для меню: лише те, з чого рахуються КБЖВ і частина страви. Решта
+ * полів — заглушки, помічник їх не читає.
+ */
+export function recipeFromRow(row: Record<string, unknown>): Recipe {
+  return {
+    id: String(row.id),
+    authorId: String(row.author_id ?? ""),
+    title: String(row.title ?? ""),
+    description: "",
+    emoji: (row.emoji as string | null) || "🍽️",
+    gradient: ["#ff6b35", "#ffb020"],
+    cuisine: "",
+    mealTypes: (Array.isArray(row.meal_types) ? row.meal_types : []) as Recipe["mealTypes"],
+    moods: [],
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    timeMin: 0,
+    difficulty: 1,
+    servings: num(row.servings) ?? 1,
+    ...(num(row.kcal) != null ? { kcal: num(row.kcal) } : {}),
+    aiNutrition: aiNutritionOf(row.ai_nutrition),
+    costLevel: 1,
+    course: isCourse(row.course) ? row.course : undefined,
+    ingredients: Array.isArray(row.ingredients) ? (row.ingredients as Recipe["ingredients"]) : [],
+    steps: [],
+    createdAt: "",
+    stats: { likes: 0, saves: 0, cooks: 0, ratingSum: 0, ratingCount: 0 },
   };
 }
 

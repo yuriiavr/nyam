@@ -86,6 +86,9 @@ interface FoodRow {
 interface SettingsRow {
   user_id: string;
   kcal_goal: number | null;
+  protein_goal: number | null;
+  fat_goal: number | null;
+  carbs_goal: number | null;
   appetite: number | string;
   share_diary: boolean;
 }
@@ -164,6 +167,9 @@ function rowToSettings(row: SettingsRow): DiarySettings {
   return {
     userId: row.user_id,
     ...(row.kcal_goal != null ? { kcalGoal: row.kcal_goal } : {}),
+    ...(row.protein_goal != null ? { proteinGoal: row.protein_goal } : {}),
+    ...(row.fat_goal != null ? { fatGoal: row.fat_goal } : {}),
+    ...(row.carbs_goal != null ? { carbsGoal: row.carbs_goal } : {}),
     appetite: n(row.appetite) ?? 1,
     shareDiary: Boolean(row.share_diary),
   };
@@ -241,7 +247,10 @@ export async function fetchDiary(memberIds: readonly string[]): Promise<RemoteDi
       .gte("cooked_at", since)
       .order("cooked_at", { ascending: false })
       .limit(500),
-    sb.from("diary_settings").select("user_id,kcal_goal,appetite,share_diary").in("user_id", [...memberIds]),
+    sb
+      .from("diary_settings")
+      .select("user_id,kcal_goal,protein_goal,fat_goal,carbs_goal,appetite,share_diary")
+      .in("user_id", [...memberIds]),
   ]);
   const error = entries.error ?? meals.error ?? settings.error;
   if (error) throw error;
@@ -297,6 +306,9 @@ export async function saveDiarySettings(settings: DiarySettings): Promise<void> 
     {
       user_id: settings.userId,
       kcal_goal: settings.kcalGoal ?? null,
+      protein_goal: settings.proteinGoal ?? null,
+      fat_goal: settings.fatGoal ?? null,
+      carbs_goal: settings.carbsGoal ?? null,
       appetite: Math.min(4, Math.max(0.25, settings.appetite)),
       share_diary: settings.shareDiary,
     },

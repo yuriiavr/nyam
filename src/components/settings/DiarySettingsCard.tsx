@@ -5,12 +5,86 @@ import { useEffect, useState } from "react";
 import { Card, Chip } from "@/components/ui";
 import { portionLabel, settingsOf } from "@/lib/diary";
 import { diaryUserId, useApp } from "@/lib/store";
+import type { DiarySettings } from "@/lib/types";
 import { haptic } from "@/lib/utils";
 
 const GOALS = [1600, 1800, 2000, 2200, 2500];
 
+const MACROS = [
+  { field: "proteinGoal", label: "Б", name: "білків", color: "var(--macro-protein)", kcalPerGram: 4 },
+  { field: "fatGoal", label: "Ж", name: "жирів", color: "var(--macro-fat)", kcalPerGram: 9 },
+  { field: "carbsGoal", label: "В", name: "вуглеводів", color: "var(--macro-carbs)", kcalPerGram: 4 },
+] as const;
+
 /**
- * Налаштування щоденника: денна ціль, апетит і хто бачить записи.
+ * Скільки калорій дають задані БЖВ — щоб видно було, що вони не суперечать
+ * цілі калорій: помічник складає меню під усі чотири числа одразу.
+ */
+function macroHint(s: DiarySettings): string {
+  if (MACROS.some((m) => s[m.field] == null)) {
+    return "Помічник складатиме меню з рецептів під ці числа. Порожнє — без цілі.";
+  }
+  const kcal = Math.round(MACROS.reduce((sum, m) => sum + (s[m.field] ?? 0) * m.kcalPerGram, 0));
+  if (!s.kcalGoal) return `Разом це ≈ ${kcal} ккал.`;
+  const gap = kcal - s.kcalGoal;
+  if (Math.abs(gap) <= s.kcalGoal * 0.05) return `Разом це ≈ ${kcal} ккал — збігається з ціллю.`;
+  return `Разом це ≈ ${kcal} ккал — на ${Math.abs(gap)} ${gap > 0 ? "більше" : "менше"} за ціль калорій.`;
+}
+
+/** Ціль одного з БЖВ: зберігається, коли поле втрачає фокус, як і ціль калорій. */
+function MacroGoal({
+  label,
+  name,
+  color,
+  value,
+  onSave,
+}: {
+  label: string;
+  name: string;
+  color: string;
+  value?: number;
+  onSave: (value: number | undefined) => void;
+}) {
+  const [raw, setRaw] = useState(value ? String(value) : "");
+  useEffect(() => {
+    setRaw(value ? String(value) : "");
+  }, [value]);
+
+  const save = () => {
+    if (!raw.trim()) {
+      if (value != null) onSave(undefined);
+      return;
+    }
+    const n = Math.round(Number(raw));
+    if (!(n >= 1 && n <= 1000)) {
+      setRaw(value ? String(value) : "");
+      return;
+    }
+    if (n !== value) onSave(n);
+  };
+
+  return (
+    <label className="flex h-11 items-center gap-1.5 rounded-2xl border border-line bg-surface px-3">
+      <span className="text-[13px] font-extrabold" style={{ color }}>
+        {label}
+      </span>
+      <input
+        value={raw}
+        onChange={(e) => setRaw(e.target.value.replace(/\D/g, "").slice(0, 4))}
+        onBlur={save}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        inputMode="numeric"
+        placeholder="—"
+        aria-label={`Ціль ${name} на день, г`}
+        className="min-w-0 flex-1 bg-transparent text-center font-display text-[17px] font-bold outline-none"
+      />
+      <span className="text-[12px] text-muted">г</span>
+    </label>
+  );
+}
+
+/**
+ * Налаштування щоденника: денні цілі, апетит і хто бачить записи.
  *
  * Апетит — скільки порцій рецепта людина зазвичай зʼїдає: саме з нього
  * поділ страви пропонує «тобі півтори, їй одну».
@@ -82,6 +156,21 @@ export function DiarySettingsCard() {
             ))}
           </div>
         </div>
+
+        <p className="mt-4 text-[13.5px] font-bold">Білки · жири · вуглеводи, г на день</p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {MACROS.map((m) => (
+            <MacroGoal
+              key={m.field}
+              label={m.label}
+              name={m.name}
+              color={m.color}
+              value={mine[m.field]}
+              onSave={(v) => setMyDiarySettings({ [m.field]: v })}
+            />
+          ))}
+        </div>
+        <p className="mt-1.5 text-[12px] leading-snug text-muted">{macroHint(mine)}</p>
 
         <div className="mt-4 flex items-center gap-3">
           <div className="min-w-0 flex-1">

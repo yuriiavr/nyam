@@ -1,5 +1,7 @@
 "use client";
 
+import { isCourse } from "@/lib/course";
+import { aiNutritionOf } from "@/lib/nutrition";
 import { getSupabase } from "./client";
 import type {
   AiNutrition,
@@ -294,47 +296,10 @@ const RECIPE_COLUMNS = {
 
 export const RECIPE_SELECT = Object.keys(RECIPE_COLUMNS).join(",");
 
-/**
- * Допустимі частини страви. У базі на course немає check-обмеження — тож
- * сторожем виступає код: у колонку йде лише те, що застосунок уміє прочитати.
- * `satisfies` не дасть додати нову частину в тип і забути її тут.
- */
-const COURSES = {
-  whole: true,
-  main: true,
-  side: true,
-  soup: true,
-  salad: true,
-  snack: true,
-  sauce: true,
-  dessert: true,
-  drink: true,
-} satisfies Record<Course, true>;
-
-export function isCourse(value: unknown): value is Course {
-  // hasOwnProperty, а не `in`: інакше «toString» теж зійшов би за частину страви.
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(COURSES, value);
-}
-
 /* ── Перетворення ─────────────────────────────────────────────────────── */
 
 const pair = (value: string[] | null, fallback: [string, string]): [string, string] =>
   value && value.length >= 2 ? [value[0], value[1]] : fallback;
-
-/**
- * Число від ШІ з колонки ai_nutrition. Лишаємо тільки те, що показуємо:
- * розклад по продуктах і назва моделі живуть у базі для розслідувань, а
- * в localStorage кожного пристрою їм робити нічого.
- */
-function aiNutritionOf(value: unknown): AiNutrition | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const v = value as Record<string, unknown>;
-  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null);
-  const [kcal, protein, fat, carbs] = [num(v.kcal), num(v.protein), num(v.fat), num(v.carbs)];
-  if (kcal == null || protein == null || fat == null || carbs == null) return undefined;
-  const note = typeof v.note === "string" && v.note.trim() ? v.note.trim() : undefined;
-  return { kcal, protein, fat, carbs, ...(note ? { note } : {}) };
-}
 
 /**
  * Рецепт, прочитаний з бази, разом із часом останнього запису в неї.

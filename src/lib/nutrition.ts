@@ -1,6 +1,6 @@
 import { ing, typeValue } from "@/data/ingredients";
 import type { Product } from "./product-types";
-import type { CookEvent, Nutrition, Recipe, RecipeIngredient, Unit } from "./types";
+import type { AiNutrition, CookEvent, Nutrition, Recipe, RecipeIngredient, Unit } from "./types";
 import { quantityOf, unitDef } from "./units";
 import { dateKey } from "./utils";
 
@@ -106,6 +106,21 @@ export interface RecipeNutrition {
 }
 
 const ZERO: Nutrition = { kcal: 0, protein: 0, fat: 0, carbs: 0 };
+
+/**
+ * Число від ШІ з колонки ai_nutrition. Лишаємо тільки те, що показуємо:
+ * розклад по продуктах і назва моделі живуть у базі для розслідувань, а
+ * в localStorage кожного пристрою їм робити нічого.
+ */
+export function aiNutritionOf(value: unknown): AiNutrition | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null);
+  const [kcal, protein, fat, carbs] = [num(v.kcal), num(v.protein), num(v.fat), num(v.carbs)];
+  if (kcal == null || protein == null || fat == null || carbs == null) return undefined;
+  const note = typeof v.note === "string" && v.note.trim() ? v.note.trim() : undefined;
+  return { kcal, protein, fat, carbs, ...(note ? { note } : {}) };
+}
 
 export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
   const servings = Math.max(1, recipe.servings || 1);

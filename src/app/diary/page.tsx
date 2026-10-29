@@ -93,7 +93,8 @@ export default function DiaryPage() {
   const userId = who?.userId ?? me;
 
   const flows = useFoodFlows({ day, forUser: userId });
-  const goal = settingsOf(settings, userId).kcalGoal;
+  const goals = settingsOf(settings, userId);
+  const goal = goals.kcalGoal;
   const today = dateKey();
 
   const lookup = useMemo(() => {
@@ -271,7 +272,13 @@ export default function DiaryPage() {
             </div>
           </div>
 
-          {current.kcal > 0 && <MacroBar nutrition={current} className="mt-4" />}
+          {current.kcal > 0 && (
+            <MacroBar
+              nutrition={current}
+              goals={{ protein: goals.proteinGoal, fat: goals.fatGoal, carbs: goals.carbsGoal }}
+              className="mt-4"
+            />
+          )}
         </Card>
       </section>
 

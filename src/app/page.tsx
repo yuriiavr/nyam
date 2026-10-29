@@ -362,7 +362,8 @@ function TodayNutrition() {
   }, [hydrated, foodLog, meals, cooked, me, myRecipes, remoteRecipes]);
 
   if (!totals) return null;
-  const goal = settingsOf(settings, me).kcalGoal;
+  const goals = settingsOf(settings, me);
+  const goal = goals.kcalGoal;
 
   if (totals.entries === 0) {
     return (
@@ -411,7 +412,11 @@ function TodayNutrition() {
               />
             </div>
           )}
-          <MacroBar nutrition={totals} className="mt-3" />
+          <MacroBar
+            nutrition={totals}
+            goals={{ protein: goals.proteinGoal, fat: goals.fatGoal, carbs: goals.carbsGoal }}
+            className="mt-3"
+          />
         </Card>
       </Link>
     </section>
