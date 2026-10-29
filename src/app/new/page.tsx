@@ -7,6 +7,7 @@ import {
   GripVertical,
   ImagePlus,
   Plus,
+  Refrigerator,
   ScanBarcode,
   Search,
   Timer,
@@ -18,6 +19,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Button, Card, Chip, QuantityInput, Sheet, useToast } from "@/components/ui";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { FridgePicker } from "@/components/FridgePicker";
 import {
   CAT_LABEL,
   CAT_ORDER,
@@ -30,6 +32,7 @@ import {
 import { catalogDeps } from "@/components/pantry/catalog";
 import { resolveBarcode } from "@/lib/resolve";
 import { recipeById, useApp } from "@/lib/store";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import type {
   Course,
   IngredientCat,
@@ -103,13 +106,14 @@ function RecipeForm() {
   const [servings, setServings] = useState(2);
   const [difficulty, setDifficulty] = useState<1 | 2 | 3>(1);
   const [costLevel, setCostLevel] = useState<1 | 2 | 3>(1);
-  const [kcal, setKcal] = useState("");
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([]);
   const [scanOpen, setScanOpen] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
   const [steps, setSteps] = useState<FormStep[]>([{ uid: newId(), text: "" }]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [fridgeOpen, setFridgeOpen] = useState(false);
+  const hasPantry = useApp((s) => s.pantry.length > 0);
   const [pickerQuery, setPickerQuery] = useState("");
   /** Назва для картки власного продукту; null — картка закрита. */
   const [creating, setCreating] = useState<string | null>(null);
@@ -136,7 +140,6 @@ function RecipeForm() {
         setServings(r.servings);
         setDifficulty(r.difficulty);
         setCostLevel(r.costLevel);
-        setKcal(r.kcal ? String(r.kcal) : "");
         setIngredients(r.ingredients);
         setSteps(
           (r.steps.length ? r.steps : [{ text: "" }]).map((step) => ({ ...step, uid: newId() })),
@@ -187,7 +190,6 @@ function RecipeForm() {
       servings,
       difficulty,
       costLevel,
-      kcal: kcal ? Number(kcal) : undefined,
       ingredients,
       steps: cleanSteps,
     };
@@ -265,6 +267,7 @@ function RecipeForm() {
           // Назва товару уточнює тип («Молоко безлактозне Галичина 2,5%»); без неї — назва типу.
           label: name && name !== def?.label ? name : undefined,
           nutrition,
+          ...(product ? { productId: product.id } : {}),
         },
       ]);
 
@@ -488,20 +491,17 @@ function RecipeForm() {
           </div>
         </Field>
 
-        <Field label="Калорії на порцію (необовʼязково)">
-          <input
-            value={kcal}
-            onChange={(e) => setKcal(e.target.value.replace(/\D/g, ""))}
-            inputMode="numeric"
-            placeholder="350"
-            className="h-12 w-full rounded-2xl border border-line bg-surface px-4 text-[15px]"
-          />
-        </Field>
+        {/* Калорій руками більше не просимо: ШІ рахує їх точніше, бо читає й кроки. */}
+        <p className="pb-4 text-[12.5px] leading-relaxed text-muted">
+          {isSupabaseConfigured
+            ? "Калорії й БЖВ порахує ШІ за складом і кроками — щойно рецепт збережеться."
+            : "Калорії й БЖВ порахуються самі — зі складу рецепта."}
+        </p>
       </section>
 
       {/* Інгредієнти */}
       <section className="px-4 pt-4">
-        <div className="mb-2.5 flex items-center justify-between">
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-[16px] font-bold">
             Інгредієнти{ingredients.length > 0 && ` · ${ingredients.length}`}
           </h2>
@@ -518,6 +518,19 @@ function RecipeForm() {
               <ScanBarcode size={15} />
               Сканувати
             </Button>
+            {hasPantry && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  haptic(10);
+                  setFridgeOpen(true);
+                }}
+              >
+                <Refrigerator size={15} />
+                З холодильника
+              </Button>
+            )}
             <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
               <Plus size={15} />
               Додати
@@ -714,6 +727,16 @@ function RecipeForm() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         onDetect={onScanned}
+      />
+
+      <FridgePicker
+        open={fridgeOpen}
+        onClose={() => setFridgeOpen(false)}
+        existing={ingredients}
+        onPick={(items) => {
+          setIngredients((p) => [...p, ...items]);
+          toast(`Додано з холодильника: ${items.length}`, "🧊");
+        }}
       />
 
       <IngredientPicker

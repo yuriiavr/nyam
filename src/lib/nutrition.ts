@@ -7,11 +7,13 @@ import { dateKey } from "./utils";
 /**
  * Підрахунок калорій і БЖВ.
  *
- * Рахуємо з інгредієнтів: кожен зводимо до грамів, беремо довідкову цінність
- * на 100 г і складаємо. Це оцінка, а не лабораторний аналіз — вода при варінні
- * випаровується, жир на сковороді лишається в пательні, а «велика цибулина»
- * у всіх різна. Тому поруч завжди показуємо, яку частку складу вдалося
- * порахувати: якщо мало — число оманливе.
+ * Спершу — число від ШІ (recipe.aiNutrition, src/lib/nutrition-ai.ts): модель
+ * читає кроки й знає, що жир на сковороді лишається в пательні, а вода з-під
+ * макаронів зливається. Поки його немає — щойно збережений рецепт, немає
+ * бекенду чи ключа, — рахуємо самі з інгредієнтів: кожен зводимо до грамів,
+ * беремо довідкову цінність на 100 г і складаємо. Це грубіша оцінка, тож
+ * поруч показуємо, яку частку складу вдалося порахувати: якщо мало — число
+ * оманливе.
  */
 
 /**
@@ -93,15 +95,58 @@ export interface RecipeNutrition {
   perServing: Nutrition;
   /** На всю страву. */
   total: Nutrition;
-  /** Частка інгредієнтів (0..1), яку вдалося врахувати. */
+  /** Частка інгредієнтів (0..1), яку вдалося врахувати. У ШІ — завжди 1. */
   coverage: number;
   /** Інгредієнти, які не потрапили в підрахунок — щоб чесно показати. */
   skipped: string[];
+  /** Хто рахував: ШІ за складом і кроками чи ми за довідником продуктів. */
+  source: "ai" | "catalog";
+  /** Припущення ШІ, від яких число залежить найбільше. */
+  note?: string;
 }
 
 const ZERO: Nutrition = { kcal: 0, protein: 0, fat: 0, carbs: 0 };
 
 export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
+  const servings = Math.max(1, recipe.servings || 1);
+
+  // ШІ рахує всю страву — порцію ділимо тут, тож зміна порцій нового рахунку не просить.
+  const ai = recipe.aiNutrition;
+  if (ai) {
+    return {
+      total: round(ai),
+      perServing: round({
+        kcal: ai.kcal / servings,
+        protein: ai.protein / servings,
+        fat: ai.fat / servings,
+        carbs: ai.carbs / servings,
+      }),
+      coverage: 1,
+      skipped: [],
+      source: "ai",
+      ...(ai.note ? { note: ai.note } : {}),
+    };
+  }
+
+  return catalogNutrition(recipe, servings);
+}
+
+/**
+ * Чи змінилось у рецепті те, з чого ШІ рахує калорії. Той самий перелік, що й
+ * у тригері бази (recipes_before_write): там число стирається, тут — локальна
+ * копія, щоб до приходу нового числа не показувати старе для нового складу.
+ */
+export function nutritionInputsChanged(before: Recipe, after: Recipe): boolean {
+  return (
+    before.title !== after.title ||
+    before.description !== after.description ||
+    JSON.stringify(before.ingredients) !== JSON.stringify(after.ingredients) ||
+    JSON.stringify(before.steps) !== JSON.stringify(after.steps)
+  );
+}
+
+/** Оцінка за довідником продуктів: грами × склад на 100 г. */
+function catalogNutrition(recipe: Recipe, servings: number): RecipeNutrition | null {
   const counted: Nutrition = { ...ZERO };
   const skipped: string[] = [];
   let usable = 0;
@@ -135,7 +180,6 @@ export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
 
   if (usable === 0) return null;
 
-  const servings = Math.max(1, recipe.servings || 1);
   const total = round(counted);
 
   return {
@@ -152,6 +196,7 @@ export function recipeNutrition(recipe: Recipe): RecipeNutrition | null {
     // не порахувалось — а на цю цифру спирається довіра до всього числа.
     coverage: considered === 0 ? 1 : Math.min(1, usable / considered),
     skipped,
+    source: "catalog",
   };
 }
 
@@ -165,8 +210,8 @@ function round(n: Nutrition): Nutrition {
 }
 
 /**
- * Калорійність порції: спершу з підрахунку по інгредієнтах, інакше — з поля
- * kcal, яке автор міг заповнити вручну.
+ * Калорійність порції: спершу від ШІ чи з підрахунку по інгредієнтах, інакше —
+ * з поля kcal, яке автор міг заповнити вручну до появи підрахунку ШІ.
  */
 export function servingKcal(recipe: Recipe): number | null {
   const computed = recipeNutrition(recipe);

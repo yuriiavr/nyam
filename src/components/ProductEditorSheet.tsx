@@ -1,13 +1,15 @@
 "use client";
 
-import { Plus, TriangleAlert } from "lucide-react";
+import { Camera, Plus, Sparkles, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IngredientPicker } from "@/components/IngredientPicker";
 import { EditTypeButton } from "@/components/EditTypeButton";
 import { NewIngredientSheet } from "@/components/NewIngredientSheet";
 import { Button, Sheet } from "@/components/ui";
 import { ancestors, descendants, ing, knownIngredient, lineage } from "@/data/ingredients";
+import { FOOD_AI_MESSAGE, estimateProductNutrition, readNutritionLabel } from "@/lib/food-client";
 import {
+  type NutritionSource,
   type PackUnit,
   type Product,
   type ProductDraft,
@@ -22,7 +24,7 @@ import {
 } from "@/lib/supabase/products-api";
 import type { Nutrition, Unit } from "@/lib/types";
 import { formatNumber, formatQuantity } from "@/lib/units";
-import { cn, haptic } from "@/lib/utils";
+import { cn, compressImage, haptic } from "@/lib/utils";
 
 /*
  * Редактор спільної картки товару (F3) — замінив колишній ProductCardSheet.
@@ -250,6 +252,7 @@ function productToDraft(p: Product): ProductDraft {
     packUnit: p.packUnit,
     gramsPerPiece: p.gramsPerPiece,
     nutrition: p.nutrition,
+    nutritionSource: p.nutritionSource,
     image: p.image,
     source: p.source === "migration" ? undefined : p.source,
   };
@@ -364,6 +367,16 @@ export function ProductEditorSheet({
   const [source, setSource] = useState<ProductDraft["source"]>(undefined);
   const [image, setImage] = useState<string | undefined>(undefined);
   const [showNutrition, setShowNutrition] = useState(false);
+  /*
+   * Звідки КБЖВ: з етикетки (людина переписала чи сфотографувала) або оцінка
+   * ШІ. Друге на картці позначене «≈», щоб наступний, хто тримає пачку в
+   * руках, знав, що варто переписати точні числа.
+   */
+  const [nutritionFrom, setNutritionFrom] = useState<NutritionSource | undefined>(undefined);
+  const [aiBusy, setAiBusy] = useState<"estimate" | "photo" | null>(null);
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const aiCtrl = useRef<AbortController | null>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
   const [tried, setTried] = useState(false);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<
@@ -396,6 +409,7 @@ export function ProductEditorSheet({
       setSource(productToDraft(product).source);
       setImage(product.image);
       setShowNutrition(Boolean(product.nutrition));
+      setNutritionFrom(product.nutrition ? product.nutritionSource : undefined);
     } else {
       const p = prefill(draft, hints);
       setBase(null);
@@ -404,7 +418,11 @@ export function ProductEditorSheet({
       setSource(p.draft.source);
       setImage(p.draft.image);
       setShowNutrition(Boolean(p.draft.nutrition));
+      setNutritionFrom(p.draft.nutrition ? p.draft.nutritionSource : undefined);
     }
+    aiCtrl.current?.abort();
+    setAiBusy(null);
+    setAiNote(null);
     setTried(false);
     setSaving(false);
     setProblem(null);
@@ -469,11 +487,104 @@ export function ProductEditorSheet({
       ...(pack != null && Number.isFinite(pack) ? { packAmount: Math.round(pack * 100) / 100, packUnit: form.packUnit } : {}),
       gramsPerPiece: perPiece != null && Number.isFinite(perPiece) ? perPiece : undefined,
       nutrition,
+      ...(nutrition ? { nutritionSource: nutritionFrom ?? "label" } : {}),
       image,
       source,
     };
     return { errors, ok: Object.keys(errors).length === 0, draft: draftOut };
-  }, [form, image, source]);
+  }, [form, image, source, nutritionFrom]);
+
+  /* ── КБЖВ від ШІ: оцінка за назвою або фото етикетки ── */
+
+  const fillNutrition = (n: Nutrition) =>
+    setForm((f) => ({
+      ...f,
+      kcal: formatNumber(n.kcal, 1),
+      protein: formatNumber(n.protein, 1),
+      fatG: formatNumber(n.fat, 1),
+      carbs: formatNumber(n.carbs, 1),
+    }));
+
+  const setNutritionField = (key: "kcal" | "protein" | "fatG" | "carbs", value: string) => {
+    set(key, value);
+    // Людина сама правила числа — тепер це її дані, а не здогадка ШІ.
+    setNutritionFrom("label");
+    setAiNote(null);
+  };
+
+  const estimate = async () => {
+    const name = form.name.replace(/\s+/g, " ").trim();
+    if (name.length < 2) {
+      setAiNote("Спершу назва — без неї ШІ нема що оцінювати.");
+      return;
+    }
+    aiCtrl.current?.abort();
+    const ctrl = new AbortController();
+    aiCtrl.current = ctrl;
+    setAiBusy("estimate");
+    setAiNote(null);
+    const fat = parseField(form.fat);
+    const res = await estimateProductNutrition(
+      {
+        name,
+        brand: form.brand.trim() || undefined,
+        type: form.typeKey && knownIngredient(form.typeKey) ? ing(form.typeKey).label : undefined,
+        fatPct: fat != null && Number.isFinite(fat) ? fat : undefined,
+        pack: form.pack ? `${form.pack} ${formatQuantity(undefined, form.packUnit)}` : undefined,
+      },
+      ctrl.signal,
+    );
+    if (ctrl.signal.aborted) return;
+    setAiBusy(null);
+    if (!res.ok) {
+      setAiNote(FOOD_AI_MESSAGE[res.reason]);
+      return;
+    }
+    haptic(12);
+    fillNutrition(res.nutrition);
+    setShowNutrition(true);
+    setNutritionFrom("ai");
+    setAiNote(res.note ? `≈ Оцінка ШІ: ${res.note}` : "≈ Оцінка ШІ. Є пачка під рукою — краще перепиши з етикетки.");
+  };
+
+  const readPhoto = async (file: File) => {
+    aiCtrl.current?.abort();
+    const ctrl = new AbortController();
+    aiCtrl.current = ctrl;
+    setAiBusy("photo");
+    setAiNote(null);
+    let data: string;
+    try {
+      data = await compressImage(file, 1400, 0.8);
+    } catch {
+      setAiBusy(null);
+      setAiNote("Не вдалося відкрити фото");
+      return;
+    }
+    const res = await readNutritionLabel(data, ctrl.signal);
+    if (ctrl.signal.aborted) return;
+    setAiBusy(null);
+    if (!res.ok) {
+      setAiNote(
+        res.reason === "unreadable" ? "На фото не видно таблиці КБЖВ — сфотографуй ближче й рівніше." : FOOD_AI_MESSAGE[res.reason],
+      );
+      return;
+    }
+    haptic(12);
+    fillNutrition(res.nutrition);
+    setShowNutrition(true);
+    setNutritionFrom("label");
+    // З етикетки — лише в порожні поля: набране людиною важить більше.
+    setForm((f) => ({
+      ...f,
+      name: f.name || res.name || "",
+      brand: f.brand || res.brand || "",
+      ...(!f.pack && res.packAmount && res.packUnit
+        ? { pack: formatNumber(res.packAmount, 2), packUnit: res.packUnit }
+        : {}),
+    }));
+    setAiNote("Прочитано з етикетки — перевір, чи цифри збіглись.");
+  };
 
   /* ── «Можливо, це вже є:» — лише для нової картки й зі звʼязком ── */
 
@@ -766,21 +877,50 @@ export function ProductEditorSheet({
 
           {showNutrition ? (
             <div>
-              <Field>КБЖВ на 100 г</Field>
+              <Field note={nutritionFrom === "ai" ? <span className="font-bold text-brand">≈ ШІ</span> : null}>
+                КБЖВ на 100 г
+              </Field>
               <div className="grid grid-cols-4 gap-2">
-                <NumField value={form.kcal} onChange={(v) => set("kcal", v)} label="ккал" />
-                <NumField value={form.protein} onChange={(v) => set("protein", v)} label="білки" />
-                <NumField value={form.fatG} onChange={(v) => set("fatG", v)} label="жири" />
-                <NumField value={form.carbs} onChange={(v) => set("carbs", v)} label="вугл." />
+                <NumField value={form.kcal} onChange={(v) => setNutritionField("kcal", v)} label="ккал" />
+                <NumField value={form.protein} onChange={(v) => setNutritionField("protein", v)} label="білки" />
+                <NumField value={form.fatG} onChange={(v) => setNutritionField("fatG", v)} label="жири" />
+                <NumField value={form.carbs} onChange={(v) => setNutritionField("carbs", v)} label="вугл." />
               </div>
               <p className={cn("mt-1.5 text-[11px] leading-snug", err("nutrition") ? "text-berry" : "text-faint")}>
-                {err("nutrition") ?? "З етикетки, збоку. Можна лишити порожнім — вигадані калорії гірші за відсутні."}
+                {err("nutrition") ??
+                  aiNote ??
+                  "З етикетки, збоку. Немає пачки під рукою — хай оцінить ШІ, картка це запамʼятає."}
               </p>
             </div>
           ) : (
             <button onClick={() => setShowNutrition(true)} className="self-start text-[13px] font-bold text-brand">
               ＋ КБЖВ з етикетки
             </button>
+          )}
+          {online && isSupabaseConfigured && (
+            <div className="-mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" loading={aiBusy === "photo"} onClick={() => photoRef.current?.click()}>
+                <Camera size={15} />
+                Фото етикетки
+              </Button>
+              <Button size="sm" variant="secondary" loading={aiBusy === "estimate"} onClick={() => void estimate()}>
+                <Sparkles size={15} />
+                Оцінити ШІ
+              </Button>
+              <input
+                ref={photoRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void readPhoto(file);
+                }}
+              />
+              {!showNutrition && aiNote && <p className="w-full text-[11.5px] leading-snug text-berry">{aiNote}</p>}
+            </div>
           )}
         </div>
       </Sheet>

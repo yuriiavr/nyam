@@ -440,7 +440,11 @@ $$;
 -- Пошук карток для пікера й «Можливо, це вже є:». Індексовані умови —
 -- like найдовшого слова або <% (обидві бере trigram GIN); like all по всіх
 -- словах індекс не бере, тож він лише перевірка.
-create or replace function public.search_products(p_query text, p_type_keys text[] default null, p_limit int default 20)
+-- drop, а не replace: food-diary.sql додає у відповідь колонку, і повторний запуск
+-- цього файлу після нього інакше впав би на «cannot change return type». Тоді
+-- запусти ще раз і food-diary.sql — він поверне позначку «≈ ШІ» в пошук.
+drop function if exists public.search_products(text, text[], int);
+create function public.search_products(p_query text, p_type_keys text[] default null, p_limit int default 20)
 returns table (id uuid, type_key text, name text, brand text, fat_pct numeric, pack_amount numeric, pack_unit text,
                grams_per_piece numeric, kcal numeric, protein numeric, fat numeric, carbs numeric,
                image_url text, source text, archived boolean, merged_into uuid, version int, updated_at timestamptz)

@@ -214,6 +214,8 @@ interface ProductRow {
   fat: number | string | null;
   carbs: number | string | null;
   image_url: string | null;
+  /** Колонка з supabase/food-diary.sql; у відповіді старої search_products її немає. */
+  nutrition_source?: string | null;
   source: string;
   archived: boolean;
   merged_into: string | null;
@@ -235,6 +237,7 @@ const PRODUCT_COLUMNS = {
   fat: true,
   carbs: true,
   image_url: true,
+  nutrition_source: true,
   source: true,
   archived: true,
   merged_into: true,
@@ -265,6 +268,10 @@ export function rowToProduct(row: ProductRow): Product {
       kcal != null
         ? { kcal, protein: num(row.protein) ?? 0, fat: num(row.fat) ?? 0, carbs: num(row.carbs) ?? 0 }
         : undefined,
+    // Джерело лише разом із числами: без КБЖВ нема чого підписувати.
+    ...(kcal != null && (row.nutrition_source === "label" || row.nutrition_source === "ai")
+      ? { nutritionSource: row.nutrition_source }
+      : {}),
     image: text(row.image_url),
     source: PRODUCT_SOURCES.has(row.source) ? (row.source as ProductSource) : "user",
     archived: Boolean(row.archived),
@@ -294,6 +301,8 @@ export function draftToCard(draft: ProductDraft): Record<string, unknown> {
     fat: draft.nutrition ? draft.nutrition.fat : null,
     carbs: draft.nutrition ? draft.nutrition.carbs : null,
     image_url: draft.image && /^https:\/\//.test(draft.image) ? draft.image : null,
+    // Немає — база вирішить сама: нові числа від людини вважає етикеткою, старі лишає як були.
+    nutrition_source: draft.nutrition ? (draft.nutritionSource ?? null) : null,
     source: draft.source ?? "user",
   };
 }
@@ -330,6 +339,33 @@ export async function fetchProductsByIds(ids: Iterable<string>, signal?: AbortSi
   const have = new Set(found.map((p) => p.id));
   const winners = uniq(found.map((p) => p.mergedInto).filter((id): id is string => !!id && !have.has(id)));
   return winners.length ? [...found, ...(await load(winners))] : found;
+}
+
+/**
+ * Вітрина каталогу (сторінка «Товари»): свіжі картки, за потреби — лише цих
+ * типів. Без пошукового рядка, тож не через search_products: та без запиту
+ * нічого не віддає.
+ */
+export async function browseProducts(
+  typeKeys: readonly string[] | null,
+  limit = 60,
+  offset = 0,
+  signal?: AbortSignal,
+): Promise<Product[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  let query = sb
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .eq("archived", false)
+    .is("merged_into", null)
+    .order("updated_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (typeKeys?.length) query = query.in("type_key", [...typeKeys]);
+  if (signal) query = query.abortSignal(signal);
+  const { data, error } = await query;
+  if (error) throw toCatalogError(error);
+  return ((data ?? []) as unknown as ProductRow[]).map(rowToProduct);
 }
 
 /**

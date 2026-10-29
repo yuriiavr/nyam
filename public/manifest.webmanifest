@@ -44,6 +44,11 @@
       "url": "/decide/fridge"
     },
     {
+      "name": "Що зʼїв сьогодні",
+      "short_name": "Щоденник",
+      "url": "/diary"
+    },
+    {
       "name": "Сканувати продукт",
       "short_name": "Сканер",
       "url": "/pantry"

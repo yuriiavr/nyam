@@ -3,7 +3,18 @@
 import { isLegacyId } from "./store-migrations";
 import * as api from "./supabase/api";
 import { friendlyError, isSupabaseConfigured } from "./supabase/client";
-import type { IngredientDef, PantryItem, PlanSlot, Profile, Recipe, ShoppingItem } from "./types";
+import * as diaryApi from "./supabase/diary-api";
+import type {
+  DiarySettings,
+  FoodEntry,
+  IngredientDef,
+  Meal,
+  PantryItem,
+  PlanSlot,
+  Profile,
+  Recipe,
+  ShoppingItem,
+} from "./types";
 
 /**
  * Тонкий шар між сховищем стану і базою.
@@ -819,3 +830,62 @@ export const pushDismissClear = () =>
   fire("приховані страви", (uid) => api.clearRelation("dismissed", uid));
 
 export const pushPlanClear = () => fire("план", (uid) => api.clearPlan(uid, scope(uid)));
+
+/* ── Щоденник ─────────────────────────────────────────────────────────── */
+
+/*
+ * Записи щоденника йдуть по черзі, і страва — раніше за свої частки: так
+ * база одразу бачить, із чого рахувати залишок. Не дійшло (немає звʼязку) —
+ * стор тримає це в diaryUnsent і дошле на наступному знімку: зʼїдений
+ * батончик не має зникати через тунель метро.
+ */
+const diaryQueue = serialQueue((error) => report(error, "щоденник"));
+const diaryInFlight = new Map<string, number>();
+
+/** Чи летить зараз запис цього рядка щоденника — знімок, замовлений раніше, його не перебʼє. */
+export function hasPendingDiaryWrite(id: string): boolean {
+  return (diaryInFlight.get(id) ?? 0) > 0;
+}
+
+export interface DiaryWrite {
+  meals?: Meal[];
+  entries?: FoodEntry[];
+  removeEntries?: string[];
+  removeMeals?: string[];
+}
+
+/** Записує пачку змін щоденника. true — база прийняла все; false — дошлемо пізніше. */
+export function pushDiary(write: DiaryWrite): Promise<boolean> {
+  if (!canSync()) return Promise.resolve(false);
+  const ids = [
+    ...(write.meals ?? []).map((m) => m.id),
+    ...(write.entries ?? []).map((e) => e.id),
+    ...(write.removeEntries ?? []),
+    ...(write.removeMeals ?? []),
+  ];
+  for (const id of ids) diaryInFlight.set(id, (diaryInFlight.get(id) ?? 0) + 1);
+  const release = () =>
+    setTimeout(() => {
+      for (const id of ids) {
+        const left = (diaryInFlight.get(id) ?? 1) - 1;
+        if (left > 0) diaryInFlight.set(id, left);
+        else diaryInFlight.delete(id);
+      }
+    }, BULK_GUARD_MS);
+
+  let ok = false;
+  return diaryQueue(async () => {
+    try {
+      if (write.meals?.length) await diaryApi.upsertMeals(write.meals);
+      if (write.entries?.length) await diaryApi.upsertEntries(write.entries);
+      if (write.removeEntries?.length) await diaryApi.deleteEntries(write.removeEntries);
+      for (const id of write.removeMeals ?? []) await diaryApi.deleteMeal(id);
+      ok = true;
+    } finally {
+      release();
+    }
+  }).then(() => ok);
+}
+
+export const pushDiarySettings = (settings: DiarySettings) =>
+  fire("налаштування щоденника", () => diaryApi.saveDiarySettings(settings));

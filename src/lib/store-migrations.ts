@@ -89,6 +89,15 @@ export function normalizePersisted(persisted: unknown, backend: boolean): Record
     for (const field of ["products", "eanIndex"] as const) {
       if (s[field] !== undefined && !isObject(s[field])) s[field] = {};
     }
+
+    // Щоденник: записи без id чи часу ламали б підсумки дня — відкидаємо їх.
+    for (const field of ["foodLog", "meals", "diarySettings"] as const) {
+      if (s[field] === undefined) continue;
+      s[field] = Array.isArray(s[field])
+        ? s[field].filter((r) => isObject(r) && typeof (r.id ?? r.userId) === "string")
+        : [];
+    }
+    if (s.diaryUnsent !== undefined && !isObject(s.diaryUnsent)) s.diaryUnsent = {};
     return s;
   } catch {
     // Сюди JSON із localStorage не доводить, але якщо дійде — лишаємо все,

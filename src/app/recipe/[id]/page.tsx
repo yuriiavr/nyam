@@ -17,6 +17,7 @@ import {
   Star,
   Trash2,
   Users,
+  UtensilsCrossed,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -40,8 +41,11 @@ import { endSession, isStarted, timerLeft, timersByUrgency, useCooking } from "@
 import { matchRecipe } from "@/lib/matching";
 import { availableFor } from "@/lib/pantry";
 import { itemsForRecipe } from "@/lib/shopping";
+import { useFoodFlows } from "@/components/diary/useFoodFlows";
+import { mealFromRecipe, slotAt } from "@/lib/diary";
 import {
   allRecipes,
+  diaryUserId,
   effectiveStats,
   pantryTypes,
   profileById,
@@ -58,6 +62,7 @@ import {
   haptic,
   MEAL_LABEL,
   MOOD_META,
+  newId,
   timeAgo,
 } from "@/lib/utils";
 import * as api from "@/lib/supabase/api";
@@ -97,7 +102,10 @@ export default function RecipePage() {
   const rate = useApp((s) => s.rate);
   const addShopping = useApp((s) => s.addShopping);
   const hydrated = useApp((s) => s.hydrated);
+  const account = useApp((s) => s.account);
   const toast = useToast();
+  // «Зʼїв»: страва з рецепта і поділ на тих, хто їв, — як після готування.
+  const flows = useFoodFlows();
   /** Готування цього рецепта, яке почали й не закінчили (src/lib/cooking.ts). */
   const cooking = useCooking((s) => s.sessions[params.id]);
   const cookTimer = cooking ? timersByUrgency(cooking)[0] : undefined;
@@ -341,6 +349,26 @@ export default function RecipePage() {
               className={myRating ? "fill-brand-2 text-brand-2" : ""}
             />
             {myRating ? `Твоя оцінка ${myRating}` : "Оцінити"}
+          </Button>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={() => {
+              haptic(10);
+              flows.split({
+                meal: mealFromRecipe(recipe, {
+                  id: newId(),
+                  ownerId: diaryUserId({ account }),
+                  cookedAt: new Date().toISOString(),
+                }),
+                isNew: true,
+                source: "cook",
+                slot: slotAt(),
+              });
+            }}
+          >
+            <UtensilsCrossed size={17} />
+            Зʼїв
           </Button>
         </div>
 
@@ -615,6 +643,8 @@ export default function RecipePage() {
       </div>
       <div className="h-16" />
 
+      {flows.ui}
+
       {/* Оцінка */}
       <Sheet
         open={rateOpen}
@@ -666,10 +696,11 @@ function Metric({
 }
 
 /**
- * Калорії та БЖВ, пораховані з інгредієнтів.
+ * Калорії та БЖВ: від ШІ, а поки його числа немає — з інгредієнтів.
  *
- * Показуємо разом із покриттям: якщо половина складу без даних, число
- * оманливе, і чесніше сказати про це, ніж робити вигляд точності.
+ * Під числом кажемо, звідки воно: у ШІ — з головним припущенням («олії
+ * лишилась половина»), у довідника — з покриттям. Якщо половина складу без
+ * даних, число оманливе, і чесніше сказати про це, ніж робити вигляд точності.
  */
 function NutritionCard({
   recipe,
@@ -691,6 +722,8 @@ function NutritionCard({
   };
   const shares = macroShares(n.perServing);
   const low = n.coverage < 0.6;
+  // Рецепт у базі — отже, ШІ його порахує (чи вже рахує); демо-набір без бекенду — ні.
+  const aiPending = n.source === "catalog" && isSupabaseConfigured && api.isUuid(recipe.id);
 
   return (
     <section className="px-4 pt-7">
@@ -742,11 +775,22 @@ function NutritionCard({
         </div>
 
         <p className="mt-3 text-[11px] leading-relaxed text-faint">
-          {low
-            ? `Оцінка приблизна: пораховано лише ${Math.round(n.coverage * 100)}% складу.`
-            : "Оцінка за довідковими даними продуктів — без урахування втрат при готуванні."}
-          {n.skipped.length > 0 &&
-            ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
+          {n.source === "ai" ? (
+            <>
+              Порахував ШІ за складом і кроками приготування.
+              {n.note && ` ${n.note}`}
+            </>
+          ) : (
+            <>
+              {aiPending
+                ? "Поки це оцінка за довідником продуктів — ШІ порахує точніше за складом і кроками."
+                : low
+                  ? `Оцінка приблизна: пораховано лише ${Math.round(n.coverage * 100)}% складу.`
+                  : "Оцінка за довідковими даними продуктів — без урахування втрат при готуванні."}
+              {aiPending && low && ` Пораховано лише ${Math.round(n.coverage * 100)}% складу.`}
+              {n.skipped.length > 0 && ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
+            </>
+          )}
         </p>
       </Card>
     </section>

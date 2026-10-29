@@ -17,11 +17,22 @@ import {
 import { useEffect, useMemo } from "react";
 import { FeedCard, RecipeScroller } from "@/components/RecipeCard";
 import { Avatar, Card, MacroBar, SectionTitle, Skeleton } from "@/components/ui";
-import { allRecipes, cookStreak, recipeById, useApp } from "@/lib/store";
-import { dayTotals } from "@/lib/nutrition";
+import { allRecipes, cookStreak, diaryUserId, recipeById, useApp } from "@/lib/store";
+import {
+  ZERO,
+  addNutrition,
+  entriesOn,
+  entryNutrition,
+  recipeMealNutrition,
+  roundNutrition,
+  settingsOf,
+  sumEntries,
+  unloggedCooks,
+} from "@/lib/diary";
+import type { Nutrition } from "@/lib/types";
 import { recommend, topBy } from "@/lib/matching";
 import { refreshIfStale } from "@/lib/session";
-import { greeting, haptic, MEAL_LABEL, currentMeal, plural } from "@/lib/utils";
+import { dateKey, greeting, haptic, MEAL_LABEL, currentMeal, plural } from "@/lib/utils";
 
 export default function HomePage() {
   /*
@@ -317,55 +328,92 @@ function HomeSkeleton() {
 }
 
 /**
- * Підсумок за день з історії готувань. Зʼявляється лише коли сьогодні щось
- * готували — порожня картка «0 ккал» щодня не додає нічого корисного.
+ * Сьогодні в щоденнику: скільки зʼїдено з цілі. Порожній день — тонкий рядок
+ * «що зʼїв сьогодні?»: саме звідси найзручніше записати сніданок.
+ *
+ * Готування без поділу «хто їв» рахуються як раніше — одна порція.
  */
 function TodayNutrition() {
   const hydrated = useApp((s) => s.hydrated);
+  const account = useApp((s) => s.account);
+  const foodLog = useApp((s) => s.foodLog);
+  const meals = useApp((s) => s.meals);
   const cooked = useApp((s) => s.cooked);
+  const settings = useApp((s) => s.diarySettings);
   const myRecipes = useApp((s) => s.myRecipes);
   const remoteRecipes = useApp((s) => s.remoteRecipes);
 
-  const totals = useMemo(
-    () => (hydrated ? dayTotals(cooked, (id) => recipeById(useApp.getState(), id)) : null),
+  const me = diaryUserId({ account });
+  const totals = useMemo(() => {
+    if (!hydrated) return null;
+    const state = useApp.getState();
+    const byId = new Map(meals.map((m) => [m.id, m]));
+    const recipeOf = (id: string) => recipeById(state, id);
+    const today = dateKey();
+    const base = sumEntries(entriesOn(foodLog, me, today), (e) => entryNutrition(e, (id) => byId.get(id), recipeOf));
+    const cooks = unloggedCooks(cooked, meals).filter((c) => dateKey(new Date(c.at)) === today);
+    const extra = cooks.reduce<Nutrition>((sum, c) => {
+      const recipe = recipeOf(c.recipeId);
+      const n = recipe ? recipeMealNutrition(recipe, 1) : undefined;
+      return n ? addNutrition(sum, n) : sum;
+    }, ZERO);
+    return { ...roundNutrition(addNutrition(base, extra)), entries: base.entries + cooks.length };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hydrated, cooked, myRecipes, remoteRecipes],
-  );
+  }, [hydrated, foodLog, meals, cooked, me, myRecipes, remoteRecipes]);
 
-  if (!totals || totals.meals === 0) return null;
+  if (!totals) return null;
+  const goal = settingsOf(settings, me).kcalGoal;
 
-  return (
-    <section className="px-4 pt-4">
-      <Card className="p-4">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-[12px] text-muted">Сьогодні приготовано</p>
-            <p className="mt-0.5 font-display text-[26px] font-extrabold leading-none">
-              {totals.kcal} <span className="text-[14px] font-bold text-muted">ккал</span>
-            </p>
-          </div>
-          <p className="text-right text-[11.5px] leading-snug text-faint">
-            {totals.meals} {plural(totals.meals, "страва", "страви", "страв")}
-            {totals.unknown > 0 && (
-              <>
-                <br />
-                {totals.unknown} без даних
-              </>
-            )}
-          </p>
-        </div>
-
-        <MacroBar nutrition={totals} className="mt-3" />
-
+  if (totals.entries === 0) {
+    return (
+      <section className="px-4 pt-4">
         <Link
           href="/diary"
           onClick={() => haptic(10)}
-          className="mt-3 flex items-center justify-between rounded-2xl bg-surface-2 px-3 py-2 text-[12.5px] font-semibold"
+          className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-3.5 py-3"
         >
-          Щоденник за два тижні
-          <ChevronRight size={15} className="text-muted" />
+          <span className="text-xl">📓</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-bold">Що зʼїв сьогодні?</span>
+            <span className="block text-[12px] text-muted">Скан, пошук або просто опиши словами</span>
+          </span>
+          <ChevronRight size={16} className="text-muted" />
         </Link>
-      </Card>
+      </section>
+    );
+  }
+
+  return (
+    <section className="px-4 pt-4">
+      <Link href="/diary" onClick={() => haptic(10)} className="block">
+        <Card className="p-4">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[12px] text-muted">Сьогодні зʼїдено</p>
+              <p className="mt-0.5 font-display text-[26px] font-extrabold leading-none">
+                {totals.kcal}{" "}
+                <span className="text-[14px] font-bold text-muted">{goal ? `з ${goal} ккал` : "ккал"}</span>
+              </p>
+            </div>
+            <span className="flex items-center gap-1 text-[12.5px] font-semibold text-muted">
+              Щоденник
+              <ChevronRight size={15} />
+            </span>
+          </div>
+          {goal && (
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2">
+              <div
+                style={{
+                  width: `${Math.min(100, (totals.kcal / goal) * 100)}%`,
+                  background: totals.kcal > goal ? "var(--berry)" : "var(--brand)",
+                }}
+                className="h-full rounded-full"
+              />
+            </div>
+          )}
+          <MacroBar nutrition={totals} className="mt-3" />
+        </Card>
+      </Link>
     </section>
   );
 }

@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cookPath, useNow } from "@/components/CookingHost";
+import { SplitSheet, type SplitRequest } from "@/components/diary/SplitSheet";
 import { Button, EmptyState, Sheet, Stars, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import {
@@ -41,9 +42,10 @@ import {
 } from "@/lib/cooking";
 import type { Consumed } from "@/lib/pantry";
 import { enablePushFromTimer } from "@/lib/push";
-import { recipeById, useApp } from "@/lib/store";
+import { mealFromRecipe, slotAt } from "@/lib/diary";
+import { diaryUserId, recipeById, useApp } from "@/lib/store";
 import type { PantryItem } from "@/lib/types";
-import { cn, formatClock, haptic } from "@/lib/utils";
+import { cn, formatClock, haptic, newId } from "@/lib/utils";
 
 /*
  * Сторінка готування — лише екран. Крок, позначені продукти, свій час і
@@ -76,6 +78,9 @@ export default function CookPage() {
   const session = useCooking((s) => s.sessions[params.id]);
   const [done, setDone] = useState(false);
   const [rating, setRating] = useState(0);
+  /* «Хто скільки зʼїв» після готування: поділ страви між рідними. */
+  const [split, setSplit] = useState<SplitRequest | null>(null);
+  const [logged, setLogged] = useState(false);
   const [timerSheet, setTimerSheet] = useState(false);
 
   // Не давати екрану гаснути
@@ -284,7 +289,37 @@ export default function CookPage() {
           </div>
         )}
 
-        <div className="mt-7 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
+        <div className="mt-6 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
+          <p className="text-[13px] font-bold">{logged ? "Записано в щоденник ✓" : "Хто скільки зʼїв?"}</p>
+          <p className="mt-1 text-[12px] leading-snug text-muted">
+            {logged
+              ? "Залишок чекає в щоденнику — доїсте одним дотиком."
+              : "Порції за апетитом кожного — калорії ляжуть у щоденники."}
+          </p>
+          {!logged && (
+            <Button
+              full
+              size="sm"
+              className="mt-3"
+              onClick={() =>
+                setSplit({
+                  meal: mealFromRecipe(recipe, {
+                    id: newId(),
+                    ownerId: diaryUserId(useApp.getState()),
+                    cookedAt: new Date().toISOString(),
+                  }),
+                  isNew: true,
+                  source: "cook",
+                  slot: slotAt(),
+                })
+              }
+            >
+              Розділити страву
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-4 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
           <p className="text-[13px] font-bold">Як вийшло?</p>
           <div className="mt-2 flex justify-center">
             <Stars
@@ -308,6 +343,11 @@ export default function CookPage() {
           <Link href="/decide">
             <Button full>Обрати наступну страву</Button>
           </Link>
+        </div>
+
+        {/* Аркуш не в порталі — інакше успадкував би центрування екрана. */}
+        <div className="text-left">
+          <SplitSheet request={split} onClose={() => setSplit(null)} onDone={() => setLogged(true)} />
         </div>
       </div>
     );

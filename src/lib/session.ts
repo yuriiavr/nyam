@@ -2,6 +2,7 @@
 
 import * as api from "./supabase/api";
 import { friendlyError, getSupabase, isSupabaseConfigured } from "./supabase/client";
+import { fetchDiary } from "./supabase/diary-api";
 import { fetchProductsByIds } from "./supabase/products-api";
 import { useApp, type RemoteUserState } from "./store";
 import { disablePush } from "./push";
@@ -190,6 +191,7 @@ async function loadUserData(userId: string, email: string, photo?: string) {
     ]);
 
     store.applyRemoteUserState(withCards, [...migrated, ...myRecipes]);
+    await refreshDiary();
 
     // Спільноту перечитуємо, щоб побачити щойно перенесені рецепти.
     await loadCommunity(userId);
@@ -204,6 +206,7 @@ async function loadUserData(userId: string, email: string, photo?: string) {
       // Подія realtime — лише відсутні картки, без перечитування всіх (A7).
       reloadUserState: () => void refreshUserState({ revalidateProducts: false }),
       reloadFamily: () => void refreshFamily(),
+      reloadDiary: () => void refreshDiary(),
     });
   } catch (error) {
     store.setSyncStatus("error", friendlyError(error));
@@ -260,6 +263,27 @@ export async function refreshUserState(opts: { revalidateProducts?: boolean } = 
   } catch (error) {
     console.warn("[session] не вдалося оновити особисті дані", error);
   }
+  // Realtime кличе refreshUserState на кожну подію комори — щоденнику своя подія.
+  if (opts.revalidateProducts !== false) await refreshDiary();
+}
+
+/**
+ * Перечитує щоденник: свої записи, страви сімʼї, налаштування.
+ *
+ * Помилка тут не ламає решти: база без supabase/food-diary.sql просто лишає
+ * щоденник локальним, а комора й рецепти працюють як працювали.
+ */
+export async function refreshDiary(): Promise<void> {
+  const store = useApp.getState();
+  const account = store.account;
+  if (!account) return;
+  const memberIds = store.familyMembers.length ? store.familyMembers.map((m) => m.userId) : [account.id];
+  try {
+    const data = await fetchDiary(memberIds.includes(account.id) ? memberIds : [...memberIds, account.id]);
+    if (data) store.applyRemoteDiary(data);
+  } catch (error) {
+    console.warn("[session] щоденник не вдалося прочитати", error);
+  }
 }
 
 /** Перечитує сімʼю і всі залежні від неї дані — після створення/входу/виходу. */
@@ -275,6 +299,8 @@ export async function refreshFamily(): Promise<void> {
   ]);
   // Склад сімʼї змінився — з ним і комора, тож картки перечитуємо всі.
   store.applyRemoteUserState(await withProducts(userState, true), myRecipes);
+  // І щоденник: страви й налаштування тепер іншої сімʼї.
+  await refreshDiary();
 }
 
 export async function refreshNotifications(): Promise<void> {

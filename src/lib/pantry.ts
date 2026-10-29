@@ -4,7 +4,7 @@ import { receiptDisplayName } from "./product-hints";
 import type { Product } from "./product-types";
 import { packGrams } from "./products";
 import { isLegacyId, legacyKey } from "./store-migrations";
-import type { IngredientCat, PantryItem, Recipe, Unit } from "./types";
+import type { IngredientCat, PantryItem, PantryTaken, Recipe, Unit } from "./types";
 import { formatQuantity, sumQuantities, unitDef, type SummedQuantity } from "./units";
 import { dateKey, newId } from "./utils";
 
@@ -561,6 +561,46 @@ export function consumeForRecipe(
 }
 
 /**
+ * Віднімає з конкретних рядків — те, що людина сама обрала в «що зʼїв»
+ * («сосиски — ось ці, Глобино»), а не те, що підбирає рецепт за типом.
+ * Рядок без кількості чи без ваги не чіпаємо: не знаємо, скільки в ньому було.
+ */
+export function consumeRows(
+  pantry: PantryItem[],
+  takes: ReadonlyArray<{ id: string; grams: number }>,
+  products: ProductCache = NO_PRODUCTS,
+): Consumption {
+  const consumed: Consumed[] = [];
+  const next = new Map(pantry.map((row) => [row.id, row as PantryItem | null]));
+
+  for (const { id, grams: want } of takes) {
+    const row = next.get(id);
+    if (!row || !(want > 0) || !row.amount || !row.unit) continue;
+    const grams = rowGrams(row, products);
+    if (!grams) continue;
+
+    const unit = row.unit;
+    const perUnit = grams / row.amount;
+    const take = Math.min(grams, want);
+    const decimals = unitDef(unit).decimals;
+    const rest = Number(((grams - take) / perUnit).toFixed(decimals));
+    next.set(id, rest > 0 ? markLegacy({ ...row, amount: rest }) : null);
+
+    consumed.push({
+      id: row.id,
+      key: row.key,
+      label: pantryDisplayName(row, products),
+      emoji: ing(row.key).emoji,
+      used: formatQuantity(Number((take / perUnit).toFixed(decimals)), unit),
+      left: rest > 0 ? formatQuantity(rest, unit) : null,
+    });
+  }
+
+  if (!consumed.length) return { pantry, consumed };
+  return { pantry: pantry.flatMap((row) => next.get(row.id) ?? []), consumed };
+}
+
+/**
  * «Повернути в комору»: рядки `items` (знімок до готування) стають на свої
  * місця за id; спорожнілі й прибрані — повертаються в кінець.
  */
@@ -573,6 +613,89 @@ export function restorePantryById(pantry: PantryItem[], items: readonly PantryIt
     return back;
   });
   return [...next, ...byId.values()];
+}
+
+/* ── Що взяв запис щоденника ──────────────────────────────────────────── */
+
+/**
+ * Звідки взяти зʼїдений товар: рядки саме цієї картки, у тому ж порядку, що й
+ * для рецепта (спершу те, що зіпсується першим). Немає в коморі — порожньо:
+ * батончик могли купити дорогою, і тоді комору не чіпаємо.
+ */
+export function productTakes(
+  pantry: readonly PantryItem[],
+  productId: string,
+  grams: number,
+  products: ProductCache = NO_PRODUCTS,
+  today: string = dateKey(),
+): Array<{ id: string; grams: number }> {
+  const own = pantry.filter((row) => row.productId === productId);
+  if (!own.length || !(grams > 0)) return [];
+  const takes: Array<{ id: string; grams: number }> = [];
+  let left = grams;
+  for (const row of consumptionOrder(own[0].key, own, products, today)) {
+    if (left <= 0) break;
+    const take = Math.min(rowGrams(row, products) as number, left);
+    takes.push({ id: row.id, grams: take });
+    left -= take;
+  }
+  return takes;
+}
+
+/** Скільки пішло з кожного рядка: було → стало, в одиницях рядка. */
+export function takenFrom(
+  before: readonly PantryItem[],
+  after: readonly PantryItem[],
+  ids: readonly string[],
+): PantryTaken[] {
+  const now = new Map(after.map((row) => [row.id, row]));
+  return [...new Set(ids)].flatMap((id) => {
+    const row = before.find((r) => r.id === id);
+    if (!row?.amount || !row.unit) return [];
+    const rest = now.get(id);
+    if (rest && rest.unit !== row.unit) return [];
+    const amount = Number((row.amount - (rest?.amount ?? 0)).toFixed(unitDef(row.unit).decimals));
+    return amount > 0 ? [{ row, amount }] : [];
+  });
+}
+
+/**
+ * Повернути взяте: до рядка, що лежить, — додати; спорожнілий — повернути
+ * з тією кількістю, яку взяли. Повертає рядки, які треба записати.
+ * Рядок, який тим часом переписали в інших одиницях, не чіпаємо: скільки це
+ * в нових одиницях, не вгадати.
+ */
+export function returnTaken(pantry: readonly PantryItem[], taken: readonly PantryTaken[]): PantryItem[] {
+  const out = new Map<string, PantryItem>();
+  for (const { row, amount } of taken) {
+    if (!(amount > 0) || !row.unit) continue;
+    const decimals = unitDef(row.unit).decimals;
+    const now = out.get(row.id) ?? pantry.find((p) => p.id === row.id);
+    if (!now) out.set(row.id, { ...row, amount: Number(amount.toFixed(decimals)) });
+    else if (now.unit === row.unit && now.amount != null) {
+      out.set(row.id, { ...now, amount: Number((now.amount + amount).toFixed(decimals)) });
+    }
+  }
+  return [...out.values()];
+}
+
+/**
+ * pantry_taken із бази. Пишуть і застосунок, і сервер помічника — рядком
+ * комори в тому ж вигляді, що PantryItem. Биті елементи відкидаємо; не масив —
+ * undefined («ще не вирішили»), а не порожньо («нічого не брали»).
+ */
+export function parsePantryTaken(raw: unknown): PantryTaken[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const num = (v: unknown) => (v == null || v === "" ? NaN : Number(v));
+  return raw.flatMap((x): PantryTaken[] => {
+    if (!x || typeof x !== "object") return [];
+    const { row, amount } = x as { row?: Partial<PantryItem>; amount?: unknown };
+    if (!row || typeof row.id !== "string" || typeof row.key !== "string" || typeof row.addedAt !== "string") return [];
+    const qty = num(amount);
+    const had = num(row.amount);
+    if (!(qty > 0) || !Number.isFinite(had) || typeof row.unit !== "string") return [];
+    return [{ row: { ...row, amount: had } as PantryItem, amount: qty }];
+  });
 }
 
 /* ── Перепривʼязка тимчасових id (D5) ─────────────────────────────────── */

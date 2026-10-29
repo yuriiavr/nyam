@@ -233,6 +233,41 @@ const onlyToday = nutrition.dayTotals(
 check("вчорашнє не рахується", onlyToday.kcal, 0);
 
 /*
+ * Число від ШІ важливіше за довідник. Воно на всю страву — порцію ділимо
+ * самі, тож зміна порцій його не псує. Новий склад — старе число вже неправда.
+ */
+const withAi = { ...recipe, aiNutrition: { kcal: 900, protein: 60, fat: 30, carbs: 90, note: "олії лишилась половина" } };
+const ai = nutrition.recipeNutrition(withAi);
+check("ШІ важливіший за довідник", [ai.source, ai.total.kcal], ["ai", 900]);
+check("ШІ: порція — частка всієї страви", ai.perServing.kcal, 450);
+check("ШІ: зміна порцій не просить нового рахунку", nutrition.recipeNutrition({ ...withAi, servings: 3 }).perServing.kcal, 300);
+check("ШІ: припущення показуємо", ai.note, "олії лишилась половина");
+check("без ШІ — довідник", nutrition.recipeNutrition(recipe).source, "catalog");
+check("ШІ йде і в щоденник", nutrition.dayTotals([{ recipeId: "t", at: today }], () => withAi).kcal, 450);
+check("новий склад — число застаріло", nutrition.nutritionInputsChanged(withAi, {
+  ...withAi,
+  ingredients: [{ key: "kurka", amount: 20, unit: "g" }],
+}), true);
+check("нові порції чи фото — ні", nutrition.nutritionInputsChanged(withAi, { ...withAi, servings: 4, image: "x" }), false);
+
+/*
+ * Відповідь моделі: складаємо самі, а рядки перевіряємо фізикою. Найчастіша
+ * помилка дешевої моделі — числа «на 100 г» замість «на цю кількість».
+ */
+const aiModule = await jiti.import(path.join(root, "src/lib/nutrition-ai.ts"));
+const item = (name, grams, kcal, protein, fat, carbs) => ({ name, grams, kcal, protein, fat, carbs });
+const good = aiModule.cleanAnswer({
+  items: [item("Паста", 250, 875, 30, 4, 180), item("Олія", 10, 88, 0, 10, 0)],
+  note: "Олія вся лишилась у соусі.",
+});
+check("розклад складає код", good?.nutrition.kcal, 963);
+check("розклад: БЖВ теж", [good?.nutrition.protein, good?.nutrition.fat, good?.nutrition.carbs], [30, 14, 180]);
+check("олія 15 г — 884 ккал не пройде", aiModule.cleanAnswer({ items: [item("Олія", 15, 884, 0, 100, 0)] }), null);
+check("пармезан 50 г з БЖВ на 100 г не пройде", aiModule.cleanAnswer({ items: [item("Пармезан", 50, 196, 35, 29, 0)] }), null);
+check("БЖВ дають більше енергії, ніж калорії, — не пройде", aiModule.cleanAnswer({ items: [item("Рис", 100, 50, 7, 1, 78)] }), null);
+check("порожній розклад не пройде", aiModule.cleanAnswer({ items: [] }), null);
+
+/*
  * День — місцевий, а не UTC. У Києві страва, приготована о 00:30, має мітку
  * вчорашнього UTC-дня, і за UTC вона зникала б із сьогоднішнього підсумку.
  */

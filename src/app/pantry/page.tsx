@@ -1,7 +1,7 @@
 "use client";
 
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
-import { Camera, Check, Plus, ReceiptText, ScanBarcode, ShoppingBasket } from "lucide-react";
+import { Camera, Check, Plus, ReceiptText, ScanBarcode, ShoppingBasket, Store } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -949,6 +949,15 @@ export default function PantryPage() {
                   {toBuy}
                 </span>
               )}
+            </Link>
+            {/* Бібліотека товарів: картки з КБЖВ, «зʼїв», «у список». */}
+            <Link
+              href="/products"
+              onClick={() => haptic(8)}
+              aria-label="Бібліотека товарів"
+              className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
+            >
+              <Store size={18} />
             </Link>
             {/* Сканер — найчастіший шлях у комору: без проміжного аркуша. */}
             <button

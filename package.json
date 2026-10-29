@@ -19,7 +19,9 @@
     "check:shopping": "node scripts/check-shopping.mjs",
     "check:push": "node scripts/check-push.mjs",
     "check:recipes": "node scripts/check-recipes.mjs",
-    "check:gemini": "node scripts/check-gemini.mjs"
+    "check:gemini": "node scripts/check-gemini.mjs",
+    "check:diary": "node scripts/check-diary.mjs",
+    "nutrition:recompute": "node scripts/recompute-nutrition.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

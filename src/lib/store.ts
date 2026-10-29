@@ -10,15 +10,21 @@ import {
   type HaveSet,
 } from "@/data/ingredients";
 import { normalizeEan } from "./ean";
+import { nutritionInputsChanged } from "./nutrition";
+import { settingsOf } from "./diary";
 import {
   consumeForRecipe,
+  consumeRows,
   patchPantryRow,
   rebaseLegacyPantry,
   rebaseRestored,
   restorePantryById,
+  returnTaken,
   stackAllIntoPantry,
+  takenFrom,
   stackIntoPantry,
   type Consumed,
+  type Consumption,
   type LegacyRemoval,
   type PantryInput,
 } from "./pantry";
@@ -27,13 +33,18 @@ import { isLegacyId, legacyKey, normalizePersisted } from "./store-migrations";
 import * as sync from "./sync";
 import { rowToIngredient, type CustomIngredientRow, type StampedRecipe } from "./supabase/api";
 import { isSupabaseConfigured } from "./supabase/client";
+import type { RemoteDiary } from "./supabase/diary-api";
 import type {
   AppNotification,
   CookEvent,
+  DiarySettings,
   Family,
   FamilyMember,
+  FoodEntry,
   IdentifierKind,
+  Meal,
   PantryItem,
+  PantryTaken,
   PlanSlot,
   Product,
   Profile,
@@ -317,6 +328,42 @@ export interface AppState {
 
   setPlanSlot: (day: string, slot: PlanSlot, recipeId: string | null) => void;
   clearPlan: () => void;
+
+  /* ── Щоденник ── */
+
+  /** Записи щоденника: свої, записані тобою для рідних і відкриті рідними. */
+  foodLog: FoodEntry[];
+  /** Страви сімʼї за останні тижні: з них частки й залишки. */
+  meals: Meal[];
+  /** Налаштування щоденника — свої й рідних (апетит потрібен, щоб ділити страву). */
+  diarySettings: DiarySettings[];
+  /**
+   * Що ще не дійшло до бази: id → записати чи прибрати. Мітка — щоб відповідь
+   * на старий запис не зняла позначку з новішої правки того самого рядка.
+   */
+  diaryUnsent: Record<string, DiaryMark>;
+
+  /** Записує зʼїдене: товар чи частки страви, разом зі стравою, якщо вона нова. */
+  logFood: (entries: FoodEntry[], meal?: Meal) => void;
+  updateFoodEntry: (id: string, patch: Partial<FoodEntry>) => void;
+  /** Прибирає записи; взяте ними з комори повертає. Віддає повернуті рядки комори. */
+  removeFoodEntries: (ids: string[]) => PantryItem[];
+  /** Створює чи оновлює страву: доїли, змінили склад, порції. */
+  saveMeal: (meal: Meal) => void;
+  /** Прибирає страву разом із записами, які можна прибрати (свої й записані тобою). */
+  removeMeal: (id: string) => void;
+  setMyDiarySettings: (patch: Partial<Omit<DiarySettings, "userId">>) => void;
+  applyRemoteDiary: (data: RemoteDiary) => void;
+  /** Списує з комори обрані рядки — «сосиски були ось ці». `taken` — щоб потім повернути. */
+  consumePantryRows: (takes: Array<{ id: string; grams: number }>) => { consumed: Consumed[]; taken: PantryTaken[] };
+  /** Повертає в комору взяте записом чи стравою. Віддає рядки, що повернулись. */
+  returnToPantry: (taken: readonly PantryTaken[]) => PantryItem[];
+}
+
+export interface DiaryMark {
+  op: "upsert" | "remove";
+  kind: "entry" | "meal";
+  stamp: string;
 }
 
 const toggleIn = (arr: string[], id: string) =>
@@ -581,6 +628,80 @@ function syncRecipeDelete(set: (partial: Partial<AppState>) => void, get: () => 
   sync.pushRecipeDelete(id, { onDeleted: settle, onRejected: settle });
 }
 
+/** Хто «я» в щоденнику: акаунт, а без нього — локальний профіль. */
+export function diaryUserId(state: Pick<AppState, "account">): string {
+  return state.account?.id ?? ME_ID;
+}
+
+/**
+ * Шле зміни щоденника й тримає їх у diaryUnsent, доки база не прийме.
+ * Без бекенду писати нікуди, і чекати теж нічого.
+ */
+function sendDiary(set: (partial: Partial<AppState>) => void, get: () => AppState, write: sync.DiaryWrite) {
+  if (!sync.canSync()) return;
+  const stamp = newId();
+  const marks = { ...get().diaryUnsent };
+  for (const m of write.meals ?? []) marks[m.id] = { op: "upsert", kind: "meal", stamp };
+  for (const e of write.entries ?? []) marks[e.id] = { op: "upsert", kind: "entry", stamp };
+  for (const id of write.removeEntries ?? []) marks[id] = { op: "remove", kind: "entry", stamp };
+  for (const id of write.removeMeals ?? []) marks[id] = { op: "remove", kind: "meal", stamp };
+  set({ diaryUnsent: marks });
+
+  void sync.pushDiary(write).then((ok) => {
+    if (!ok) return;
+    const now = { ...get().diaryUnsent };
+    let changed = false;
+    for (const [id, mark] of Object.entries(now)) {
+      if (mark.stamp === stamp) {
+        delete now[id];
+        changed = true;
+      }
+    }
+    if (changed) set({ diaryUnsent: now });
+  });
+}
+
+/**
+ * Знімок бази поверх локального: недоставлене й те, що саме летить, лишається
+ * своїм; прибране, але ще не прибране в базі, — не воскресає.
+ */
+function mergeDiaryList<T extends { id: string }>(
+  local: readonly T[],
+  remote: readonly T[],
+  kind: DiaryMark["kind"],
+  unsent: Record<string, DiaryMark>,
+): T[] {
+  const keep = local.filter(
+    (x) => (unsent[x.id]?.op === "upsert" && unsent[x.id].kind === kind) || sync.hasPendingDiaryWrite(x.id),
+  );
+  const ids = new Set(keep.map((x) => x.id));
+  return [...keep, ...remote.filter((x) => !ids.has(x.id) && unsent[x.id]?.op !== "remove")];
+}
+
+/** Записує результат списання в стан і базу — спільне для рецепта й «що зʼїв». */
+function applyConsumption(
+  set: (partial: Partial<AppState>) => void,
+  get: () => AppState,
+  { pantry, consumed }: Consumption,
+): Consumed[] {
+  if (consumed.length === 0) return [];
+  const state = get();
+  const left = new Map(pantry.map((p) => [p.id, p]));
+  const touched = [...new Set(consumed.map((c) => c.id))];
+  const written = touched.flatMap((id) => left.get(id) ?? []);
+  const emptied = state.pantry.filter((p) => touched.includes(p.id) && !left.has(p.id));
+  // Спорожнілий рядок із тимчасовим id базі не назвати — його прибере перший знімок.
+  const legacyGone = emptied.filter((p) => isLegacyId(p.id)).map(legacyRemoval);
+
+  set({
+    pantry,
+    ...(legacyGone.length ? { pantryLegacyRemoved: [...state.pantryLegacyRemoved, ...legacyGone] } : {}),
+  });
+  sync.pushPantryBulk(written);
+  sync.pushPantryRemove(emptied.map((p) => p.id));
+  return consumed;
+}
+
 export const useApp = create<AppState>()(
   persist(
     (set, get) => ({
@@ -619,6 +740,10 @@ export const useApp = create<AppState>()(
       family: null,
       familyMembers: [],
       notifications: [],
+      foodLog: [],
+      meals: [],
+      diarySettings: [],
+      diaryUnsent: {},
 
       setHydrated: (v) => set({ hydrated: v }),
       setTheme: (theme) => set({ theme }),
@@ -753,6 +878,10 @@ export const useApp = create<AppState>()(
           unsyncedRecipes: {},
           unsyncedImages: {},
           pendingRecipeDeletes: {},
+          foodLog: [],
+          meals: [],
+          diarySettings: [],
+          diaryUnsent: {},
           syncStatus: "offline",
           syncError: null,
         }),
@@ -825,23 +954,20 @@ export const useApp = create<AppState>()(
        */
       consumePantry: (recipe, factor = 1) => {
         const state = get();
-        const { pantry, consumed } = consumeForRecipe(state.pantry, recipe, factor, state.products);
-        if (consumed.length === 0) return [];
+        return applyConsumption(set, get, consumeForRecipe(state.pantry, recipe, factor, state.products));
+      },
 
-        const left = new Map(pantry.map((p) => [p.id, p]));
-        const touched = [...new Set(consumed.map((c) => c.id))];
-        const written = touched.flatMap((id) => left.get(id) ?? []);
-        const emptied = state.pantry.filter((p) => touched.includes(p.id) && !left.has(p.id));
-        // Спорожнілий рядок із тимчасовим id базі не назвати — його прибере перший знімок.
-        const legacyGone = emptied.filter((p) => isLegacyId(p.id)).map(legacyRemoval);
+      consumePantryRows: (takes) => {
+        const state = get();
+        const result = consumeRows(state.pantry, takes, state.products);
+        const taken = takenFrom(state.pantry, result.pantry, result.consumed.map((c) => c.id));
+        return { consumed: applyConsumption(set, get, result), taken };
+      },
 
-        set({
-          pantry,
-          ...(legacyGone.length ? { pantryLegacyRemoved: [...state.pantryLegacyRemoved, ...legacyGone] } : {}),
-        });
-        sync.pushPantryBulk(written);
-        sync.pushPantryRemove(emptied.map((p) => p.id));
-        return consumed;
+      returnToPantry: (taken) => {
+        const rows = returnTaken(get().pantry, taken);
+        if (rows.length) get().restorePantry(rows);
+        return rows;
       },
 
       restorePantry: (list) => {
@@ -1104,6 +1230,11 @@ export const useApp = create<AppState>()(
         if (!before) return;
 
         const updated: Recipe = { ...before, ...patch };
+        /*
+         * Новий склад — старе число від ШІ вже неправда. База його теж зітре й
+         * замовить нове, а до його приходу показуємо оцінку за довідником.
+         */
+        if (nutritionInputsChanged(before, updated)) delete updated.aiNutrition;
         const inMine = state.myRecipes.some((r) => r.id === id);
         /*
          * Фото пишемо в базу, лише якщо цю правку воно справді змінило (або
@@ -1190,6 +1321,137 @@ export const useApp = create<AppState>()(
       clearPlan: () => {
         set({ plan: {} });
         sync.pushPlanClear();
+      },
+
+      logFood: (entries, meal) => {
+        const state = get();
+        const ids = new Set(entries.map((e) => e.id));
+        set({
+          ...(meal ? { meals: [meal, ...state.meals.filter((m) => m.id !== meal.id)] } : {}),
+          foodLog: [...entries, ...state.foodLog.filter((e) => !ids.has(e.id))].slice(0, 3000),
+        });
+        sendDiary(set, get, { meals: meal ? [meal] : [], entries });
+      },
+
+      updateFoodEntry: (id, patch) => {
+        const before = get().foodLog.find((e) => e.id === id);
+        if (!before) return;
+        const updated: FoodEntry = { ...before, ...patch, id };
+        set({ foodLog: get().foodLog.map((e) => (e.id === id ? updated : e)) });
+        sendDiary(set, get, { entries: [updated] });
+      },
+
+      removeFoodEntries: (ids) => {
+        if (ids.length === 0) return [];
+        const state = get();
+        const gone = new Set(ids);
+        const removed = state.foodLog.filter((e) => gone.has(e.id));
+        /*
+         * Страва, описана словами, без жодного запису — це помилковий запис, а
+         * не залишок: прибираємо й її, а взяте нею з комори повертаємо.
+         * Приготований рецепт лишається залишком — їжа ж нікуди не ділась.
+         */
+        const orphans = state.meals.filter((m) => {
+          const mine = removed.filter((e) => e.mealId === m.id);
+          if (!mine.some((e) => e.source === "dish" || e.source === "voice")) return false;
+          if (state.foodLog.some((e) => e.mealId === m.id && !gone.has(e.id))) return false;
+          return m.eaten - mine.reduce((sum, e) => sum + (e.share ?? 0), 0) < 0.01;
+        });
+        const dropMeals = orphans.map((m) => m.id);
+        set({
+          foodLog: state.foodLog.filter((e) => !gone.has(e.id)),
+          ...(dropMeals.length ? { meals: state.meals.filter((m) => !dropMeals.includes(m.id)) } : {}),
+        });
+        sendDiary(set, get, { removeEntries: ids, ...(dropMeals.length ? { removeMeals: dropMeals } : {}) });
+        return get().returnToPantry([
+          ...removed.flatMap((e) => e.pantryTaken ?? []),
+          ...orphans.flatMap((m) => m.pantryTaken ?? []),
+        ]);
+      },
+
+      saveMeal: (meal) => {
+        set({ meals: [meal, ...get().meals.filter((m) => m.id !== meal.id)] });
+        sendDiary(set, get, { meals: [meal] });
+      },
+
+      removeMeal: (id) => {
+        const state = get();
+        const me = diaryUserId(state);
+        // Чужий відкритий щоденник — лише читати: його записи лишаються за власником.
+        const entries = state.foodLog
+          .filter((e) => e.mealId === id && (e.userId === me || e.loggedBy === me || !e.loggedBy))
+          .map((e) => e.id);
+        const gone = new Set(entries);
+        set({
+          meals: state.meals.filter((m) => m.id !== id),
+          foodLog: state.foodLog.filter((e) => !gone.has(e.id)),
+        });
+        sendDiary(set, get, { removeEntries: entries, removeMeals: [id] });
+      },
+
+      setMyDiarySettings: (patch) => {
+        const state = get();
+        const me = diaryUserId(state);
+        const next: DiarySettings = { ...settingsOf(state.diarySettings, me), ...patch, userId: me };
+        set({ diarySettings: [next, ...state.diarySettings.filter((s) => s.userId !== me)] });
+        if (sync.canSync()) sync.pushDiarySettings(next);
+      },
+
+      applyRemoteDiary: (data) => {
+        const state = get();
+        const me = state.account?.id;
+        const unsent = state.diaryUnsent;
+
+        /*
+         * Записане до входу (локальний профіль) — тепер твоє: переписуємо власника
+         * й шлемо разом із недоставленим. Інакше перший вхід «зʼїдав» би щоденник.
+         */
+        const adoptedEntries = me
+          ? state.foodLog.filter((e) => e.userId === ME_ID).map((e) => ({ ...e, userId: me }))
+          : [];
+        const adoptedMeals = me
+          ? state.meals.filter((m) => m.ownerId === ME_ID).map((m) => ({ ...m, ownerId: me }))
+          : [];
+        const adopted = new Set([...adoptedEntries, ...adoptedMeals].map((x) => x.id));
+        const localEntries = state.foodLog.map((e) => (adopted.has(e.id) ? { ...e, userId: me as string } : e));
+        const localMeals = state.meals.map((m) => (adopted.has(m.id) ? { ...m, ownerId: me as string } : m));
+        const keepAdopted: Record<string, DiaryMark> = { ...unsent };
+        for (const e of adoptedEntries) keepAdopted[e.id] = { op: "upsert", kind: "entry", stamp: "" };
+        for (const m of adoptedMeals) keepAdopted[m.id] = { op: "upsert", kind: "meal", stamp: "" };
+
+        const foodLog = mergeDiaryList(localEntries, data.entries, "entry", keepAdopted)
+          .sort((a, b) => b.eatenAt.localeCompare(a.eatenAt))
+          .slice(0, 3000);
+        const meals = mergeDiaryList(localMeals, data.meals, "meal", keepAdopted).sort((a, b) =>
+          b.cookedAt.localeCompare(a.cookedAt),
+        );
+
+        // Свої налаштування, яких база ще не бачила, — не губимо.
+        const mine = me ? state.diarySettings.find((s) => s.userId === me || s.userId === ME_ID) : undefined;
+        const remoteMine = me ? data.settings.find((s) => s.userId === me) : undefined;
+        const diarySettings =
+          mine && !remoteMine && me ? [{ ...mine, userId: me }, ...data.settings] : data.settings;
+
+        set({ foodLog, meals, diarySettings });
+
+        // Дослати недоставлене, якого зараз ніхто не шле.
+        const marked = (id: string, kind: DiaryMark["kind"], op: DiaryMark["op"]) =>
+          keepAdopted[id]?.kind === kind && keepAdopted[id]?.op === op && !sync.hasPendingDiaryWrite(id);
+        const resend: sync.DiaryWrite = {
+          meals: meals.filter((m) => marked(m.id, "meal", "upsert")),
+          entries: foodLog.filter((e) => marked(e.id, "entry", "upsert")),
+          removeEntries: Object.keys(keepAdopted).filter((id) => marked(id, "entry", "remove")),
+          removeMeals: Object.keys(keepAdopted).filter((id) => marked(id, "meal", "remove")),
+        };
+        if (
+          resend.meals?.length ||
+          resend.entries?.length ||
+          resend.removeEntries?.length ||
+          resend.removeMeals?.length
+        ) {
+          sendDiary(set, get, resend);
+        }
+        if (mine && !remoteMine && me) sync.pushDiarySettings({ ...mine, userId: me });
       },
     }),
     {

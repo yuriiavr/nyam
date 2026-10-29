@@ -23,6 +23,9 @@ export type PackUnit = "g" | "kg" | "ml" | "l" | "pcs";
  */
 export type ProductSource = "user" | "off" | "receipt" | "migration";
 
+/** Звідки КБЖВ картки: з упаковки чи оцінка ШІ за назвою. */
+export type NutritionSource = "label" | "ai";
+
 /**
  * Спільна картка товару: назва, виробник, упаковка, жирність, КБЖВ і рівно
  * один тип. Одна на всіх — правку бачать усі, і кожна пишеться в історію.
@@ -44,6 +47,11 @@ export interface Product {
   gramsPerPiece?: number;
   /** На 100 г. Цілим блоком: ккал без БЖВ буває, БЖВ без ккал — ні (products_nutrition_whole). */
   nutrition?: Nutrition;
+  /**
+   * Звідки КБЖВ: `ai` — оцінка моделі за назвою, показуємо з «≈». Немає при
+   * числах — з етикетки (картки до supabase/food-diary.sql вписували люди й OFF).
+   */
+  nutritionSource?: NutritionSource;
   /** Лише https (обмеження в базі) — зазвичай image_small_url з Open Food Facts. */
   image?: string;
   source: ProductSource;
@@ -72,6 +80,8 @@ export interface ProductDraft {
   packUnit?: PackUnit;
   gramsPerPiece?: number;
   nutrition?: Nutrition;
+  /** Немає — база вирішить сама: нові числа від людини вважає етикеткою. */
+  nutritionSource?: NutritionSource;
   image?: string;
   /** Лише off чи receipt мають сенс; решту база однаково запише як user. */
   source?: Exclude<ProductSource, "migration">;

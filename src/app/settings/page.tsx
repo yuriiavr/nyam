@@ -19,6 +19,8 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { InstallGuide } from "@/components/PushOffer";
+import { DiarySettingsCard } from "@/components/settings/DiarySettingsCard";
+import { VoiceAssistantCard } from "@/components/settings/VoiceAssistantCard";
 import { TopBar } from "@/components/TopBar";
 import { Avatar, Button, Card, useToast } from "@/components/ui";
 import { disablePush, enablePush, pushConfigured, pushState, pushSupported } from "@/lib/push";
@@ -94,6 +96,12 @@ export default function SettingsPage() {
           </Card>
         </Link>
       </section>
+
+      {/* Щоденник: ціль, апетит, хто бачить */}
+      <DiarySettingsCard />
+
+      {/* Голосовий помічник через MCP */}
+      <VoiceAssistantCard />
 
       {/* Встановлення. Коли застосунок уже на телефоні, розповідати про це
           нема сенсу — прибираємо секцію цілком. */}

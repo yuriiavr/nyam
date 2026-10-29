@@ -41,6 +41,15 @@ export interface Nutrition {
   carbs: number;
 }
 
+/**
+ * КБЖВ усієї страви, пораховані ШІ за складом і кроками (src/lib/nutrition-ai.ts).
+ * На всю страву, а не на порцію: від кількості порцій вона не залежить.
+ */
+export interface AiNutrition extends Nutrition {
+  /** Припущення, від яких число залежить найбільше, — показуємо під ним. */
+  note?: string;
+}
+
 export interface IngredientDef {
   key: string;
   label: string;
@@ -123,6 +132,12 @@ export interface RecipeIngredient {
    */
   nutrition?: Nutrition;
   /**
+   * Спільна картка товару, з якої взято назву й етикетку («з холодильника»,
+   * сканер). Лише посилання: рецепт їде у спільноту, і числа в ньому мусять
+   * жити й без картки.
+   */
+  productId?: string;
+  /**
    * Старий вільний текст («2-3 шт», «до смаку»). Лишається заради рецептів,
    * створених до появи одиниць, і як запасний варіант для нестандартних мір.
    */
@@ -162,7 +177,14 @@ export interface Recipe {
   timeMin: number;
   difficulty: 1 | 2 | 3;
   servings: number;
+  /** Калорії порції, вписані автором руками, — з часів до підрахунку ШІ. */
   kcal?: number;
+  /**
+   * Порахував ШІ; немає — ще не порахував (щойно збережено, немає бекенду чи
+   * ключа). Пише лише сервер: тригер бази не дає записати сюди клієнтові й
+   * сам стирає число, щойно змінились назва, опис, склад чи кроки.
+   */
+  aiNutrition?: AiNutrition;
   /** 1 — дешево, 3 — дорого */
   costLevel: 1 | 2 | 3;
   /**
@@ -296,6 +318,7 @@ export type {
   IdentifierHit,
   IdentifierKind,
   LineChoice,
+  NutritionSource,
   PackUnit,
   Product,
   ProductDraft,
@@ -310,6 +333,117 @@ export type {
 export interface CookEvent {
   recipeId: string;
   at: string;
+}
+
+/* ── Щоденник ───────────────────────────────────────────────────────────── */
+
+/** Прийом їжі в щоденнику. Десерт і напій — це перекус: окремих полиць не треба. */
+export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
+
+/** Звідки запис: сканер, пошук, «що зʼїв» словами, готування, залишки, голос. */
+export type FoodSource = "scan" | "search" | "dish" | "cook" | "leftover" | "voice" | "manual";
+
+/**
+ * Один продукт у страві — як його порахували.
+ *
+ * Числа на цю кількість, а не на 100 г: так склад складається додаванням.
+ * `from` каже, чому вірити: етикетка конкретного товару точніша за довідник
+ * типу, а довідник — за оцінку ШІ.
+ */
+export interface MealItem {
+  name: string;
+  grams: number;
+  productId?: string;
+  typeKey?: string;
+  /** Рядок комори, з якого взяли, — щоб списати саме його. */
+  pantryId?: string;
+  kcal: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  from: "label" | "catalog" | "ai";
+}
+
+/**
+ * Що взяли з комори: рядок до списання й скільки з нього пішло — в його
+ * одиницях. Повертаємо саме цю кількість, а не знімок рядка: поки запис жив,
+ * із тієї ж пачки могли взяти ще.
+ */
+export interface PantryTaken {
+  row: PantryItem;
+  amount: number;
+}
+
+/**
+ * Страва, приготована на кількох: рецепт або «запечена картопля з сосискою».
+ *
+ * Знає КБЖВ усієї страви й скільки з неї вийшло порцій; хто скільки зʼїв —
+ * у записах щоденника (FoodEntry.mealId + share). Так один казан ділиться
+ * між людьми з різним апетитом, а недоїдене лишається залишком на завтра.
+ */
+export interface Meal {
+  id: string;
+  /** Хто готував. Страву бачить уся сімʼя — як комору. */
+  ownerId: string;
+  recipeId?: string;
+  title: string;
+  emoji: string;
+  /** Скільки порцій вийшло. */
+  servings: number;
+  /** КБЖВ усієї страви. Немає — не знаємо (рецепт ще не порахований). */
+  nutrition?: Nutrition;
+  items: MealItem[];
+  /** Припущення ШІ, від яких число залежить найбільше. */
+  note?: string;
+  cookedAt: string;
+  /** Скільки страви вже записали в щоденники (0..1). Веде база. */
+  eaten: number;
+  /** Доїли чи викинули — залишком більше не пропонуємо. */
+  finished: boolean;
+  /**
+   * Що страва взяла з комори. Немає — ще не вирішили (записали голосом і
+   * чекаємо підтвердження); порожньо — нічого не брали.
+   */
+  pantryTaken?: PantryTaken[];
+}
+
+/**
+ * Запис щоденника: що людина зʼїла.
+ *
+ * Або товар (`productId` + `grams`: батончик, йогурт), або частка страви
+ * (`mealId` + `share`). `nutrition` — зʼїдене, а не на 100 г; для частки
+ * страви база тримає його рівним страві × частка.
+ */
+export interface FoodEntry {
+  id: string;
+  /** Чий це запис — хто зʼїв. */
+  userId: string;
+  /** Хто записав: сам або кухар, що ділив страву. */
+  loggedBy?: string;
+  eatenAt: string;
+  slot: MealSlot;
+  title: string;
+  emoji: string;
+  productId?: string;
+  mealId?: string;
+  /** Частка страви (0..1]. */
+  share?: number;
+  grams?: number;
+  nutrition?: Nutrition;
+  source: FoodSource;
+  /** Що цей запис узяв із комори: прибрали запис — повертається назад. */
+  pantryTaken?: PantryTaken[];
+}
+
+/** Налаштування щоденника — свої й (лише для читання) рідних. */
+export interface DiarySettings {
+  userId: string;
+  /** Ціль калорій на день. */
+  kcalGoal?: number;
+  /** Скільки людина зʼїдає відносно звичайної порції: 1,5 — у півтора раза більше. */
+  appetite: number;
+  /** Чи бачить сімʼя цей щоденник. */
+  shareDiary: boolean;
 }
 
 export type PlanSlot = "breakfast" | "lunch" | "dinner";

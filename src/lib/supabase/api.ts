@@ -2,6 +2,7 @@
 
 import { getSupabase } from "./client";
 import type {
+  AiNutrition,
   AppNotification,
   CookEvent,
   Course,
@@ -38,13 +39,18 @@ interface RecipeRow {
   difficulty: number;
   servings: number;
   kcal: number | null;
+  /** КБЖВ усієї страви від ШІ (supabase/recipe-nutrition.sql); пише лише сервер. */
+  ai_nutrition: unknown;
   cost_level: number;
   ingredients: RecipeIngredient[] | null;
   steps: RecipeStep[] | null;
   source_id: string | null;
   course: string | null;
   created_at: string;
-  /** Ставить тригер recipes_touch — за ним видно, чи дійшла до бази локальна правка. */
+  /**
+   * Ставить тригер recipes_before_write — за ним видно, чи дійшла до бази
+   * локальна правка. Число від ШІ його навмисно не рухає.
+   */
   updated_at: string;
   likes?: number;
   saves?: number;
@@ -271,6 +277,7 @@ const RECIPE_COLUMNS = {
   difficulty: true,
   servings: true,
   kcal: true,
+  ai_nutrition: true,
   cost_level: true,
   ingredients: true,
   steps: true,
@@ -315,6 +322,21 @@ const pair = (value: string[] | null, fallback: [string, string]): [string, stri
   value && value.length >= 2 ? [value[0], value[1]] : fallback;
 
 /**
+ * Число від ШІ з колонки ai_nutrition. Лишаємо тільки те, що показуємо:
+ * розклад по продуктах і назва моделі живуть у базі для розслідувань, а
+ * в localStorage кожного пристрою їм робити нічого.
+ */
+function aiNutritionOf(value: unknown): AiNutrition | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null);
+  const [kcal, protein, fat, carbs] = [num(v.kcal), num(v.protein), num(v.fat), num(v.carbs)];
+  if (kcal == null || protein == null || fat == null || carbs == null) return undefined;
+  const note = typeof v.note === "string" && v.note.trim() ? v.note.trim() : undefined;
+  return { kcal, protein, fat, carbs, ...(note ? { note } : {}) };
+}
+
+/**
  * Рецепт, прочитаний з бази, разом із часом останнього запису в неї.
  *
  * Окремим типом, а не полем Recipe: час потрібен лише звірці з локальними
@@ -340,6 +362,7 @@ export function rowToRecipe(row: RecipeRow, myId?: string | null): StampedRecipe
     difficulty: (row.difficulty as 1 | 2 | 3) ?? 1,
     servings: row.servings,
     kcal: row.kcal ?? undefined,
+    aiNutrition: aiNutritionOf(row.ai_nutrition),
     costLevel: (row.cost_level as 1 | 2 | 3) ?? 1,
     // Порожнє або незнайоме значення — «не вказано»: частину виведе courseOf.
     course: isCourse(row.course) ? row.course : undefined,
@@ -373,7 +396,10 @@ export function rowToProfile(row: ProfileRow): Profile {
   };
 }
 
-/** Поля рецепта для запису — статистика рахується базою, тож її не шлемо. */
+/**
+ * Поля рецепта для запису — статистика рахується базою, тож її не шлемо.
+ * І число від ШІ теж: його пише лише сервер, а тригер однаково не прийняв би.
+ */
 export function recipeToRow(recipe: Recipe, authorId: string) {
   return {
     id: recipe.id,

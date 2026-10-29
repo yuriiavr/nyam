@@ -56,6 +56,10 @@ create table if not exists public.recipes (
   difficulty   int  not null default 1 check (difficulty between 1 and 3),
   servings     int  not null default 2 check (servings between 1 and 50),
   kcal         int,
+  -- КБЖВ усієї страви від ШІ; пише лише сервер (див. supabase/recipe-nutrition.sql).
+  ai_nutrition jsonb,
+  -- Версія складу для ai_nutrition: росте з кожною зміною назви, опису, складу, кроків.
+  content_rev  int  not null default 0,
   cost_level   int  not null default 1 check (cost_level between 1 and 3),
   -- [{ "key": "kartoplya", "qty": "4 шт", "optional": false }]
   ingredients  jsonb not null default '[]'::jsonb,
@@ -332,10 +336,60 @@ begin
 end;
 $$;
 
+-- Базі, створеній до підрахунку калорій ШІ, — колонки, без яких тригер нижче впаде.
+alter table public.recipes
+  add column if not exists ai_nutrition jsonb,
+  add column if not exists content_rev  int not null default 0;
+
+/*
+ * Сторож запису рецепта. Докладно — у supabase/recipe-nutrition.sql, там же
+ * тригер, що кличе ШІ, і погодинний добір (їм потрібні pg_net і Vault).
+ * Коротко: нова версія складу стирає старе число від ШІ; клієнт його не пише;
+ * запис самого числа не рухає updated_at.
+ */
+create or replace function public.recipes_before_write()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  from_client constant boolean := current_user in ('anon', 'authenticated');
+begin
+  if tg_op = 'INSERT' then
+    if from_client then
+      new.ai_nutrition := null;
+      new.content_rev := 0;
+    end if;
+    return new;
+  end if;
+
+  if new.title is distinct from old.title
+     or new.description is distinct from old.description
+     or new.ingredients is distinct from old.ingredients
+     or new.steps is distinct from old.steps then
+    new.content_rev := old.content_rev + 1;
+    new.ai_nutrition := null;
+  elsif from_client then
+    new.content_rev := old.content_rev;
+    new.ai_nutrition := old.ai_nutrition;
+  end if;
+
+  if new.ai_nutrition is distinct from old.ai_nutrition
+     and to_jsonb(new) - 'ai_nutrition' - 'updated_at' = to_jsonb(old) - 'ai_nutrition' - 'updated_at' then
+    new.updated_at := old.updated_at;
+  else
+    new.updated_at := now();
+  end if;
+
+  return new;
+end;
+$$;
+
 drop trigger if exists recipes_touch on public.recipes;
-create trigger recipes_touch
-  before update on public.recipes
-  for each row execute function public.touch_updated_at();
+drop trigger if exists recipes_before_write on public.recipes;
+create trigger recipes_before_write
+  before insert or update on public.recipes
+  for each row execute function public.recipes_before_write();
 
 -- Запобіжник дерева типів. Invoker, а не definer: читає лише те, що й так
 -- видно кожному (обидва каталоги відкриті на читання).
@@ -515,6 +569,8 @@ create table if not exists public.products (
   fat             numeric(5,1) check (fat     is null or fat     between 0 and 100),
   carbs           numeric(5,1) check (carbs   is null or carbs   between 0 and 100),
   image_url       text check (image_url is null or image_url ~ '^https://'),
+  -- Звідки КБЖВ: 'label' — з упаковки, 'ai' — оцінка моделі за назвою (food-diary.sql).
+  nutrition_source text check (nutrition_source is null or nutrition_source in ('label','ai')),
   source          text not null default 'user' check (source in ('user','off','receipt','migration')),
   -- «Прибрати картку» замість видалення: вандалізм чи помилку можна повернути.
   archived        boolean not null default false,
@@ -534,6 +590,9 @@ create table if not exists public.products (
   constraint products_macros           check (coalesce(protein,0) + coalesce(fat,0) + coalesce(carbs,0) <= 105),
   constraint products_not_self_merged  check (merged_into is null or merged_into <> id)
 );
+
+-- Базі, створеній до щоденника, — колонка, без якої функції нижче не створяться.
+alter table public.products add column if not exists nutrition_source text;
 
 -- Дублікат ніколи не тихий: друга така сама картка впирається сюди, і
 -- save_product відповідає «Такий товар уже є: … Це він?».
@@ -739,6 +798,7 @@ returns jsonb language sql stable set search_path = public as $$
     'id', p.id, 'type_key', p.type_key, 'name', p.name, 'brand', p.brand, 'fat_pct', p.fat_pct,
     'pack_amount', p.pack_amount, 'pack_unit', p.pack_unit, 'grams_per_piece', p.grams_per_piece,
     'kcal', p.kcal, 'protein', p.protein, 'fat', p.fat, 'carbs', p.carbs, 'image_url', p.image_url,
+    'nutrition_source', p.nutrition_source,
     'source', p.source, 'archived', p.archived, 'merged_into', p.merged_into, 'version', p.version,
     'updated_at', p.updated_at)
 $$;
@@ -812,10 +872,13 @@ $$;
 -- Пошук карток для пікера й «Можливо, це вже є:». Індексовані умови —
 -- like найдовшого слова або <% (обидві бере trigram GIN); like all по всіх
 -- словах індекс не бере, тож він лише перевірка.
-create or replace function public.search_products(p_query text, p_type_keys text[] default null, p_limit int default 20)
+-- Нова колонка у відповіді — тип результату змінився, тож саме drop, а не replace.
+drop function if exists public.search_products(text, text[], int);
+create function public.search_products(p_query text, p_type_keys text[] default null, p_limit int default 20)
 returns table (id uuid, type_key text, name text, brand text, fat_pct numeric, pack_amount numeric, pack_unit text,
                grams_per_piece numeric, kcal numeric, protein numeric, fat numeric, carbs numeric,
-               image_url text, source text, archived boolean, merged_into uuid, version int, updated_at timestamptz)
+               image_url text, nutrition_source text, source text, archived boolean, merged_into uuid,
+               version int, updated_at timestamptz)
 language plpgsql stable set search_path = public as $$
 #variable_conflict use_column
 declare
@@ -830,7 +893,8 @@ begin
   perform set_config('pg_trgm.word_similarity_threshold', '0.4', true);
   return query
     select p.id, p.type_key, p.name, p.brand, p.fat_pct, p.pack_amount, p.pack_unit, p.grams_per_piece,
-           p.kcal, p.protein, p.fat, p.carbs, p.image_url, p.source, p.archived, p.merged_into, p.version, p.updated_at
+           p.kcal, p.protein, p.fat, p.carbs, p.image_url, p.nutrition_source, p.source, p.archived,
+           p.merged_into, p.version, p.updated_at
       from public.products p
      where p.merged_into is null and not p.archived
        and (p_type_keys is null or p.type_key = any (p_type_keys))
@@ -853,9 +917,11 @@ create or replace function public.save_product(p_id uuid, p_expected_version int
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_row   public.products;
+  v_old   public.products;
   v_name  text;
   v_brand text;
   v_src   text;
+  v_nsrc  text;
   v_pack_amount numeric;
   v_pack_unit   text;
 begin
@@ -863,8 +929,6 @@ begin
   if p_card is null or jsonb_typeof(p_card) <> 'object' then
     raise exception 'Порожня картка' using errcode = '22023';
   end if;
-  -- Без типу картка нікому не підходить. Не 23503 від запобіжника («такого
-  -- типу вже немає» — людині порадили б оновити застосунок), а помилка форми.
   if nullif(btrim(coalesce(p_card->>'type_key', '')), '') is null then
     raise exception 'Обери тип товару' using errcode = '22023';
   end if;
@@ -873,21 +937,22 @@ begin
   v_name  := nullif(btrim(regexp_replace(coalesce(p_card->>'name', ''), '\s+', ' ', 'g')), '');
   v_brand := nullif(btrim(regexp_replace(coalesce(p_card->>'brand', ''), '\s+', ' ', 'g')), '');
   v_src   := case when p_card->>'source' in ('off', 'receipt') then p_card->>'source' else 'user' end;
+  v_nsrc  := case when p_card->>'nutrition_source' in ('label', 'ai') then p_card->>'nutrition_source' end;
   v_pack_amount := (p_card->>'pack_amount')::numeric;
   v_pack_unit   := nullif(p_card->>'pack_unit', '');
 
   if p_id is null then
     insert into public.products as t (type_key, name, brand, fat_pct, pack_amount, pack_unit, grams_per_piece,
-                                      kcal, protein, fat, carbs, image_url, source)
+                                      kcal, protein, fat, carbs, image_url, source, nutrition_source)
     values (p_card->>'type_key', v_name, v_brand, (p_card->>'fat_pct')::numeric, v_pack_amount, v_pack_unit,
             (p_card->>'grams_per_piece')::numeric, (p_card->>'kcal')::numeric, (p_card->>'protein')::numeric,
-            (p_card->>'fat')::numeric, (p_card->>'carbs')::numeric, nullif(p_card->>'image_url', ''), v_src)
+            (p_card->>'fat')::numeric, (p_card->>'carbs')::numeric, nullif(p_card->>'image_url', ''), v_src,
+            case when (p_card->>'kcal') is not null then coalesce(v_nsrc, 'label') end)
     on conflict (identity_key) where merged_into is null and not archived do nothing
     returning * into v_row;
     if found then
       return jsonb_build_object('status', 'created', 'product', public.product_client_json(v_row));
     end if;
-    -- Такий товар уже є — нічого не пишемо, людину спитають «Це він?».
     select * into v_row from public.products p
      where p.identity_key = public.product_identity_key(v_name, v_brand, v_pack_amount, v_pack_unit)
        and p.merged_into is null and not p.archived;
@@ -897,18 +962,26 @@ begin
   if p_expected_version is null then
     raise exception 'Бракує номера версії картки' using errcode = '22023';
   end if;
+  select * into v_old from public.products p where p.id = p_id;
   begin
     update public.products p
        set type_key = p_card->>'type_key', name = v_name, brand = v_brand,
            fat_pct = (p_card->>'fat_pct')::numeric, pack_amount = v_pack_amount, pack_unit = v_pack_unit,
            grams_per_piece = (p_card->>'grams_per_piece')::numeric, kcal = (p_card->>'kcal')::numeric,
            protein = (p_card->>'protein')::numeric, fat = (p_card->>'fat')::numeric,
-           carbs = (p_card->>'carbs')::numeric, image_url = nullif(p_card->>'image_url', '')
-           -- source не чіпаємо: правка людиною не робить OFF-картку «вигаданою».
+           carbs = (p_card->>'carbs')::numeric, image_url = nullif(p_card->>'image_url', ''),
+           nutrition_source = case
+             when (p_card->>'kcal') is null then null
+             when v_nsrc is not null then v_nsrc
+             when (p_card->>'kcal')::numeric is not distinct from v_old.kcal
+              and (p_card->>'protein')::numeric is not distinct from v_old.protein
+              and (p_card->>'fat')::numeric is not distinct from v_old.fat
+              and (p_card->>'carbs')::numeric is not distinct from v_old.carbs then v_old.nutrition_source
+             else 'label'
+           end
      where p.id = p_id and p.version = p_expected_version and not p.archived and p.merged_into is null
     returning * into v_row;
   exception when unique_violation then
-    -- Перейменування влучило в іншу картку — це дублікат, а не помилка.
     select * into v_row from public.products p
      where p.identity_key = public.product_identity_key(v_name, v_brand, v_pack_amount, v_pack_unit)
        and p.merged_into is null and not p.archived and p.id <> p_id;
@@ -1131,6 +1204,7 @@ begin
          set type_key = p.type_key, name = p.name, brand = p.brand, fat_pct = p.fat_pct,
              pack_amount = p.pack_amount, pack_unit = p.pack_unit, grams_per_piece = p.grams_per_piece,
              kcal = p.kcal, protein = p.protein, fat = p.fat, carbs = p.carbs, image_url = p.image_url,
+             nutrition_source = case when p.kcal is not null then p.nutrition_source end,
              archived = p.archived
        where t.id = p.id and t.version = p_expected_version;
     exception when unique_violation then
@@ -1236,7 +1310,8 @@ alter table public.community_changes   enable row level security;
 -- Через grant на колонки клієнт НІКОЛИ не робить select * (PRODUCT_SELECT).
 revoke all on public.products from anon, authenticated;
 grant select (id, type_key, name, brand, fat_pct, pack_amount, pack_unit, grams_per_piece,
-              kcal, protein, fat, carbs, image_url, source, archived, merged_into, version, updated_at, search_key)
+              kcal, protein, fat, carbs, image_url, nutrition_source, source, archived, merged_into, version,
+              updated_at, search_key)
   on public.products to anon, authenticated;
 drop policy if exists "products readable" on public.products;
 create policy "products readable" on public.products for select using (true);

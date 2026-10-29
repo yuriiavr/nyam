@@ -41,6 +41,8 @@ interface Handlers {
   reloadUserState: () => void;
   /** Склад сімʼї змінився — треба перечитати і її, і залежні дані. */
   reloadFamily: () => void;
+  /** Щоденник: хтось записав тобі частку страви, доїв залишок, змінив апетит. */
+  reloadDiary: () => void;
 }
 
 let channel: RealtimeChannel | null = null;
@@ -59,6 +61,7 @@ export function subscribeRealtime(userId: string, handlers: Handlers): () => voi
   const community = debounce(handlers.reloadCommunity, DEBOUNCE_MS);
   const userState = debounce(handlers.reloadUserState, DEBOUNCE_MS);
   const family = debounce(handlers.reloadFamily, DEBOUNCE_MS);
+  const diary = debounce(handlers.reloadDiary, DEBOUNCE_MS);
 
   channel = sb
     .channel("nyam-live")
@@ -158,12 +161,22 @@ export function subscribeRealtime(userId: string, handlers: Handlers): () => voi
     // Хтось увійшов або вийшов із сімʼї — змінюється сам склад спільних даних.
     .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, family)
 
+    /*
+     * Щоденник: кухар записав тобі частку, хтось доїв залишок. Власні записи
+     * цього пристрою теж приходять сюди відлунням — merge їх не перебʼє, поки
+     * вони летять (hasPendingDiaryWrite).
+     */
+    .on("postgres_changes", { event: "*", schema: "public", table: "food_log" }, diary)
+    .on("postgres_changes", { event: "*", schema: "public", table: "meals" }, diary)
+    .on("postgres_changes", { event: "*", schema: "public", table: "diary_settings" }, diary)
+
     .subscribe();
 
   return () => {
     community.cancel();
     userState.cancel();
     family.cancel();
+    diary.cancel();
     unsubscribeRealtime();
   };
 }
