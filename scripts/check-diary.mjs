@@ -361,6 +361,21 @@ check("Списуємо: варені — сухими за ШІ, бекон —
   { id: "eggs", grams: 110 },
 ]);
 
+console.log("── Склад порції ──");
+
+const two = diary.portionsOf(composed, 2);
+check("Дві такі порції — удвічі більше грамів", two.items.map((i) => i.grams), [600, 300, 220, 80, 10]);
+check("…і калорій", two.items[1].kcal, 1622);
+check("БЖВ — із десятою", two.items[1].carbs, 4.2);
+check("Пачка й джерело лишаються", [two.items[1].pantryId, two.items[1].from], ["bacon", "label"]);
+check("Списання — на всі порції", two.takes, [
+  { id: "pasta", grams: 250 },
+  { id: "bacon", grams: 300 },
+  { id: "eggs", grams: 220 },
+]);
+check("Одна порція — той самий склад", diary.portionsOf(composed, 1).items, composed.items);
+check("Півтори — округлено до грама", diary.portionsOf(composed, 1.5).takes[0], { id: "pasta", grams: 188 });
+
 console.log("── Ваги посеред готування ──");
 
 const cooked = await jiti.import(path.join(root, "src/lib/cooked.ts"));

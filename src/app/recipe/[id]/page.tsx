@@ -364,6 +364,8 @@ export default function RecipePage() {
                 isNew: true,
                 source: "cook",
                 slot: slotAt(),
+                // Без готування за кроками — тож що було в тарілці, людина скаже тут.
+                portionEdit: true,
               });
             }}
           >

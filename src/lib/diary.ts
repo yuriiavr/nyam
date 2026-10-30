@@ -479,6 +479,25 @@ export function cookedComposition(
 }
 
 /**
+ * Склад однієї порції → уся страва з `servings` таких порцій: грами,
+ * калорії й списання множаться на число порцій. Так «що було в моїй
+ * тарілці» стає мірою для всіх, хто їв, і для залишку.
+ */
+export function portionsOf(
+  portion: { items: readonly MealItem[]; takes: ReadonlyArray<{ id: string; grams: number }> },
+  servings: number,
+): { items: MealItem[]; takes: Array<{ id: string; grams: number }> } {
+  return {
+    items: portion.items.map((item) => ({
+      ...item,
+      grams: Math.round(item.grams * servings),
+      ...roundNutrition(scaleNutrition(item, servings)),
+    })),
+    takes: portion.takes.map((t) => ({ id: t.id, grams: Math.round(t.grams * servings) })),
+  };
+}
+
+/**
  * «Нещодавнє» для швидкого повтору: товари, які людина їла, — по одному,
  * найсвіжіші першими, з тією самою вагою, що й минулого разу.
  */

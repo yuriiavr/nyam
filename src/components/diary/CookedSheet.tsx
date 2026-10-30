@@ -15,7 +15,15 @@ import type { Product } from "@/lib/product-types";
 import { shortProductName } from "@/lib/products";
 import { useApp } from "@/lib/store";
 import type { MealItem, Nutrition, PantryItem, Recipe, RecipeIngredient, Unit } from "@/lib/types";
-import { formatNumber, formatQuantity, quantityOf, unitDef, unitLabel } from "@/lib/units";
+import {
+  formatNumber,
+  formatQuantity,
+  quantityOf,
+  scaleAmount,
+  scaleLegacyQty,
+  unitDef,
+  unitLabel,
+} from "@/lib/units";
 import { cn, haptic, newId } from "@/lib/utils";
 
 /** Рядок складу в аркуші. Кількість — як набрана, щоб «0,5» не ставало «0.5» посеред введення. */
@@ -55,36 +63,47 @@ export interface CookedSave {
 
 const NO_WEIGHTS: Readonly<Record<string, CookWeight>> = {};
 
+/** Рецепт на `factor` від себе: на одну порцію дрібне не зникає в нуль. */
+function scaled(amount: number, unit: Unit, factor: number): number {
+  const n = scaleAmount(amount, unit, factor);
+  return n > 0 || !(amount > 0) ? n : unitDef(unit).decimals > 0 ? 0.25 : 1;
+}
+
 const amountOf = (line: CookedDraftLine) => Number(line.amount.replace(",", "."));
 
 /** Етикетка картки, а не оцінка ШІ: оцінку модель зробить і сама, свіжішу. */
 const labelOf = (product: Product | undefined) =>
   product?.nutrition && product.nutritionSource !== "ai" ? product.nutrition : undefined;
 
-/** Рядок з рецепта — з вагою, записаною посеред готування, якщо її записали. */
+/**
+ * Рядок з рецепта — з вагою, записаною посеред готування, якщо її записали.
+ * `factor` — частка рецепта: на одну порцію це 1/порцій.
+ */
 function lineFromRecipe(
   item: RecipeIngredient,
   view: readonly PantryItem[],
   products: Record<string, Product>,
   weight?: CookWeight,
+  factor = 1,
 ): CookedDraftLine {
   const q = quantityOf(item);
   const recipeUnit = q?.unit ?? ing(item.key).defaultUnit ?? "g";
+  const recipeAmount = q?.amount != null ? scaled(q.amount, recipeUnit, factor) : undefined;
   const rows = pantryCandidates(view, item.key, products);
   // Зважене — отже, поклали: і необовʼязкове, і з тієї пачки, яку тоді обрали.
   const chosen =
     (weight?.rowId ? rows.find((row) => row.id === weight.rowId) : undefined) ??
     defaultRow(weight ? { ...item, optional: false } : item, rows, recipeUnit);
   const unit = weight?.unit ?? recipeUnit;
-  const amount = weight?.amount ?? q?.amount;
+  const amount = weight?.amount ?? recipeAmount;
   return {
     id: newId(),
     key: item.key,
     name: item.label ?? ing(item.key).label,
     amount: amount != null ? formatNumber(amount, unitDef(unit).decimals) : "",
     unit,
-    ...(q?.amount != null ? { recipeAmount: q.amount, recipeUnit } : {}),
-    ...(q?.amount == null && item.qty && recipeUnit !== "taste" ? { qty: item.qty } : {}),
+    ...(recipeAmount != null ? { recipeAmount, recipeUnit } : {}),
+    ...(q?.amount == null && item.qty && recipeUnit !== "taste" ? { qty: scaleLegacyQty(item.qty, factor) } : {}),
     rowId: chosen?.id ?? null,
     cooked: !!weight?.cooked,
     ...(item.optional ? { optional: true } : {}),
@@ -103,6 +122,10 @@ function lineFromRecipe(
  * вже готове в каструлі. ШІ рахує страву з етикеток саме цих пачок, а
  * зважене готовим — сам: етикетка на сухий продукт до звареного не пасує.
  * Комору списуємо за цим складом, а не за рецептом.
+ *
+ * `portion` — те саме для однієї порції: «Зʼїв» зі сторінки рецепта, де
+ * людина каже, що було в її тарілці. Кількості рецепта ділимо на його
+ * порції, а скільки таких порцій вийшло й хто скільки зʼїв, вирішує поділ.
  */
 export function CookedSheet({
   open,
@@ -110,6 +133,7 @@ export function CookedSheet({
   pantryBefore,
   draft,
   weights = NO_WEIGHTS,
+  portion = false,
   onClose,
   onSave,
 }: {
@@ -121,6 +145,8 @@ export function CookedSheet({
   draft?: CookedDraftLine[] | null;
   /** Ваги, записані посеред готування: ними й заповнюємо склад. */
   weights?: Readonly<Record<string, CookWeight>>;
+  /** Склад однієї порції, а не всієї страви. */
+  portion?: boolean;
   onClose: () => void;
   onSave: (result: CookedSave) => void;
 }) {
@@ -143,8 +169,11 @@ export function CookedSheet({
     }
     setBusy(false);
     setProblem(null);
+    const factor = portion ? 1 / Math.max(1, recipe.servings || 1) : 1;
     setLines(
-      draft?.length ? draft : recipe.ingredients.map((item) => lineFromRecipe(item, view, products, weights[item.key])),
+      draft?.length
+        ? draft
+        : recipe.ingredients.map((item) => lineFromRecipe(item, view, products, weights[item.key], factor)),
     );
     // Лише на відкритті: комора міняється зі знімками, а вибір людини — ні.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,6 +182,8 @@ export function CookedSheet({
   const patch = (id: string, change: Partial<CookedDraftLine>) =>
     setLines((list) => list.map((line) => (line.id === id ? { ...line, ...change } : line)));
 
+  /** Підказка біля кількості: на порцію — це вже не «у рецепті», а його частка. */
+  const recipeWord = portion ? "за рецептом" : "у рецепті";
   const rowName = (row: PantryItem) => shortProductName(pantryDisplayName(row, products), row.key);
   const productOf = (line: CookedDraftLine) => {
     const row = line.rowId ? rows.get(line.rowId) : undefined;
@@ -195,7 +226,7 @@ export function CookedSheet({
     setProblem(null);
 
     const dish: CookedDish = {
-      title: recipe.title,
+      title: portion ? `${recipe.title} — одна порція` : recipe.title,
       description: recipe.description,
       lines: lines.map(toCooked),
       steps: recipe.steps,
@@ -251,21 +282,22 @@ export function CookedSheet({
       <Sheet
         open={open}
         onClose={onClose}
-        title="Що пішло в страву"
+        title={portion ? "Що було в порції" : "Що пішло в страву"}
         footer={
           <div className="flex flex-col gap-2">
             {problem && <p className="text-center text-[13px] font-semibold text-berry">{problem}</p>}
             <Button full size="lg" loading={busy} disabled={!ready} onClick={() => void save()}>
               <Sparkles size={17} />
-              {ready ? "Порахувати й зберегти" : "Впиши, скільки пішло"}
+              {!ready ? "Впиши, скільки пішло" : portion ? "Порахувати порцію" : "Порахувати й зберегти"}
             </Button>
           </div>
         }
       >
         <div className="flex flex-col gap-3 pb-2">
           <p className="text-[12.5px] leading-snug text-muted">
-            Виправ, скільки чого поклали, і познач, з якої пачки брали. ШІ порахує калорії з етикеток саме цих
-            пачок, а комора спише те, що справді пішло.
+            {portion
+              ? "Впиши, скільки чого було в одній порції, і познач, з якої пачки. ШІ порахує калорії з етикеток саме цих пачок."
+              : "Виправ, скільки чого поклали, і познач, з якої пачки брали. ШІ порахує калорії з етикеток саме цих пачок, а комора спише те, що справді пішло."}
           </p>
 
           {lines.map((line) => {
@@ -276,9 +308,9 @@ export function CookedSheet({
             const hint = [
               line.weighed ? "⚖️ зважено" : "",
               line.recipeAmount != null && line.recipeUnit
-                ? `у рецепті ${formatQuantity(line.recipeAmount, line.recipeUnit)}`
+                ? `${recipeWord} ${formatQuantity(line.recipeAmount, line.recipeUnit)}`
                 : line.qty
-                  ? `у рецепті ${line.qty}`
+                  ? `${recipeWord} ${line.qty}`
                   : "",
               line.optional ? "за бажанням" : "",
             ]
@@ -388,8 +420,8 @@ export function CookedSheet({
                 )}
                 {line.cooked && (
                   <p className="mt-1.5 text-[11.5px] leading-snug text-faint">
-                    Етикетка — на {raw} продукт, тож готовий ШІ порахує сам і спише з пачки, скільки {raw} на це
-                    пішло.
+                    {`Етикетка — на ${raw} продукт, тож готовий ШІ порахує сам`}
+                    {portion ? "." : ` і спише з пачки, скільки ${raw} на це пішло.`}
                   </p>
                 )}
               </div>

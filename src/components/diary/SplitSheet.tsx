@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, Scale } from "lucide-react";
+import { ChevronRight, ListChecks, Minus, Plus, Scale } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Segmented, Sheet, useToast } from "@/components/ui";
 import {
@@ -12,16 +12,19 @@ import {
   mealNutrition,
   portionLabel,
   portionsFromGrams,
+  portionsOf,
   recipeMealNutrition,
   roundNutrition,
   scaleNutrition,
   sharesFromPortions,
   splitDefaults,
 } from "@/lib/diary";
+import { planTakes } from "@/lib/pantry";
 import { diaryUserId, recipeById, useApp } from "@/lib/store";
-import type { FoodEntry, Meal, MealSlot } from "@/lib/types";
+import type { FoodEntry, Meal, MealSlot, PantryItem } from "@/lib/types";
 import { formatNumber } from "@/lib/units";
 import { cn, dateKey, haptic, newId } from "@/lib/utils";
+import { CookedSheet, type CookedSave } from "./CookedSheet";
 import { PersonAvatar, personName, usePeople } from "./people";
 
 /** Що ділимо: щойно приготовану страву чи залишок учорашньої. */
@@ -34,7 +37,11 @@ export interface SplitRequest {
   day?: string;
   /** Рядки комори, які списати після запису («сосиски були ось ці»). */
   consume?: Array<{ id: string; grams: number }>;
+  /** Можна розписати, що було в порції, — «Зʼїв» зі сторінки рецепта. */
+  portionEdit?: boolean;
 }
+
+const NO_ROWS: readonly PantryItem[] = [];
 
 const STEP = 0.5;
 const snap = (x: number) => Math.max(0, Math.round(x * 4) / 4);
@@ -70,6 +77,10 @@ export function SplitSheet({
   const [weigh, setWeigh] = useState(false);
   const [dishGrams, setDishGrams] = useState("");
   const [plates, setPlates] = useState<Record<string, string>>({});
+  /* Що було в порції, коли не як у рецепті: склад однієї тарілки, решта — її кратні. */
+  const [portion, setPortion] = useState<CookedSave | null>(null);
+  const [portionOpen, setPortionOpen] = useState(false);
+  const [deduct, setDeduct] = useState(true);
 
   const meal = request?.meal;
   const isNew = !!request?.isNew;
@@ -89,6 +100,9 @@ export function SplitSheet({
     setWeigh(false);
     setDishGrams("");
     setPlates({});
+    setPortion(null);
+    setPortionOpen(false);
+    setDeduct(true);
     if (request.isNew) {
       setPortions(splitDefaults(people, m.servings));
     } else {
@@ -107,9 +121,10 @@ export function SplitSheet({
    */
   const total = useMemo(() => {
     if (!meal) return undefined;
+    if (isNew && portion) return roundNutrition(scaleNutrition(portion.nutrition, servings));
     if (isNew && recipe && !hasOwnComposition(meal)) return recipeMealNutrition(recipe, servings) ?? meal.nutrition;
     return mealNutrition(meal, recipe);
-  }, [meal, isNew, recipe, servings]);
+  }, [meal, isNew, recipe, servings, portion]);
 
   if (!request || !meal) return null;
 
@@ -137,12 +152,21 @@ export function SplitSheet({
     });
   };
 
+  /* Склад порції — на всі зварені порції: і страва, і що пішло з комори. */
+  const whole = isNew && portion ? portionsOf({ items: portion.items, takes: portion.wants }, servings) : null;
+
   const save = () => {
     if (over) return;
     // Спершу комора: страва памʼятає, що взяла, — прибрали запис, і це повернеться.
-    const used = request.consume?.length ? consumePantryRows(request.consume) : null;
+    // Порції не вистачило однієї пачки — решту з такої самої.
+    const state = useApp.getState();
+    const fromPortion = whole && deduct ? planTakes(state.pantry, whole.takes, state.products) : [];
+    const consume = [...(request.consume ?? []), ...fromPortion];
+    const used = consume.length ? consumePantryRows(consume) : null;
     const taken = used?.taken.length ? { pantryTaken: [...(meal.pantryTaken ?? []), ...used.taken] } : {};
-    const finalMeal: Meal = { ...(isNew ? { ...meal, servings, nutrition: total } : meal), ...taken };
+    const composed: Partial<Meal> =
+      whole && portion ? { items: whole.items, ...(portion.note ? { note: portion.note } : {}) } : {};
+    const finalMeal: Meal = { ...(isNew ? { ...meal, servings, nutrition: total, ...composed } : meal), ...taken };
     const shares = sharesFromPortions(effective, finalMeal.servings);
     const eatenAt = eatenAtFor(request.day ?? dateKey(), slot);
     const entries: FoodEntry[] = Object.entries(shares).map(([userId, share]) => ({
@@ -183,138 +207,195 @@ export function SplitSheet({
   };
 
   return (
-    <Sheet
-      open={!!request}
-      onClose={onClose}
-      title={
-        <span className="flex items-center gap-2">
-          <span className="text-xl">{meal.emoji}</span>
-          <span className="min-w-0 truncate">{meal.title}</span>
-        </span>
-      }
-      footer={
-        <div className="flex flex-col gap-2">
-          <Button full size="lg" disabled={over} onClick={save}>
-            {sum > 0 ? "Записати" : isNew ? "Зберегти без записів" : "Записати"}
-          </Button>
-          {!isNew && (
-            <button onClick={finish} className="py-1 text-[13px] font-semibold text-muted">
-              Доїли або викинули — прибрати залишок
-            </button>
-          )}
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-4 pb-2">
-        <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-3.5 py-3">
-          <div className="min-w-0">
-            <p className="text-[12px] text-muted">{isNew ? "Вийшло порцій" : "Лишилось"}</p>
-            <p className="font-display text-[20px] font-extrabold leading-tight">
-              {isNew ? formatNumber(servings, 2) : portionLabel(available)}
-            </p>
-            <p className="text-[11.5px] text-muted">
-              {perPortion ? `${Math.round(perPortion.kcal)} ккал у порції` : "Калорії ще не пораховані"}
-            </p>
+    <>
+      <Sheet
+        open={!!request}
+        onClose={onClose}
+        title={
+          <span className="flex items-center gap-2">
+            <span className="text-xl">{meal.emoji}</span>
+            <span className="min-w-0 truncate">{meal.title}</span>
+          </span>
+        }
+        footer={
+          <div className="flex flex-col gap-2">
+            <Button full size="lg" disabled={over} onClick={save}>
+              {sum > 0 ? "Записати" : isNew ? "Зберегти без записів" : "Записати"}
+            </Button>
+            {!isNew && (
+              <button onClick={finish} className="py-1 text-[13px] font-semibold text-muted">
+                Доїли або викинули — прибрати залишок
+              </button>
+            )}
           </div>
-          {isNew && (
-            <div className="flex items-center gap-1.5">
-              <StepButton label="Менше порцій" onClick={() => setServings((s) => Math.max(1, s - 1))}>
-                <Minus size={16} />
-              </StepButton>
-              <StepButton label="Більше порцій" onClick={() => setServings((s) => Math.min(50, s + 1))}>
-                <Plus size={16} />
-              </StepButton>
+        }
+      >
+        <div className="flex flex-col gap-4 pb-2">
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-3.5 py-3">
+            <div className="min-w-0">
+              <p className="text-[12px] text-muted">{isNew ? "Вийшло порцій" : "Лишилось"}</p>
+              <p className="font-display text-[20px] font-extrabold leading-tight">
+                {isNew ? formatNumber(servings, 2) : portionLabel(available)}
+              </p>
+              <p className="text-[11.5px] text-muted">
+                {perPortion ? `${Math.round(perPortion.kcal)} ккал у порції` : "Калорії ще не пораховані"}
+              </p>
+            </div>
+            {isNew && (
+              <div className="flex items-center gap-1.5">
+                <StepButton label="Менше порцій" onClick={() => setServings((s) => Math.max(1, s - 1))}>
+                  <Minus size={16} />
+                </StepButton>
+                <StepButton label="Більше порцій" onClick={() => setServings((s) => Math.min(50, s + 1))}>
+                  <Plus size={16} />
+                </StepButton>
+              </div>
+            )}
+          </div>
+
+          {request.portionEdit && isNew && recipe && (
+            <div className="-mt-1 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  haptic(8);
+                  setPortionOpen(true);
+                }}
+                className="flex items-center gap-3 rounded-2xl border border-line px-3.5 py-3 text-left"
+              >
+                <ListChecks size={18} className="shrink-0 text-brand" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-bold">
+                    {portion ? "Склад порції — як було" : "Склад порції — як у рецепті"}
+                  </span>
+                  <span className="block text-[12px] leading-snug text-muted">
+                    {portion
+                      ? `${Math.round(portion.nutrition.kcal)} ккал у порції · змінити`
+                      : "Клали інакше? Впиши, скільки чого було в тарілці"}
+                  </span>
+                </span>
+                <ChevronRight size={17} className="shrink-0 text-muted" />
+              </button>
+              {whole && whole.takes.length > 0 && (
+                <label className="flex items-center gap-2.5 px-1 text-[13px]">
+                  <input
+                    type="checkbox"
+                    checked={deduct}
+                    onChange={(e) => setDeduct(e.target.checked)}
+                    className="h-5 w-5 accent-[var(--brand)]"
+                  />
+                  Списати з комори — на {portionLabel(servings)}
+                </label>
+              )}
             </div>
           )}
-        </div>
 
-        <div className="flex items-center justify-between">
-          <p className="text-[12px] font-bold uppercase tracking-wide text-muted">Хто скільки зʼїв</p>
-          <button
-            onClick={() => setWeigh((w) => !w)}
-            className={cn(
-              "flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold",
-              weigh ? "bg-brand/10 text-brand" : "text-muted",
-            )}
-          >
-            <Scale size={14} />
-            {weigh ? "Порціями" : "Зважити"}
-          </button>
-        </div>
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-muted">Хто скільки зʼїв</p>
+            <button
+              onClick={() => setWeigh((w) => !w)}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold",
+                weigh ? "bg-brand/10 text-brand" : "text-muted",
+              )}
+            >
+              <Scale size={14} />
+              {weigh ? "Порціями" : "Зважити"}
+            </button>
+          </div>
 
-        {weigh && (
-          <label className="-mt-2 flex items-center gap-2 text-[13px]">
-            <span className="flex-1 text-muted">Уся страва, готова</span>
-            <input
-              value={dishGrams}
-              onChange={(e) => setDishGrams(e.target.value.replace(/[^\d.,]/g, ""))}
-              inputMode="decimal"
-              placeholder="1200"
-              className="h-10 w-24 rounded-xl border border-line bg-surface px-2 text-center text-[15px]"
-            />
-            <span className="w-4 text-muted">г</span>
-          </label>
-        )}
+          {weigh && (
+            <label className="-mt-2 flex items-center gap-2 text-[13px]">
+              <span className="flex-1 text-muted">Уся страва, готова</span>
+              <input
+                value={dishGrams}
+                onChange={(e) => setDishGrams(e.target.value.replace(/[^\d.,]/g, ""))}
+                inputMode="decimal"
+                placeholder="1200"
+                className="h-10 w-24 rounded-xl border border-line bg-surface px-2 text-center text-[15px]"
+              />
+              <span className="w-4 text-muted">г</span>
+            </label>
+          )}
 
-        <div className="flex flex-col gap-2">
-          {people.map((p) => {
-            const n = effective[p.userId] ?? 0;
-            const kcal = perPortion ? Math.round(perPortion.kcal * n) : null;
-            return (
-              <div key={p.userId} className="flex items-center gap-3 rounded-2xl border border-line px-3 py-2.5">
-                <PersonAvatar person={p} size={36} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-bold">{personName(p)}</p>
-                  <p className="text-[12px] text-muted">
-                    {n > 0 ? portionLabel(n) : "не їв"}
-                    {kcal != null && n > 0 && ` · ${kcal} ккал`}
-                  </p>
-                </div>
-                {weigh ? (
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      value={plates[p.userId] ?? ""}
-                      onChange={(e) => setPlates((x) => ({ ...x, [p.userId]: e.target.value.replace(/[^\d.,]/g, "") }))}
-                      inputMode="decimal"
-                      placeholder="0"
-                      aria-label={`Тарілка: ${personName(p)}, грамів`}
-                      className="h-10 w-20 rounded-xl border border-line bg-surface px-2 text-center text-[15px]"
-                    />
-                    <span className="text-[13px] text-muted">г</span>
-                  </label>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <StepButton label={`Менше: ${personName(p)}`} onClick={() => bump(p.userId, -STEP)} disabled={n <= 0}>
-                      <Minus size={16} />
-                    </StepButton>
-                    <span className="w-9 text-center font-display text-[16px] font-bold">{formatNumber(n, 2)}</span>
-                    <StepButton label={`Більше: ${personName(p)}`} onClick={() => bump(p.userId, STEP)} disabled={left <= 0}>
-                      <Plus size={16} />
-                    </StepButton>
+          <div className="flex flex-col gap-2">
+            {people.map((p) => {
+              const n = effective[p.userId] ?? 0;
+              const kcal = perPortion ? Math.round(perPortion.kcal * n) : null;
+              return (
+                <div key={p.userId} className="flex items-center gap-3 rounded-2xl border border-line px-3 py-2.5">
+                  <PersonAvatar person={p} size={36} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-bold">{personName(p)}</p>
+                    <p className="text-[12px] text-muted">
+                      {n > 0 ? portionLabel(n) : "не їв"}
+                      {kcal != null && n > 0 && ` · ${kcal} ккал`}
+                    </p>
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {weigh ? (
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        value={plates[p.userId] ?? ""}
+                        onChange={(e) => setPlates((x) => ({ ...x, [p.userId]: e.target.value.replace(/[^\d.,]/g, "") }))}
+                        inputMode="decimal"
+                        placeholder="0"
+                        aria-label={`Тарілка: ${personName(p)}, грамів`}
+                        className="h-10 w-20 rounded-xl border border-line bg-surface px-2 text-center text-[15px]"
+                      />
+                      <span className="text-[13px] text-muted">г</span>
+                    </label>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <StepButton label={`Менше: ${personName(p)}`} onClick={() => bump(p.userId, -STEP)} disabled={n <= 0}>
+                        <Minus size={16} />
+                      </StepButton>
+                      <span className="w-9 text-center font-display text-[16px] font-bold">{formatNumber(n, 2)}</span>
+                      <StepButton label={`Більше: ${personName(p)}`} onClick={() => bump(p.userId, STEP)} disabled={left <= 0}>
+                        <Plus size={16} />
+                      </StepButton>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <p className={cn("-mt-1 text-[12px] leading-snug", over ? "text-berry" : "text-muted")}>
+            {over
+              ? `Це більше, ніж є: ${portionLabel(available)}. ${isNew ? "Додай порцій угорі" : "Перевір цифри"}.`
+              : left >= 0.1
+                ? `Лишиться ${portionLabel(snap(left))} — доїсте потім одним дотиком.`
+                : "Усе зʼїли — залишку не буде."}
+          </p>
+
+          <Segmented
+            value={slot}
+            onChange={setSlot}
+            options={SLOT_ORDER.map((s) => ({ value: s, label: SLOT_META[s].label }))}
+          />
+
+          {(portion?.note ?? meal.note) && (
+            <p className="text-[11.5px] leading-snug text-faint">≈ {portion?.note ?? meal.note}</p>
+          )}
         </div>
+      </Sheet>
 
-        <p className={cn("-mt-1 text-[12px] leading-snug", over ? "text-berry" : "text-muted")}>
-          {over
-            ? `Це більше, ніж є: ${portionLabel(available)}. ${isNew ? "Додай порцій угорі" : "Перевір цифри"}.`
-            : left >= 0.1
-              ? `Лишиться ${portionLabel(snap(left))} — доїсте потім одним дотиком.`
-              : "Усе зʼїли — залишку не буде."}
-        </p>
-
-        <Segmented
-          value={slot}
-          onChange={setSlot}
-          options={SLOT_ORDER.map((s) => ({ value: s, label: SLOT_META[s].label }))}
+      {/* Поруч, а не всередині: аркуш зсунутий transform-ом, і вкладений fixed жив би в його межах. */}
+      {request.portionEdit && isNew && recipe && (
+        <CookedSheet
+          open={portionOpen}
+          recipe={recipe}
+          portion
+          pantryBefore={NO_ROWS}
+          draft={portion?.lines}
+          onClose={() => setPortionOpen(false)}
+          onSave={(result) => {
+            setPortion(result);
+            setPortionOpen(false);
+            toast(`Порція: ${Math.round(result.nutrition.kcal)} ккал`, "✅");
+          }}
         />
-
-        {meal.note && <p className="text-[11.5px] leading-snug text-faint">≈ {meal.note}</p>}
-      </div>
-    </Sheet>
+      )}
+    </>
   );
 }
 
