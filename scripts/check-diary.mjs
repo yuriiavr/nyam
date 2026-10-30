@@ -412,6 +412,16 @@ check("Зважене необовʼязкове — поклали, отже с
 check("Зважене готовим — поки міра рецепта", weighedSalad.ingredients[3], { key: "syr", amount: 50, unit: "g" });
 check("Без ваг — той самий рецепт", cooked.withWeights(salad, {}) === salad, true);
 
+console.log("── Інша міра ──");
+
+check("2 шт яєць — це 120 г", cooked.convertAmount("yajtsya", 2, "pcs", "g"), 120);
+check("200 г огірків — 2 шт", cooked.convertAmount("ogirok", 200, "g", "pcs"), 2);
+check("150 г — 0,15 кг", cooked.convertAmount("ogirok", 150, "g", "kg"), 0.15);
+check("Півштуки дрібного — чвертями, не 0,4", cooked.convertAmount("ogirok", 40, "g", "pcs"), 0.5);
+check("Та сама міра — без змін", cooked.convertAmount("yajtsya", 3, "pcs", "pcs"), 3);
+check("«За смаком» у грами не переводиться", cooked.convertAmount("syr", 1, "taste", "g"), null);
+check("Олію штуками — без ваги штуки не вгадуємо", cooked.convertAmount("oliya", 2, "tbsp", "pcs"), null);
+
 console.log("── Скільки з яких пачок ──");
 
 const pastaCard = { id: "p-pasta", typeKey: "makarony", name: "Спагеті Barilla", version: 1, updatedAt: "", source: "user", archived: false };

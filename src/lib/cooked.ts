@@ -1,6 +1,8 @@
 import { ing, satisfies } from "@/data/ingredients";
+import { ingredientGrams } from "./nutrition";
 import { consumptionOrder, isBareStaple, type ProductCache } from "./pantry";
 import type { PantryItem, Recipe, RecipeIngredient, Unit } from "./types";
+import { scaleAmount, unitDef } from "./units";
 
 /**
  * Склад страви, як її справді зварили: що зважили на ходу й з яких пачок.
@@ -26,6 +28,25 @@ export const weighsCooked = (key: string): boolean => WEIGH_COOKED.has(ing(key).
 
 /** «сухого» для круп і пасти, «сирого» для мʼяса й риби — як кажуть про вагу до готування. */
 export const rawWord = (key: string): string => (ing(key).cat === "grain" ? "сухого" : "сирого");
+
+/**
+ * Та сама кількість в іншій мірі — через грами продукту: 2 шт яєць → 110 г,
+ * 300 г борошна → 0,3 кг. null — перевести не можна («за смаком», штуки
+ * без відомої ваги штуки).
+ */
+export function convertAmount(key: string, amount: number, from: Unit, to: Unit): number | null {
+  if (from === to) return amount;
+  const grams = ingredientGrams({ key, amount, unit: from });
+  const perUnit = ingredientGrams({ key, amount: 1, unit: to });
+  if (grams == null || !perUnit) return null;
+  // Вага й обʼєм — точно (0,15 кг); штуки й ложки — чвертями, як у рецептах.
+  const base = unitDef(to).base;
+  const n =
+    base === "g" || base === "ml"
+      ? Number((grams / perUnit).toFixed(unitDef(to).decimals))
+      : scaleAmount(grams, to, 1 / perUnit);
+  return n > 0 ? n : null;
+}
 
 /** Рядки комори, з яких міг піти продукт: спершу ті, з яких бере рецепт, далі — без кількості. */
 export function pantryCandidates(view: readonly PantryItem[], key: string, products: ProductCache): PantryItem[] {

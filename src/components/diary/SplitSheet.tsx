@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, ListChecks, Minus, Plus, Scale } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Segmented, Sheet, useToast } from "@/components/ui";
 import {
   SLOT_META,
@@ -24,7 +24,7 @@ import { diaryUserId, recipeById, useApp } from "@/lib/store";
 import type { FoodEntry, Meal, MealSlot, PantryItem } from "@/lib/types";
 import { formatNumber } from "@/lib/units";
 import { cn, dateKey, haptic, newId } from "@/lib/utils";
-import { CookedSheet, type CookedSave } from "./CookedSheet";
+import { CookedSheet, countComposition, lineMissing, type CookedDraftLine, type CookedSave } from "./CookedSheet";
 import { PersonAvatar, personName, usePeople } from "./people";
 
 /** Що ділимо: щойно приготовану страву чи залишок учорашньої. */
@@ -81,6 +81,11 @@ export function SplitSheet({
   const [portion, setPortion] = useState<CookedSave | null>(null);
   const [portionOpen, setPortionOpen] = useState(false);
   const [deduct, setDeduct] = useState(true);
+  /* Склад змінили й закрили, не порахувавши: ШІ порахує його перед записом. */
+  const [draft, setDraft] = useState<CookedDraftLine[] | null>(null);
+  const [counting, setCounting] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const countCtrl = useRef<AbortController | null>(null);
 
   const meal = request?.meal;
   const isNew = !!request?.isNew;
@@ -93,6 +98,7 @@ export function SplitSheet({
   }, [meal, isNew, servings, foodLog]);
 
   useEffect(() => {
+    countCtrl.current?.abort();
     if (!request) return;
     const m = request.meal;
     setServings(m.servings);
@@ -103,6 +109,9 @@ export function SplitSheet({
     setPortion(null);
     setPortionOpen(false);
     setDeduct(true);
+    setDraft(null);
+    setCounting(false);
+    setProblem(null);
     if (request.isNew) {
       setPortions(splitDefaults(people, m.servings));
     } else {
@@ -119,17 +128,26 @@ export function SplitSheet({
    * КБЖВ усієї страви: рецепт перераховуємо на зварені порції. Склад,
    * розписаний після готування, — уже вся каструля: порції її лише ділять.
    */
-  const total = useMemo(() => {
+  const recipeTotal = useMemo(() => {
     if (!meal) return undefined;
-    if (isNew && portion) return roundNutrition(scaleNutrition(portion.nutrition, servings));
     if (isNew && recipe && !hasOwnComposition(meal)) return recipeMealNutrition(recipe, servings) ?? meal.nutrition;
     return mealNutrition(meal, recipe);
-  }, [meal, isNew, recipe, servings, portion]);
+  }, [meal, isNew, recipe, servings]);
 
   if (!request || !meal) return null;
 
+  /** Склад порції, якщо його розписали, — на всі зварені порції; інакше рецепт. */
+  const totalOf = (p: CookedSave | null) =>
+    isNew && p ? roundNutrition(scaleNutrition(p.nutrition, servings)) : recipeTotal;
+  /* Склад порції — на всі зварені порції: і страва, і що пішло з комори. */
+  const wholeOf = (p: CookedSave | null) =>
+    isNew && p ? portionsOf({ items: p.items, takes: p.wants }, servings) : null;
+
+  const total = totalOf(portion);
+  const whole = wholeOf(portion);
   const base = isNew ? servings : meal.servings;
-  const perPortion = total ? scaleNutrition(total, 1 / Math.max(0.25, base)) : undefined;
+  // Змінений, ще не порахований склад — старих калорій не показуємо: вони вже не про цю тарілку.
+  const perPortion = total && !draft ? scaleNutrition(total, 1 / Math.max(0.25, base)) : undefined;
 
   /* Зважування: порції з грамів тарілки — поверх кнопок. */
   const dish = Number(dishGrams.replace(",", "."));
@@ -152,11 +170,10 @@ export function SplitSheet({
     });
   };
 
-  /* Склад порції — на всі зварені порції: і страва, і що пішло з комори. */
-  const whole = isNew && portion ? portionsOf({ items: portion.items, takes: portion.wants }, servings) : null;
-
-  const save = () => {
+  const save = (p: CookedSave | null) => {
     if (over) return;
+    const total = totalOf(p);
+    const whole = wholeOf(p);
     // Спершу комора: страва памʼятає, що взяла, — прибрали запис, і це повернеться.
     // Порції не вистачило однієї пачки — решту з такої самої.
     const state = useApp.getState();
@@ -165,7 +182,7 @@ export function SplitSheet({
     const used = consume.length ? consumePantryRows(consume) : null;
     const taken = used?.taken.length ? { pantryTaken: [...(meal.pantryTaken ?? []), ...used.taken] } : {};
     const composed: Partial<Meal> =
-      whole && portion ? { items: whole.items, ...(portion.note ? { note: portion.note } : {}) } : {};
+      whole && p ? { items: whole.items, ...(p.note ? { note: p.note } : {}) } : {};
     const finalMeal: Meal = { ...(isNew ? { ...meal, servings, nutrition: total, ...composed } : meal), ...taken };
     const shares = sharesFromPortions(effective, finalMeal.servings);
     const eatenAt = eatenAtFor(request.day ?? dateKey(), slot);
@@ -199,6 +216,45 @@ export function SplitSheet({
     onClose();
   };
 
+  /**
+   * «Записати». Склад змінили, але не порахували — спершу ШІ: у щоденник
+   * іде калорійність того, що справді було в тарілці, а не рецепта.
+   */
+  const submit = async () => {
+    if (over || counting) return;
+    if (!draft || !recipe) {
+      save(portion);
+      return;
+    }
+    if (draft.length === 0 || draft.some(lineMissing)) {
+      setPortionOpen(true);
+      return;
+    }
+    countCtrl.current?.abort();
+    const c = new AbortController();
+    countCtrl.current = c;
+    setCounting(true);
+    setProblem(null);
+    const state = useApp.getState();
+    const res = await countComposition({
+      lines: draft,
+      recipe,
+      rows: new Map(state.pantry.map((row) => [row.id, row])),
+      products: state.products,
+      portion: true,
+      signal: c.signal,
+    });
+    if (!res) return;
+    setCounting(false);
+    if (!res.ok) {
+      setProblem(res.problem);
+      return;
+    }
+    setPortion(res.result);
+    setDraft(null);
+    save(res.result);
+  };
+
   const finish = () => {
     saveMeal({ ...meal, finished: true });
     haptic(10);
@@ -219,8 +275,15 @@ export function SplitSheet({
         }
         footer={
           <div className="flex flex-col gap-2">
-            <Button full size="lg" disabled={over} onClick={save}>
-              {sum > 0 ? "Записати" : isNew ? "Зберегти без записів" : "Записати"}
+            {problem && <p className="text-center text-[13px] font-semibold text-berry">{problem}</p>}
+            <Button full size="lg" disabled={over} loading={counting} onClick={() => void submit()}>
+              {draft
+                ? "Порахувати й записати"
+                : sum > 0
+                  ? "Записати"
+                  : isNew
+                    ? "Зберегти без записів"
+                    : "Записати"}
             </Button>
             {!isNew && (
               <button onClick={finish} className="py-1 text-[13px] font-semibold text-muted">
@@ -238,7 +301,11 @@ export function SplitSheet({
                 {isNew ? formatNumber(servings, 2) : portionLabel(available)}
               </p>
               <p className="text-[11.5px] text-muted">
-                {perPortion ? `${Math.round(perPortion.kcal)} ккал у порції` : "Калорії ще не пораховані"}
+                {perPortion
+                  ? `${Math.round(perPortion.kcal)} ккал у порції`
+                  : draft
+                    ? "Калорії порахує ШІ"
+                    : "Калорії ще не пораховані"}
               </p>
             </div>
             {isNew && (
@@ -265,17 +332,19 @@ export function SplitSheet({
                 <ListChecks size={18} className="shrink-0 text-brand" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13.5px] font-bold">
-                    {portion ? "Склад порції — як було" : "Склад порції — як у рецепті"}
+                    {draft ? "Склад порції — змінено" : portion ? "Склад порції — як було" : "Склад порції — як у рецепті"}
                   </span>
                   <span className="block text-[12px] leading-snug text-muted">
-                    {portion
-                      ? `${Math.round(portion.nutrition.kcal)} ккал у порції · змінити`
-                      : "Клали інакше? Впиши, скільки чого було в тарілці"}
+                    {draft
+                      ? "Ще не пораховано — ШІ порахує перед записом"
+                      : portion
+                        ? `${Math.round(portion.nutrition.kcal)} ккал у порції · змінити`
+                        : "Клали інакше? Впиши, скільки чого було в тарілці"}
                   </span>
                 </span>
                 <ChevronRight size={17} className="shrink-0 text-muted" />
               </button>
-              {whole && whole.takes.length > 0 && (
+              {(draft ? draft.some((line) => line.rowId) : !!whole && whole.takes.length > 0) && (
                 <label className="flex items-center gap-2.5 px-1 text-[13px]">
                   <input
                     type="checkbox"
@@ -386,10 +455,13 @@ export function SplitSheet({
           recipe={recipe}
           portion
           pantryBefore={NO_ROWS}
-          draft={portion?.lines}
+          draft={draft ?? portion?.lines}
           onClose={() => setPortionOpen(false)}
+          onDraft={setDraft}
           onSave={(result) => {
             setPortion(result);
+            setDraft(null);
+            setProblem(null);
             setPortionOpen(false);
             toast(`Порція: ${Math.round(result.nutrition.kcal)} ккал`, "✅");
           }}
