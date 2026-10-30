@@ -7,6 +7,7 @@ import {
   SLOT_META,
   SLOT_ORDER,
   eatenAtFor,
+  hasOwnComposition,
   leftoverServings,
   mealNutrition,
   portionLabel,
@@ -100,10 +101,13 @@ export function SplitSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
 
-  /** КБЖВ усієї страви: рецепт перераховуємо на зварені порції. */
+  /*
+   * КБЖВ усієї страви: рецепт перераховуємо на зварені порції. Склад,
+   * розписаний після готування, — уже вся каструля: порції її лише ділять.
+   */
   const total = useMemo(() => {
     if (!meal) return undefined;
-    if (isNew && recipe) return recipeMealNutrition(recipe, servings) ?? meal.nutrition;
+    if (isNew && recipe && !hasOwnComposition(meal)) return recipeMealNutrition(recipe, servings) ?? meal.nutrition;
     return mealNutrition(meal, recipe);
   }, [meal, isNew, recipe, servings]);
 

@@ -601,6 +601,46 @@ export function consumeRows(
 }
 
 /**
+ * Скільки з яких рядків узяти, коли людина каже «макарони були ось ці».
+ *
+ * Обирають товар, а не рядок: 500 г макаронів при двох пачках по 400 — це
+ * обидві пачки. Тож обраний рядок першим, а чого в ньому не вистачило — з
+ * таких самих (та сама картка, а без картки — той самий тип без картки) у
+ * звичному порядку: спершу те, що зіпсується першим. Рядок без кількості
+ * не чіпаємо зовсім — не знаємо, скільки в ньому було, а отже, і чи
+ * вистачило. Кілька потреб з одного рядка складаються в одне списання.
+ */
+export function planTakes(
+  pantry: readonly PantryItem[],
+  wants: ReadonlyArray<{ id: string; grams: number }>,
+  products: ProductCache = NO_PRODUCTS,
+  today: string = dateKey(),
+): Array<{ id: string; grams: number }> {
+  const left = new Map(pantry.map((row) => [row.id, rowGrams(row, products) ?? 0]));
+  const out = new Map<string, number>();
+
+  for (const want of wants) {
+    const chosen = pantry.find((row) => row.id === want.id);
+    if (!chosen || !(want.grams > 0) || rowGrams(chosen, products) == null) continue;
+    const same = pantry.filter(
+      (row) =>
+        row.id !== chosen.id &&
+        (chosen.productId ? row.productId === chosen.productId : !row.productId && row.key === chosen.key),
+    );
+    let need = want.grams;
+    for (const row of [chosen, ...consumptionOrder(chosen.key, same, products, today)]) {
+      if (need <= 0) break;
+      const take = Math.min(left.get(row.id) ?? 0, need);
+      if (take <= 0) continue;
+      left.set(row.id, (left.get(row.id) ?? 0) - take);
+      out.set(row.id, (out.get(row.id) ?? 0) + take);
+      need -= take;
+    }
+  }
+  return [...out].map(([id, grams]) => ({ id, grams }));
+}
+
+/**
  * «Повернути в комору»: рядки `items` (знімок до готування) стають на свої
  * місця за id; спорожнілі й прибрані — повертаються в кінець.
  */

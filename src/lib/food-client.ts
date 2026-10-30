@@ -1,6 +1,7 @@
 "use client";
 
 import type { DishParse, PantryChoice } from "./food-ai";
+import type { CookedAnswer, CookedDish } from "./nutrition-ai";
 import { getSupabase } from "./supabase/client";
 import type { Nutrition, PackUnit } from "./types";
 
@@ -95,3 +96,7 @@ export const readNutritionLabel = (image: string, signal?: AbortSignal) =>
 /** «Що зʼїв» словами → продукти й рядки комори. */
 export const parseEatenDish = (text: string, pantry: PantryChoice[], signal?: AbortSignal) =>
   post<{ dish: DishParse }>("/api/food/dish", { text, pantry }, signal);
+
+/** Склад, як його справді зварили, → КБЖВ страви й сира вага того, що зважили готовим. */
+export const countCookedDish = (dish: CookedDish, signal?: AbortSignal) =>
+  post<CookedAnswer>("/api/food/cooked", dish, signal);

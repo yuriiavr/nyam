@@ -9,6 +9,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Scale,
   SlidersHorizontal,
   Timer,
   X,
@@ -17,8 +18,10 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cookPath, useNow } from "@/components/CookingHost";
+import { CookedSheet, type CookedSave } from "@/components/diary/CookedSheet";
 import { SplitSheet, type SplitRequest } from "@/components/diary/SplitSheet";
 import { Button, EmptyState, Sheet, Stars, useToast } from "@/components/ui";
+import { WeighSheet } from "@/components/WeighSheet";
 import { ing } from "@/data/ingredients";
 import {
   anyRunning,
@@ -30,6 +33,7 @@ import {
   resetTimer,
   setCustomTime,
   setStep,
+  setWeight,
   startedSessions,
   startTimer,
   stepSeconds,
@@ -40,12 +44,14 @@ import {
   type CookSession,
   type StepTimer,
 } from "@/lib/cooking";
+import { stepIngredients, withWeights, type CookWeight } from "@/lib/cooked";
 import type { Consumed } from "@/lib/pantry";
 import { enablePushFromTimer } from "@/lib/push";
 import { mealFromRecipe, slotAt } from "@/lib/diary";
 import { diaryUserId, recipeById, useApp } from "@/lib/store";
 import type { PantryItem } from "@/lib/types";
-import { cn, formatClock, haptic, newId } from "@/lib/utils";
+import { formatQuantity, ingredientQtyLabel } from "@/lib/units";
+import { cn, formatClock, haptic, newId, plural } from "@/lib/utils";
 
 /*
  * Сторінка готування — лише екран. Крок, позначені продукти, свій час і
@@ -62,6 +68,8 @@ export default function CookPage() {
   const myRecipes = useApp((s) => s.myRecipes);
   const remoteRecipes = useApp((s) => s.remoteRecipes);
   const restorePantry = useApp((s) => s.restorePantry);
+  const recookPantry = useApp((s) => s.recookPantry);
+  const saveMeal = useApp((s) => s.saveMeal);
   const markCooked = useApp((s) => s.markCooked);
   const consumePantry = useApp((s) => s.consumePantry);
   const rate = useApp((s) => s.rate);
@@ -81,6 +89,15 @@ export default function CookPage() {
   /* «Хто скільки зʼїв» після готування: поділ страви між рідними. */
   const [split, setSplit] = useState<SplitRequest | null>(null);
   const [logged, setLogged] = useState(false);
+  /* Страва цього готування: той самий id і до запису, і після — склад можна уточнити й тоді. */
+  const [mealId] = useState(newId);
+  /* Склад, як його справді зварили, — коли готували не за рецептом. */
+  const [cooked, setCooked] = useState<CookedSave | null>(null);
+  const [cookedOpen, setCookedOpen] = useState(false);
+  /* Ваги, записані посеред готування: сесія після «Готово!» зникає, а склад із них ще складати. */
+  const [weighed, setWeighed] = useState<Record<string, CookWeight>>({});
+  /* Аркуш «зважити»: null — закритий; key null — спершу обрати продукт. */
+  const [weigh, setWeigh] = useState<{ key: string | null } | null>(null);
   const [timerSheet, setTimerSheet] = useState(false);
 
   // Не давати екрану гаснути
@@ -187,8 +204,51 @@ export default function CookPage() {
     haptic(12);
     restorePantry(pantryBefore);
     setConsumed([]);
+    setPantryBefore([]);
     toast("Продукти повернуто в комору", "↩️");
   };
+
+  /*
+   * Склад уточнили: комору — за ним, а не за рецептом. Страва, яку вже
+   * поділили, бере нове число одразу: записи в щоденниках рахуються з неї
+   * (а в базі їх переписує тригер страви).
+   */
+  const applyCooked = (result: CookedSave) => {
+    const { consumed: now, before } = recookPantry(pantryBefore, result.wants);
+    setConsumed(now);
+    setPantryBefore(before);
+    setCooked(result);
+    setCookedOpen(false);
+    if (logged) {
+      const meal = useApp.getState().meals.find((m) => m.id === mealId);
+      if (meal) saveMeal({ ...meal, items: result.items, nutrition: result.nutrition, note: result.note });
+    }
+    toast(`Склад уточнено: ${result.nutrition.kcal} ккал на всю страву`, "✅");
+  };
+
+  /** Вага записана — назад до кроку: руки зайняті, зайвих дотиків не треба. */
+  const saveWeight = (key: string, weight: CookWeight | null) => {
+    if (!recipe) return;
+    setWeight(recipe.id, key, weight);
+    setWeigh(null);
+    const label = recipe.ingredients.find((i) => i.key === key)?.label ?? ing(key).label;
+    toast(
+      weight ? `${label} — ${formatQuantity(weight.amount, weight.unit)}${weight.cooked ? " готового" : ""}` : `${label}: вагу прибрано`,
+      "⚖️",
+    );
+  };
+
+  const weighSheet = recipe && session && (
+    <WeighSheet
+      open={!!weigh}
+      recipe={recipe}
+      ingKey={weigh?.key ?? null}
+      weights={session.weights}
+      onPick={(key) => setWeigh({ key })}
+      onSave={saveWeight}
+      onClose={() => setWeigh(null)}
+    />
+  );
 
   /**
    * Вихід хрестиком — не кінець готування: крок і таймери лишаються, а
@@ -210,19 +270,25 @@ export default function CookPage() {
       return;
     }
     // Страва готова — таймери цього рецепта, якщо ще йдуть, уже ні до чого.
+    // Ваги забираємо раніше, ніж сесія зникне.
+    const weights = session.weights;
+    setWeighed(weights);
     setDone(true);
     endSession(recipe.id);
     markCooked(recipe.id);
     // Комора має відповідати холодильнику: продукти, що пішли на страву,
-    // з неї зникають. Знімок «до» лишаємо, щоб списання можна було
-    // скасувати — помилитись кроком у готуванні легко.
+    // з неї зникають — за вагами, якщо їх записували, інакше за рецептом.
+    // Знімок «до» лишаємо, щоб списання можна було скасувати — помилитись
+    // кроком у готуванні легко.
     const before = useApp.getState().pantry;
-    const changes = consumePantry(recipe);
+    const changes = consumePantry(withWeights(recipe, weights));
     if (changes.length > 0) {
       setConsumed(changes);
       // Лише зачеплені рядки і саме за id: ключ типу не розрізняє пачок (D9).
       setPantryBefore(before.filter((p) => changes.some((c) => c.id === p.id)));
     }
+    // Зважували — склад уже майже готовий: відкриваємо його, лишилось порахувати.
+    if (Object.keys(weights).length > 0) setCookedOpen(true);
     haptic([30, 60, 30, 60, 50]);
   };
 
@@ -245,6 +311,7 @@ export default function CookPage() {
 
   /* ── Завершення ───────────────────────────────────────────────────── */
   if (done) {
+    const weighedCount = Object.keys(weighed).length;
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
         <motion.div
@@ -260,36 +327,59 @@ export default function CookPage() {
           «{recipe.title}» додано в історію приготувань.
         </p>
 
-        {consumed.length > 0 && (
-          <div className="mt-6 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4 text-left">
-            <p className="text-[13px] font-bold">Списано з комори</p>
-            <ul className="mt-2 flex flex-col gap-1.5">
-              {consumed.map((c, i) => (
-                // Один рядок комори може закрити дві потреби рецепта — id не унікальний.
-                <li key={`${c.id}:${i}`} className="flex items-baseline gap-1.5 text-[12.5px] leading-snug">
-                  <span>{c.emoji}</span>
-                  {/* «Молоко Галичина 2,5%: −500 мл, лишилось 400 мл» — назва пачки, а не типу. */}
-                  <span className="min-w-0">
-                    <span className="font-semibold">{c.label}:</span>{" "}
-                    <span className="text-muted">−{c.used}</span>
-                    {", "}
-                    <span className={c.left ? "text-faint" : "text-berry"}>
-                      {c.left ? `лишилось ${c.left}` : "закінчилось"}
+        <div className="mt-6 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4 text-left">
+          <p className="text-[13px] font-bold">Склад страви</p>
+          <p className="mt-1 text-[12px] leading-snug text-muted">
+            {cooked
+              ? `Як справді зварили · ${cooked.nutrition.kcal} ккал на всю страву`
+              : weighedCount > 0
+                ? `Зважено на ходу: ${weighedCount} ${plural(weighedCount, "продукт", "продукти", "продуктів")}, решта — як у рецепті. Порахуй — і калорії будуть за твоїми вагами.`
+                : "Як у рецепті. Клали інакше — виправ, і калорії з коморою підлаштуються."}
+          </p>
+
+          {consumed.length > 0 && (
+            <>
+              <p className="mt-3 text-[12px] font-bold">Списано з комори</p>
+              <ul className="mt-1.5 flex flex-col gap-1.5">
+                {consumed.map((c, i) => (
+                  // Один рядок комори може закрити дві потреби рецепта — id не унікальний.
+                  <li key={`${c.id}:${i}`} className="flex items-baseline gap-1.5 text-[12.5px] leading-snug">
+                    <span>{c.emoji}</span>
+                    {/* «Молоко Галичина 2,5%: −500 мл, лишилось 400 мл» — назва пачки, а не типу. */}
+                    <span className="min-w-0">
+                      <span className="font-semibold">{c.label}:</span>{" "}
+                      <span className="text-muted">−{c.used}</span>
+                      {", "}
+                      <span className={c.left ? "text-faint" : "text-berry"}>
+                        {c.left ? `лишилось ${c.left}` : "закінчилось"}
+                      </span>
                     </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={undoConsume}
-              className="mt-2.5 text-[12px] font-semibold text-muted underline"
-            >
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <Button
+            full
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            onClick={() => {
+              haptic(10);
+              setCookedOpen(true);
+            }}
+          >
+            {cooked ? "Змінити склад" : weighedCount > 0 ? "Порахувати за вагами" : "Уточнити, скільки чого пішло"}
+          </Button>
+          {consumed.length > 0 && (
+            <button onClick={undoConsume} className="mt-2.5 text-[12px] font-semibold text-muted underline">
               Повернути в комору
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
-        <div className="mt-6 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
+        <div className="mt-4 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
           <p className="text-[13px] font-bold">{logged ? "Записано в щоденник ✓" : "Хто скільки зʼїв?"}</p>
           <p className="mt-1 text-[12px] leading-snug text-muted">
             {logged
@@ -301,18 +391,20 @@ export default function CookPage() {
               full
               size="sm"
               className="mt-3"
-              onClick={() =>
+              onClick={() => {
+                const meal = mealFromRecipe(recipe, {
+                  id: mealId,
+                  ownerId: diaryUserId(useApp.getState()),
+                  cookedAt: new Date().toISOString(),
+                });
                 setSplit({
-                  meal: mealFromRecipe(recipe, {
-                    id: newId(),
-                    ownerId: diaryUserId(useApp.getState()),
-                    cookedAt: new Date().toISOString(),
-                  }),
+                  // Уточнений склад — уже вся каструля: рецепт його не перебиває.
+                  meal: cooked ? { ...meal, items: cooked.items, nutrition: cooked.nutrition, note: cooked.note } : meal,
                   isNew: true,
                   source: "cook",
                   slot: slotAt(),
-                })
-              }
+                });
+              }}
             >
               Розділити страву
             </Button>
@@ -345,9 +437,18 @@ export default function CookPage() {
           </Link>
         </div>
 
-        {/* Аркуш не в порталі — інакше успадкував би центрування екрана. */}
+        {/* Аркуші не в порталі — інакше успадкували б центрування екрана. */}
         <div className="text-left">
           <SplitSheet request={split} onClose={() => setSplit(null)} onDone={() => setLogged(true)} />
+          <CookedSheet
+            open={cookedOpen}
+            recipe={recipe}
+            pantryBefore={pantryBefore}
+            draft={cooked?.lines}
+            weights={weighed}
+            onClose={() => setCookedOpen(false)}
+            onSave={applyCooked}
+          />
         </div>
       </div>
     );
@@ -372,39 +473,59 @@ export default function CookPage() {
 
         <div className="flex-1 px-4 pt-4">
           <p className="text-[13.5px] leading-relaxed text-muted">
-            Познач, що вже дістав із холодильника. Так нічого не забудеш посеред готування.
+            Познач, що вже дістав із холодильника. Так нічого не забудеш посеред готування. Зважив — тицни у вагу
+            праворуч і запиши.
           </p>
 
           <div className="mt-4 flex flex-col gap-2">
             {recipe.ingredients.map((item) => {
               const def = ing(item.key);
               const isChecked = session.checked.includes(item.key);
+              const w = session.weights[item.key];
               return (
-                <button
+                <div
                   key={item.key}
-                  onClick={() => {
-                    haptic(10);
-                    toggleChecked(recipe.id, item.key);
-                  }}
-                  className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${
+                  className={`flex items-center rounded-2xl border transition-colors ${
                     isChecked ? "border-mint/40 bg-mint/8" : "border-line bg-surface"
                   }`}
                 >
-                  <span
-                    className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${
-                      isChecked ? "border-mint bg-mint text-bg" : "border-line"
-                    }`}
+                  <button
+                    onClick={() => {
+                      haptic(10);
+                      toggleChecked(recipe.id, item.key);
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"
                   >
-                    {isChecked && <Check size={15} strokeWidth={3} />}
-                  </span>
-                  <span className="text-lg">{def.emoji}</span>
-                  <span
-                    className={`flex-1 text-[14px] font-semibold ${isChecked ? "text-muted line-through" : ""}`}
+                    <span
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${
+                        isChecked ? "border-mint bg-mint text-bg" : "border-line"
+                      }`}
+                    >
+                      {isChecked && <Check size={15} strokeWidth={3} />}
+                    </span>
+                    <span className="text-lg">{def.emoji}</span>
+                    <span
+                      className={`min-w-0 flex-1 truncate text-[14px] font-semibold ${isChecked ? "text-muted line-through" : ""}`}
+                    >
+                      {def.label}
+                    </span>
+                  </button>
+                  {/* Вага — окремою кнопкою: рядок сам позначає «дістав». */}
+                  <button
+                    onClick={() => {
+                      haptic(8);
+                      setWeigh({ key: item.key });
+                    }}
+                    aria-label={`Зважити: ${def.label}`}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 self-stretch rounded-r-2xl px-3 text-[12.5px] font-bold",
+                      w ? "text-mint" : "text-muted",
+                    )}
                   >
-                    {def.label}
-                  </span>
-                  <span className="text-[12.5px] font-bold text-muted">{item.qty}</span>
-                </button>
+                    {w ? `${formatQuantity(w.amount, w.unit)}${w.cooked ? " гот." : ""}` : ingredientQtyLabel(item)}
+                    <Scale size={14} />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -419,12 +540,14 @@ export default function CookPage() {
             {checkedCount} з {recipe.ingredients.length} готово
           </p>
         </div>
+        {weighSheet}
       </div>
     );
   }
 
   /* ── Крок ─────────────────────────────────────────────────────────── */
   const progress = ((step + 1) / recipe.steps.length) * 100;
+  const mentioned = stepIngredients(recipe, step);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -469,6 +592,47 @@ export default function CookPage() {
             <p className="text-[13.5px] leading-relaxed text-muted">{currentStep.tip}</p>
           </div>
         )}
+
+        {/*
+          Ваги того, що згадує крок: нарізав огірок — одразу записав 50 г.
+          Перенос рядків, а не прокрутка: прокрутку вбік зʼїв би свайп кроків.
+        */}
+        <div className="mt-5 flex flex-wrap gap-2">
+          {mentioned.map((item) => {
+            const w = session.weights[item.key];
+            return (
+              <button
+                key={item.key}
+                onClick={() => {
+                  haptic(8);
+                  setWeigh({ key: item.key });
+                }}
+                className={cn(
+                  "flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-bold",
+                  w ? "border-mint/50 bg-mint/10" : "border-line bg-surface text-muted",
+                )}
+              >
+                <span>{ing(item.key).emoji}</span>
+                <span className="truncate">{item.label ?? ing(item.key).label}</span>
+                {w ? (
+                  <span className="shrink-0 text-mint">· {formatQuantity(w.amount, w.unit)}</span>
+                ) : (
+                  <Scale size={13} className="shrink-0" />
+                )}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => {
+              haptic(8);
+              setWeigh({ key: null });
+            }}
+            className="flex items-center gap-1.5 rounded-full border border-dashed border-line px-3 py-1.5 text-[12.5px] font-bold text-muted"
+          >
+            <Scale size={13} />
+            {mentioned.length ? "Інше" : "Записати вагу"}
+          </button>
+        </div>
 
         {/* Таймер */}
         <AnimatePresence>
@@ -559,6 +723,8 @@ export default function CookPage() {
           Можна гортати кроки свайпом. Екран не згасне під час готування.
         </p>
       </div>
+
+      {weighSheet}
 
       {/* Свій час на цей крок */}
       <TimerSheet

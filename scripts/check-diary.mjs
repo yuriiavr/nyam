@@ -304,5 +304,126 @@ check("Записане в застосунку — там уже обрали",
 check("Чужа страва — питаємо господаря", diary.pantryPending([voiceMeal], [voiceEntry], "her", at), []);
 check("Позавчора — уже не згадати", diary.pantryPending([voiceMeal], [voiceEntry], "me", new Date("2026-01-05T00:00:00Z")), []);
 
+console.log("── Склад після готування ──");
+
+/*
+ * Готували не за рецептом: макаронів менше, бекон з іншої пачки. Розписаний
+ * склад — уже число цієї каструлі, і свіже число рецепта його не перебиває.
+ */
+const carbonara = {
+  id: "rc",
+  title: "Карбонара",
+  servings: 2,
+  aiNutrition: { kcal: 1600, protein: 60, fat: 70, carbs: 180 },
+  ingredients: [{ key: "makarony", amount: 250, unit: "g" }],
+  steps: [],
+};
+const cookedMeal = diary.mealFromRecipe(carbonara, { id: "mc", ownerId: "me", cookedAt: "2026-01-02T19:00:00Z" });
+check("Страва з рецепта — число рецепта", diary.mealNutrition(cookedMeal, carbonara)?.kcal, 1600);
+check("Склад, як зварили, — рецепт не перебиває", diary.mealNutrition({
+  ...cookedMeal,
+  items: [{ name: "Паста", grams: 300, kcal: 1200, protein: 40, fat: 50, carbs: 150, from: "ai" }],
+  nutrition: { kcal: 1200, protein: 40, fat: 50, carbs: 150 },
+}, carbonara)?.kcal, 1200);
+check("Склад без числа — ще рецепт", diary.hasOwnComposition({ items: [{ name: "x" }], nutrition: undefined }), false);
+
+const parts = [
+  // Зважили вареними: скільки сухих — каже ШІ.
+  { name: "Спагеті Barilla", typeKey: "makarony", productId: "p-pasta", pantryId: "pasta", grams: null, cooked: true, labelled: false },
+  // Зважили з пачки: списуємо за мірою людини, хай би ШІ що вважав.
+  { name: "Бекон Глобино", typeKey: "bekon", productId: "p-bacon", pantryId: "bacon", grams: 150, cooked: false, labelled: true },
+  // Яйця без ваги штуки: міри в грамах немає — ШІ.
+  { name: "Яйця", typeKey: "yaitsia", pantryId: "eggs", grams: null, cooked: false, labelled: false },
+  // Не з комори — нічого не списуємо.
+  { name: "Пармезан", typeKey: "parmezan", grams: 40, cooked: false, labelled: false },
+];
+const counted = [
+  { line: 0, name: "Паста варена", grams: 300, rawGrams: 125, kcal: 470, protein: 17, fat: 3, carbs: 93 },
+  { line: 1, name: "Бекон", grams: 150, rawGrams: 140, kcal: 811, protein: 55.5, fat: 63, carbs: 2.1 },
+  { line: 2, name: "Яйця", grams: 110, rawGrams: 110, kcal: 157, protein: 14, fat: 11, carbs: 1 },
+  { line: 3, name: "Пармезан", grams: 40, rawGrams: 40, kcal: 158, protein: 14, fat: 11, carbs: 1 },
+  { line: null, name: "Олія для пательні", grams: 5, rawGrams: 5, kcal: 45, protein: 0, fat: 5, carbs: 0 },
+];
+const composed = diary.cookedComposition(parts, counted);
+check("Назви — пачок людини, а дописане кроками — як назвав ШІ", composed.items.map((i) => i.name), [
+  "Спагеті Barilla",
+  "Бекон Глобино",
+  "Яйця",
+  "Пармезан",
+  "Олія для пательні",
+]);
+check("Етикетка — лише там, де її дали й зважили сирим", composed.items.map((i) => i.from), ["ai", "label", "ai", "ai", "ai"]);
+check("Склад памʼятає пачку", [composed.items[1].productId, composed.items[1].pantryId], ["p-bacon", "bacon"]);
+check("Дописане кроками — без пачки", [composed.items[4].typeKey, composed.items[4].pantryId], [undefined, undefined]);
+check("Списуємо: варені — сухими за ШІ, бекон — за мірою людини, яйця — за ШІ", composed.takes, [
+  { id: "pasta", grams: 125 },
+  { id: "bacon", grams: 150 },
+  { id: "eggs", grams: 110 },
+]);
+
+console.log("── Ваги посеред готування ──");
+
+const cooked = await jiti.import(path.join(root, "src/lib/cooked.ts"));
+const salad = {
+  ingredients: [
+    { key: "ogirok", amount: 2, unit: "pcs" },
+    { key: "pomidor", amount: 3, unit: "pcs" },
+    { key: "tsybulya", amount: 0.5, unit: "pcs", optional: true },
+    { key: "syr", amount: 50, unit: "g" },
+    { key: "oliya", amount: 2, unit: "tbsp" },
+  ],
+  steps: [
+    { text: "Наріж огірки й помідори кубиками, цибулю — півкільцями." },
+    { text: "Посип тертим сиром і заправ олією." },
+    { text: "Перемішай і подавай." },
+  ],
+};
+const keysOf = (list) => list.map((i) => i.key);
+check("Крок згадує огірки, помідори й цибулю — у будь-якому відмінку", keysOf(cooked.stepIngredients(salad, 0)), [
+  "ogirok",
+  "pomidor",
+  "tsybulya",
+]);
+check("«Посип» — не сир, «сиром» — сир", keysOf(cooked.stepIngredients(salad, 1)), ["syr", "oliya"]);
+check("Крок без продуктів — нічого", cooked.stepIngredients(salad, 2), []);
+check("Кроку немає — нічого", cooked.stepIngredients(salad, 9), []);
+
+const weighedSalad = cooked.withWeights(
+  { ...salad, id: "s", title: "Салат" },
+  { ogirok: { amount: 180, unit: "g" }, tsybulya: { amount: 40, unit: "g" }, syr: { amount: 300, unit: "g", cooked: true } },
+);
+check("Зважене — у списання замість рецепта", weighedSalad.ingredients[0], { key: "ogirok", amount: 180, unit: "g", optional: false });
+check("Зважене необовʼязкове — поклали, отже списуємо", weighedSalad.ingredients[2].optional, false);
+check("Зважене готовим — поки міра рецепта", weighedSalad.ingredients[3], { key: "syr", amount: 50, unit: "g" });
+check("Без ваг — той самий рецепт", cooked.withWeights(salad, {}) === salad, true);
+
+console.log("── Скільки з яких пачок ──");
+
+const pastaCard = { id: "p-pasta", typeKey: "makarony", name: "Спагеті Barilla", version: 1, updatedAt: "", source: "user", archived: false };
+const pastaCache = { [pastaCard.id]: pastaCard };
+const shelf = [
+  { id: "open", key: "makarony", productId: "p-pasta", amount: 100, unit: "g", addedAt: "2026-01-01T00:00:00Z" },
+  { id: "full", key: "makarony", productId: "p-pasta", amount: 500, unit: "g", addedAt: "2026-01-02T00:00:00Z" },
+  { id: "chumak", key: "makarony", productId: "p-other", amount: 400, unit: "g", addedAt: "2026-01-01T00:00:00Z" },
+  { id: "loose", key: "makarony", addedAt: "2026-01-01T00:00:00Z", label: "Макарони з ринку" },
+];
+check(
+  "Обрана пачка першою, решта — з такої самої, а не з чужої",
+  pantry.planTakes(shelf, [{ id: "open", grams: 250 }], pastaCache),
+  [
+    { id: "open", grams: 100 },
+    { id: "full", grams: 150 },
+  ],
+);
+check("Вистачило обраної — інших не чіпаємо", pantry.planTakes(shelf, [{ id: "full", grams: 250 }], pastaCache), [
+  { id: "full", grams: 250 },
+]);
+check("Пачка без кількості — не списуємо нічого", pantry.planTakes(shelf, [{ id: "loose", grams: 250 }], pastaCache), []);
+check(
+  "Дві потреби з однієї пачки — одне списання, і не більше, ніж є",
+  pantry.planTakes(shelf, [{ id: "chumak", grams: 300 }, { id: "chumak", grams: 300 }], pastaCache),
+  [{ id: "chumak", grams: 400 }],
+);
+
 console.log(`\n${pass} ✓  ${fail} ✗`);
 process.exit(fail ? 1 : 0);

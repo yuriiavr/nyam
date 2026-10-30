@@ -16,6 +16,7 @@ import {
   consumeForRecipe,
   consumeRows,
   patchPantryRow,
+  planTakes,
   rebaseLegacyPantry,
   rebaseRestored,
   restorePantryById,
@@ -271,6 +272,15 @@ export interface AppState {
   consumePantry: (recipe: Recipe, factor?: number) => Consumed[];
   /** Повертає в комору перелічені рядки (знімок до готування) — скасування списання, за id. */
   restorePantry: (items: PantryItem[]) => void;
+  /**
+   * Переписує списання готування: повертає рядки `before` (знімок до
+   * списання за рецептом) і знімає те, що справді пішло, — «ці макарони,
+   * 300 г». `before` у відповіді — знімок уже для нового списання.
+   */
+  recookPantry: (
+    before: readonly PantryItem[],
+    wants: ReadonlyArray<{ id: string; grams: number }>,
+  ) => { consumed: Consumed[]; before: PantryItem[] };
 
   /**
    * Кладе картки в кеш (після пошуку, скану, збереження, знімка) і, якщо
@@ -989,6 +999,47 @@ export const useApp = create<AppState>()(
             : {}),
         });
         sync.pushPantryBulk(items);
+      },
+
+      /*
+       * Повернути й списати наново — одним записом на рядок. Двома кроками
+       * (restorePantry, потім consumePantryRows) той самий рядок пішов би в
+       * базу двічі, і котрий запис дійде останнім, не скаже ніхто: у коморі
+       * могло б лишитись «як до готування».
+       */
+      recookPantry: (before, wants) => {
+        const state = get();
+        const items = rebaseRestored(state.pantry, before, state.pantryLegacyRemoved);
+        const restored = restorePantryById(state.pantry, items);
+        const result = consumeRows(restored, planTakes(restored, wants, state.products), state.products);
+
+        const was = new Map(state.pantry.map((p) => [p.id, p]));
+        const now = new Set(result.pantry.map((p) => p.id));
+        // Незмінений рядок лишається тим самим обʼєктом — і restorePantryById, і consumeRows його не копіюють.
+        const written = result.pantry.filter((p) => was.get(p.id) !== p);
+        const emptied = state.pantry.filter((p) => !now.has(p.id));
+
+        // Тимчасові id — як у restorePantry і applyConsumption: повернутий уже не «прибраний», спорожнілий — так.
+        const back = items.filter((i) => isLegacyId(i.id)).map(legacyRemoval);
+        const gone = emptied.filter((p) => isLegacyId(p.id)).map(legacyRemoval);
+        const legacy =
+          back.length || gone.length
+            ? {
+                pantryLegacyRemoved: [
+                  ...state.pantryLegacyRemoved.filter(
+                    (r) => !back.some((b) => b.key === r.key && b.addedAt === r.addedAt),
+                  ),
+                  ...gone,
+                ],
+              }
+            : {};
+
+        set({ pantry: result.pantry, ...legacy });
+        sync.pushPantryBulk(written);
+        sync.pushPantryRemove(emptied.map((p) => p.id));
+
+        const taken = new Set(result.consumed.map((c) => c.id));
+        return { consumed: result.consumed, before: restored.filter((p) => taken.has(p.id)) };
       },
 
       upsertProducts: (list, identifiers = []) => {

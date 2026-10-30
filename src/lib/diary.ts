@@ -83,15 +83,27 @@ export function itemsNutrition(items: readonly MealItem[]): Nutrition {
  * справді зварили: число ШІ приходить через хвилину після збереження, і
  * страва, записана в цю хвилину, без цього лишилась би з грубою оцінкою
  * довідника назавжди. Немає рецепта (приватний, видалений) — що записали.
+ *
+ * Склад, розписаний після готування (hasOwnComposition), — це вже не рецепт: там
+ * макаронів менше, а сир з іншої пачки. Його число рецепт не перебиває.
  */
 export function mealNutrition(meal: Meal, recipe?: Recipe | null): Nutrition | undefined {
-  if (recipe && meal.recipeId === recipe.id) {
+  if (recipe && meal.recipeId === recipe.id && !hasOwnComposition(meal)) {
     const n = recipeNutrition(recipe);
     if (n && (n.source === "ai" || n.coverage >= 0.5 || !meal.nutrition)) {
       return roundNutrition(scaleNutrition(n.total, meal.servings / Math.max(1, recipe.servings || 1)));
     }
   }
   return meal.nutrition;
+}
+
+/**
+ * Чи знає страва свій склад. Страва з рецепта приходить без складу — її число
+ * дає рецепт; склад у неї зʼявляється, лише коли після готування розписали,
+ * що справді пішло в каструлю.
+ */
+export function hasOwnComposition(meal: Pick<Meal, "items" | "nutrition">): boolean {
+  return meal.items.length > 0 && !!meal.nutrition;
 }
 
 /** Страва з рецепта: КБЖВ на скільки порцій її зварили. */
@@ -403,6 +415,67 @@ export function mealItem(input: {
     ...n,
     from,
   };
+}
+
+/* ── Склад після готування ────────────────────────────────────────────── */
+
+/** Рядок складу, як його розписали після готування, — те, що треба, щоб зібрати страву. */
+export interface CookedPart {
+  name: string;
+  typeKey: string;
+  productId?: string;
+  /** Рядок комори, з якого брали. */
+  pantryId?: string;
+  /** Сира чи суха вага за мірою людини; null — міру в грами не перевести. */
+  grams: number | null;
+  /** Зважено готовим: скільки зникло з пачки, знає лише ШІ. */
+  cooked: boolean;
+  /** Моделі дали етикетку саме цього товару. */
+  labelled: boolean;
+}
+
+/** Продукт із відповіді ШІ (CookedItem у nutrition-ai.ts). */
+export interface CountedItem extends Nutrition {
+  line: number | null;
+  name: string;
+  grams: number;
+  rawGrams: number;
+}
+
+/**
+ * Відповідь ШІ → склад страви й що списати з комори.
+ *
+ * Склад — рядками моделі, бо вона дописує й те, чого в складі не було (олію
+ * для змащування), але з назвами й пачками людини. Списуємо за мірою людини:
+ * «250 г макаронів» — це 250 г з пачки, хай би модель що вважала. Крім двох
+ * випадків, коли міри в грамах немає: зважене готовим (300 г варених — це
+ * скільки сухих, знає модель) і штуки, чия вага невідома.
+ */
+export function cookedComposition(
+  parts: readonly CookedPart[],
+  counted: readonly CountedItem[],
+): { items: MealItem[]; takes: Array<{ id: string; grams: number }> } {
+  const items = counted.map((c): MealItem => {
+    const part = c.line != null ? parts[c.line] : undefined;
+    return {
+      name: part?.name ?? c.name,
+      grams: Math.round(c.grams),
+      ...(part?.productId ? { productId: part.productId } : {}),
+      ...(part ? { typeKey: part.typeKey } : {}),
+      ...(part?.pantryId ? { pantryId: part.pantryId } : {}),
+      ...roundNutrition(c),
+      from: part?.labelled && !part.cooked ? "label" : "ai",
+    };
+  });
+
+  const takes = parts.flatMap((part, i) => {
+    if (!part.pantryId) return [];
+    const ai = counted.filter((c) => c.line === i).reduce((sum, c) => sum + c.rawGrams, 0);
+    const grams = part.cooked ? ai : (part.grams ?? ai);
+    return grams > 0 ? [{ id: part.pantryId, grams: Math.round(grams) }] : [];
+  });
+
+  return { items, takes };
 }
 
 /**

@@ -31,10 +31,12 @@ import {
   rememberAlarm,
   type AlarmDraft,
 } from "@/lib/cook-alarms";
+import type { CookWeight } from "@/lib/cooked";
 import { useApp } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { alarmUrl } from "@/lib/timer-push";
-import type { Recipe } from "@/lib/types";
+import type { Recipe, Unit } from "@/lib/types";
+import { UNITS } from "@/lib/units";
 
 export interface StepTimer {
   /** Повний час кроку — з нього «скинути» і повторний старт. */
@@ -66,6 +68,12 @@ export interface CookSession {
    */
   customSec: Record<number, number>;
   timers: Record<number, StepTimer>;
+  /**
+   * Що зважили на ходу, за типом інгредієнта: «огірок — 50 г». Нарізав —
+   * записав, бо до кінця салату ваги всіх продуктів уже ніхто не згадає.
+   * Після «Готово!» з цього складається склад страви.
+   */
+  weights: Record<string, CookWeight>;
   touchedAt: number;
 }
 
@@ -186,6 +194,7 @@ function freshSession(recipe: Recipe): CookSession {
     checked: [],
     customSec: {},
     timers: {},
+    weights: {},
     touchedAt: Date.now(),
   };
 }
@@ -241,6 +250,16 @@ export function toggleChecked(recipeId: string, key: string): void {
     ? session.checked.filter((k) => k !== key)
     : [...session.checked, key];
   put(recipeId, { ...session, checked });
+}
+
+/** Записує вагу продукту — або прибирає, якщо `weight` null. */
+export function setWeight(recipeId: string, key: string, weight: CookWeight | null): void {
+  const session = sessionOf(recipeId);
+  if (!session) return;
+  const weights = { ...session.weights };
+  if (weight) weights[key] = weight;
+  else delete weights[key];
+  put(recipeId, { ...session, weights });
 }
 
 /** Свій час на крок. Відлік, що йшов за старим часом, уже ні до чого. */
@@ -332,11 +351,14 @@ export function endSession(recipeId: string): void {
 
 /**
  * Вихід зі сторінки готування. Прогрес і таймери лишаються — окрім випадку,
- * коли готування ще не почалось: заглянув у підготовку й пішов.
+ * коли готування ще не почалось: заглянув у підготовку й пішов, нічого не
+ * позначивши й не зваживши.
  */
 export function leaveSession(recipeId: string): void {
   const session = sessionOf(recipeId);
-  if (session && !isStarted(session) && session.checked.length === 0) put(recipeId, null);
+  if (session && !isStarted(session) && session.checked.length === 0 && Object.keys(session.weights).length === 0) {
+    put(recipeId, null);
+  }
 }
 
 /* ── Для CookingHost ──────────────────────────────────────────────────── */
@@ -464,6 +486,24 @@ function normalizeTimer(raw: unknown): StepTimer | null {
   };
 }
 
+const UNIT_KEYS = new Set<string>(UNITS.map((u) => u.key));
+
+function normalizeWeights(raw: unknown): Record<string, CookWeight> {
+  const out: Record<string, CookWeight> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const w = (value ?? {}) as Partial<CookWeight>;
+    if (!num(w.amount) || w.amount <= 0 || typeof w.unit !== "string" || !UNIT_KEYS.has(w.unit)) continue;
+    out[key] = {
+      amount: w.amount,
+      unit: w.unit as Unit,
+      ...(w.cooked === true ? { cooked: true } : {}),
+      ...(typeof w.rowId === "string" ? { rowId: w.rowId } : {}),
+    };
+  }
+  return out;
+}
+
 /** Зіпсоване чи чуже в сховищі не має валити застосунок — просто відкидаємо. */
 function normalizeSessions(raw: unknown): Record<string, CookSession> {
   const out: Record<string, CookSession> = {};
@@ -493,6 +533,8 @@ function normalizeSessions(raw: unknown): Record<string, CookSession> {
       checked: Array.isArray(s.checked) ? s.checked.filter((k): k is string => typeof k === "string") : [],
       customSec,
       timers,
+      // Сесії до ваг їх не мають — порожньо, а не зламано.
+      weights: normalizeWeights(s.weights),
       touchedAt: num(s.touchedAt) ? s.touchedAt : Date.now(),
     };
   }

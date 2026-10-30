@@ -268,6 +268,57 @@ check("БЖВ дають більше енергії, ніж калорії, —
 check("порожній розклад не пройде", aiModule.cleanAnswer({ items: [] }), null);
 
 /*
+ * Страва, як її зварили: макарони зважили вже вареними. Етикетку сухих
+ * моделі не даємо, а сира вага того, що зважили готовим, мусить бути
+ * правдоподібною — з неї списується пачка.
+ */
+const cookedDish = {
+  title: "Карбонара",
+  lines: [
+    { name: "Спагеті Barilla (Паста)", qty: "300 г", cooked: true, label: { kcal: 359, protein: 12.5, fat: 2, carbs: 71 } },
+    { name: "Бекон", qty: "150 г", label: { kcal: 541, protein: 37, fat: 42, carbs: 1.4 } },
+  ],
+  steps: [{ text: "Відвари спагеті, обсмаж бекон." }],
+};
+const cookedText = aiModule.describeCooked(cookedDish);
+check("готове позначено", cookedText.includes("1. Спагеті Barilla (Паста): 300 г — вага готового"), true);
+check("етикетку сухих до готового не даємо", cookedText.includes("359 ккал"), false);
+check("етикетку сирого — даємо", cookedText.includes("541 ккал"), true);
+
+const cookedItem = (line, grams, raw, kcal, protein, fat, carbs) => ({
+  line, name: "x", grams, raw_grams: raw, kcal, protein, fat, carbs,
+});
+const cookedGood = aiModule.cleanCooked(
+  {
+    items: [
+      cookedItem(1, 300, 125, 470, 17, 3, 93),
+      cookedItem(2, 150, 999, 811, 55.5, 63, 2.1),
+      cookedItem(0, 5, 5, 45, 0, 5, 0),
+    ],
+    note: "300 г варених — це близько 125 г сухих.",
+  },
+  cookedDish,
+);
+check("варене: склад складає код", cookedGood?.nutrition.kcal, 1326);
+check("варене: рядки з номерами складу від нуля, дописане — без", cookedGood?.items.map((i) => i.line), [0, 1, null]);
+check("варене: сира вага з ШІ, зважене сирим — як є", cookedGood?.items.map((i) => i.rawGrams), [125, 150, 5]);
+check(
+  "300 г варених із 10 г сухих — не пройде",
+  aiModule.cleanCooked({ items: [cookedItem(1, 300, 10, 470, 17, 3, 93), cookedItem(2, 150, 150, 811, 55.5, 63, 2.1)] }, cookedDish),
+  null,
+);
+check(
+  "зважене готовим пропало з розкладу — не пройде",
+  aiModule.cleanCooked({ items: [cookedItem(2, 150, 150, 811, 55.5, 63, 2.1)] }, cookedDish),
+  null,
+);
+check(
+  "фізика рядків та сама: БЖВ на 100 г замість кількості — не пройде",
+  aiModule.cleanCooked({ items: [cookedItem(1, 300, 125, 470, 17, 3, 93), cookedItem(2, 15, 15, 81, 37, 42, 1.4)] }, cookedDish),
+  null,
+);
+
+/*
  * День — місцевий, а не UTC. У Києві страва, приготована о 00:30, має мітку
  * вчорашнього UTC-дня, і за UTC вона зникала б із сьогоднішнього підсумку.
  */
