@@ -1,7 +1,7 @@
 "use client";
 
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
-import { Camera, Check, Plus, ReceiptText, ScanBarcode, ShoppingBasket, Store } from "lucide-react";
+import { Camera, Check, ListFilter, Plus, ReceiptText, ScanBarcode, Search, ShoppingBasket, Store } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -12,7 +12,6 @@ import { NewIngredientSheet } from "@/components/NewIngredientSheet";
 import { ProductEditorSheet, typeFamily } from "@/components/ProductEditorSheet";
 import { ProductPicker } from "@/components/ProductPicker";
 import { ProductSheet } from "@/components/ProductSheet";
-import { TopBar } from "@/components/TopBar";
 import { Button, EmptyState, Segmented, Sheet, Spinner, useToast } from "@/components/ui";
 import {
   cachedBrands,
@@ -23,9 +22,9 @@ import {
   type TeachOutcome,
 } from "@/components/pantry/catalog";
 import { ConflictSheet } from "@/components/pantry/ConflictSheet";
-import { ItemSheet } from "@/components/pantry/ItemSheet";
+import { ItemSheet, inDays } from "@/components/pantry/ItemSheet";
 import { NamingSequence, namingDraft, namingOfferText, needsNaming } from "@/components/pantry/NamingSequence";
-import { ActionToast, PantryGroupSheet, PantryGroups } from "@/components/pantry/PantryGroups";
+import { ActionToast, ListHeader, PantryGroupSheet, PantryGroups, type PantryGrouping } from "@/components/pantry/PantryGroups";
 import {
   MAX_OFF_LOOKUPS,
   ReceiptReview,
@@ -42,6 +41,7 @@ import {
   CAT_LABEL,
   CAT_ORDER,
   allIngredients,
+  canonicalKey,
   ing,
   isOwnKey,
   knownIngredient,
@@ -83,7 +83,7 @@ import {
 import { teachPlan } from "@/lib/teach";
 import type { IngredientCat, IngredientDef, PantryItem, Unit } from "@/lib/types";
 import { formatSummed, ingredientQtyLabel, sumQuantities } from "@/lib/units";
-import { compressImage, dateKey, haptic, newId, plural } from "@/lib/utils";
+import { cn, compressImage, dateKey, haptic, newId, plural } from "@/lib/utils";
 
 /*
  * Комора по товару (I4–I6): один рядок — одна покупка, згрупована за типом.
@@ -97,6 +97,12 @@ import { compressImage, dateKey, haptic, newId, plural } from "@/lib/utils";
  * removePantry(id). Жодного «addPantry({...item, ...changes})»: для комори по
  * товару це вже друга пачка, а не правка першої.
  */
+
+/** Скільки днів наперед товар уже «варто вжити»: межа «скоро» з expiryInfo. */
+const SOON_DAYS = 3;
+
+type StockFilter = "all" | "urgent" | IngredientCat;
+type BasicsFilter = "all" | "missing" | "have";
 
 /** Для якого рядка чи скану відкрито вибір товару. */
 type PickerContext =
@@ -160,6 +166,10 @@ export default function PantryPage() {
   const canReadPhoto = isSupabaseConfigured && !!account;
 
   const [tab, setTab] = useState<"stock" | "basics">("stock");
+  /** Фільтр «У коморі»: усе, «Варто вжити» чи одна категорія. Свій у кожної вкладки. */
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+  const [basicsFilter, setBasicsFilter] = useState<BasicsFilter>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [addSheet, setAddSheet] = useState(false);
   /** id рядка, картку якого відкрито. */
   const [itemId, setItemId] = useState<string | null>(null);
@@ -222,11 +232,17 @@ export default function PantryPage() {
    */
   const stock = useMemo(() => pantry.filter((p) => p.productId || !ing(p.key).staple), [pantry, customIngredients]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /*
+   * «Варто вжити» — прострочене і те, що зіпсується за три дні: саме стільки
+   * expiryInfo вважає «скоро». Межа рахується від today, тож опівночі
+   * зсувається разом із ним.
+   */
+  const soonUntil = inDays(SOON_DAYS);
   const grouping = useMemo(
-    () => groupPantry(stock, products, today),
+    () => groupPantry(stock, products, today, soonUntil),
     // customIngredients — родовід і категорії дописаних типів.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [stock, products, today, customIngredients],
+    [stock, products, today, soonUntil, customIngredients],
   );
   /*
    * «14 товарів · 9 типів» і число на вкладці — про те саме, що видно у
@@ -257,9 +273,61 @@ export default function PantryPage() {
    * лише тоді, коли в коморі є саме олія. Різновид лише підписуємо під нею.
    * Рахуємо різні ключі, а не рядки: у двох членів сімʼї «Сіль» одна (D7).
    */
-  const basicsHave = allIngredients().filter(
-    (d) => d.staple && pantry.some((p) => p.key === d.key),
-  ).length;
+  const pantryKeys = useMemo(() => new Set(pantry.map((p) => p.key)), [pantry]);
+  const basicsHave = allIngredients().filter((d) => d.staple && pantryKeys.has(d.key)).length;
+  const basicsTotal = basics.reduce((n, [, items]) => n + items.length, 0);
+
+  /* ── Фільтр ──────────────────────────────────────────────────────── */
+
+  /*
+   * Категорія рядка «Варто вжити» — та сама, у якій він лежав би серед груп:
+   * за канонічним типом, як рахує groupPantry. Інакше фільтр «Молочне»
+   * ховав би прострочений кефір, що в списку стоїть під «Молочним».
+   */
+  const urgentOf = (cat: IngredientCat) => (row: PantryItem) => ing(canonicalKey(row.key)).cat === cat;
+  const shownGrouping: PantryGrouping =
+    stockFilter === "all"
+      ? grouping
+      : stockFilter === "urgent"
+        ? { expired: grouping.expired, soon: grouping.soon, sections: [] }
+        : {
+            expired: grouping.expired.filter(urgentOf(stockFilter)),
+            soon: grouping.soon.filter(urgentOf(stockFilter)),
+            sections: grouping.sections.filter((s) => s.cat === stockFilter),
+          };
+
+  const filterOptions: Array<{ value: string; label: string; count?: number }> =
+    tab === "stock"
+      ? [
+          { value: "all", label: "Усі категорії", count: counts.items },
+          { value: "urgent", label: "Варто вжити", count: grouping.expired.length + grouping.soon.length },
+          ...CAT_ORDER.map((cat) => ({
+            value: cat,
+            label: CAT_LABEL[cat],
+            count:
+              (grouping.sections.find((s) => s.cat === cat)?.groups.reduce((n, g) => n + g.rows.length, 0) ?? 0) +
+              grouping.expired.filter(urgentOf(cat)).length +
+              grouping.soon.filter(urgentOf(cat)).length,
+          })).filter((o) => o.count > 0 || o.value === stockFilter),
+        ]
+      : [
+          { value: "all", label: "Усі" },
+          { value: "missing", label: "Чого бракує", count: basicsTotal - basicsHave },
+          { value: "have", label: "Що є", count: basicsHave },
+        ];
+  const currentFilter: string = tab === "stock" ? stockFilter : basicsFilter;
+  const setFilter = (value: string) => {
+    if (tab === "stock") setStockFilter(value as StockFilter);
+    else setBasicsFilter(value as BasicsFilter);
+  };
+  /** Підпис активного фільтра; порожньо — показано все. */
+  const filterLabel = currentFilter === "all" ? "" : (filterOptions.find((o) => o.value === currentFilter)?.label ?? "");
+  const basicsShown = basics.reduce(
+    (n, [, items]) =>
+      n + items.filter((d) => basicsFilter === "all" || (basicsFilter === "have") === pantryKeys.has(d.key)).length,
+    0,
+  );
+  const recent = useMemo(() => recentProducts(products).slice(0, 5), [products]);
 
   const group = groupKey
     ? (grouping.sections.flatMap((s) => s.groups).find((g) => g.key === groupKey) ?? null)
@@ -926,88 +994,152 @@ export default function PantryPage() {
 
   return (
     <div className="pb-8">
-      <TopBar
-        back={false}
-        title="Моя комора"
-        subtitle={
-          counts.items
-            ? `${counts.items} ${plural(counts.items, "товар", "товари", "товарів")} · ${counts.types} ${plural(counts.types, "тип", "типи", "типів")}`
-            : "Що є вдома"
-        }
-        right={
-          <div className="flex items-center gap-2">
-            {/* Список покупок — зворотний бік комори: те, чого в ній немає. */}
-            <Link
-              href="/shopping"
-              onClick={() => haptic(8)}
-              aria-label="Список покупок"
-              className="relative grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
-            >
-              <ShoppingBasket size={18} />
-              {toBuy > 0 && (
-                <span className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-brand px-1 text-[10px] font-extrabold text-brand-ink">
-                  {toBuy}
-                </span>
-              )}
-            </Link>
-            {/* Бібліотека товарів: картки з КБЖВ, «зʼїв», «у список». */}
-            <Link
-              href="/products"
-              onClick={() => haptic(8)}
-              aria-label="Бібліотека товарів"
-              className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
-            >
-              <Store size={18} />
-            </Link>
-            {/* Сканер — найчастіший шлях у комору: без проміжного аркуша. */}
+      {/*
+        Шапка й вкладки стоять на місці, прокручується лише список: фільтр і
+        «+» потрібні саме тоді, коли долистав до середини комори.
+      */}
+      <header className="pad-safe-t sticky top-0 z-30 bg-bg">
+        <div className="flex h-[52px] items-center gap-2 pl-5 pr-4">
+          <h1 className="min-w-0 flex-1 truncate font-display text-[22px] font-bold">Комора</h1>
+          {/* Список покупок — зворотний бік комори: те, чого в ній немає. */}
+          <Link
+            href="/shopping"
+            onClick={() => haptic(8)}
+            aria-label={toBuy > 0 ? `Список покупок, купити ${toBuy}` : "Список покупок"}
+            className="relative grid h-[38px] w-[38px] place-items-center rounded-[10px] bg-surface-2"
+          >
+            <ShoppingBasket size={18} />
+            {toBuy > 0 && (
+              <span className="absolute -right-1 -top-1 grid h-[17px] min-w-[17px] place-items-center rounded-[5px] bg-brand px-1 text-[10px] font-extrabold text-brand-ink">
+                {toBuy}
+              </span>
+            )}
+          </Link>
+          {/* Бібліотека товарів: картки з КБЖВ, «зʼїв», «у список». */}
+          <Link
+            href="/products"
+            onClick={() => haptic(8)}
+            aria-label="Бібліотека товарів"
+            className="grid h-[38px] w-[38px] place-items-center rounded-[10px] bg-surface-2"
+          >
+            <Store size={18} />
+          </Link>
+          {/* Сканер — найчастіший шлях у комору: без проміжного аркуша. */}
+          <button
+            onClick={() => {
+              haptic(12);
+              setScanOpen(true);
+            }}
+            aria-label="Сканувати штрихкод"
+            className="grid h-[38px] w-[38px] place-items-center rounded-[10px] bg-surface-2"
+          >
+            <ScanBarcode size={18} />
+          </button>
+          <button
+            onClick={() => {
+              haptic(12);
+              setAddSheet(true);
+            }}
+            aria-label="Додати продукт"
+            className="grid h-[38px] w-[38px] place-items-center rounded-[10px] brand-gradient text-brand-ink"
+          >
+            <Plus size={19} strokeWidth={2.4} />
+          </button>
+        </div>
+
+        {/* Вкладки: що приніс і що є з базового; поруч — фільтр поточної вкладки */}
+        <div className="relative flex gap-2 px-4 pb-3.5 pt-0.5">
+          <Segmented
+            className="flex-1"
+            value={tab}
+            onChange={(next) => {
+              setTab(next);
+              setFilterOpen(false);
+            }}
+            options={[
+              { value: "stock", label: "У коморі", count: counts.items },
+              { value: "basics", label: "Базові", count: `${basicsHave}/${basicsTotal}` },
+            ]}
+          />
+          <button
+            onClick={() => {
+              haptic(8);
+              setFilterOpen((open) => !open);
+            }}
+            aria-label={filterLabel ? `Фільтр: ${filterLabel}` : "Фільтр"}
+            aria-haspopup="menu"
+            aria-expanded={filterOpen}
+            className={cn(
+              "grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border bg-surface transition-colors",
+              filterOpen || filterLabel ? "border-brand text-brand" : "border-line text-ink",
+            )}
+          >
+            <ListFilter size={18} strokeWidth={2.2} />
+          </button>
+          {filterOpen && (
+            <>
+              <div aria-hidden className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
+              <div
+                role="menu"
+                aria-label="Фільтр"
+                className="absolute right-4 top-full z-50 -mt-1.5 w-[236px] rounded-[12px] border border-line-strong bg-surface-2 p-1 shadow-[0_24px_60px_-16px_rgb(0_0_0_/_0.9)] light:shadow-[var(--shadow-card)]"
+              >
+                {filterOptions.map((o) => {
+                  const on = o.value === currentFilter;
+                  return (
+                    <button
+                      key={o.value}
+                      role="menuitemradio"
+                      aria-checked={on}
+                      onClick={() => {
+                        haptic(8);
+                        setFilter(o.value);
+                        setFilterOpen(false);
+                      }}
+                      className={cn(
+                        "flex h-10 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[13.5px]",
+                        on ? "bg-brand/12 font-extrabold text-brand" : "font-semibold",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                      {o.count != null && <span className="shrink-0 text-[12px] opacity-70">{o.count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </header>
+
+      <section className="flex flex-col gap-2.5 px-4">
+        {filterLabel && (
+          <div className="flex items-center gap-2 text-[12.5px] font-bold text-muted">
+            Фільтр: <span className="min-w-0 truncate text-ink">{filterLabel}</span>
             <button
               onClick={() => {
-                haptic(12);
-                setScanOpen(true);
+                haptic(8);
+                setFilter("all");
               }}
-              aria-label="Сканувати штрихкод"
-              className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
+              className="ml-auto shrink-0 font-extrabold text-brand"
             >
-              <ScanBarcode size={18} />
-            </button>
-            <button
-              onClick={() => {
-                haptic(12);
-                setAddSheet(true);
-              }}
-              aria-label="Додати продукт"
-              className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-brand-ink"
-            >
-              <Plus size={19} />
+              Скинути
             </button>
           </div>
-        }
-      />
+        )}
 
-      {/* Вкладки: що приніс і що є з базового */}
-      <div className="px-4 pt-4">
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "stock", label: `У коморі (${counts.items})` },
-            { value: "basics", label: `Базові (${basicsHave})` },
-          ]}
-        />
-      </div>
-
-      {tab === "stock" ? (
-        <section className="px-4 pt-4">
-          {!hydrated ? null : stock.length === 0 ? (
+        {tab === "stock" ? (
+          !hydrated ? null : stock.length === 0 ? (
             <EmptyState
               emoji="🧊"
               title="Тут порожньо"
-              note="Додай продукти кнопкою вгорі — скануванням штрихкоду, чека або зі списку."
-              action={<Button onClick={() => setPicker({ kind: "add" })}>Додати продукт</Button>}
+              action={<Button onClick={() => setAddSheet(true)}>Додати продукт</Button>}
             />
+          ) : shownGrouping.expired.length + shownGrouping.soon.length + shownGrouping.sections.length === 0 ? (
+            <p className="py-14 text-center text-[14px] font-bold text-muted">За цим фільтром нічого немає</p>
           ) : (
             <PantryGroups
-              grouping={grouping}
+              grouping={shownGrouping}
               displayName={displayName}
               shortName={shortName}
               canUseProducts={canUseProducts}
@@ -1017,30 +1149,29 @@ export default function PantryPage() {
                 offerUndoRemove(row);
               }}
               onOpenGroup={(g) => setGroupKey(g.key)}
-              onRefineRow={(row) => void chooseProduct(row)}
+              onRescue={() => router.push("/decide/rescue")}
             />
-          )}
-        </section>
-      ) : (
-        /*
-         * Базові продукти — не інвентар, а чеклист. Сіль і олія або є, або
-         * немає; скільки саме їх лишилось, ніхто не рахує, і питати про це
-         * означало б вимагати роботи заради нуля користі. Тому тут увесь
-         * список одразу, а не лише те, що вже додано.
-         */
-        <section className="px-4 pt-4">
-          <p className="text-[12.5px] leading-snug text-muted">
-            Те, що зазвичай просто є вдома. Познач, чого бракує, — підбір страв за
-            холодильником це врахує.
-          </p>
-          <div className="mt-4 flex flex-col gap-5">
-            {basics.map(([cat, items]) => (
-              <div key={cat}>
-                <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">
-                  {CAT_LABEL[cat]}
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {items.map((def) => {
+          )
+        ) : (
+          /*
+           * Базові продукти — не інвентар, а чеклист. Сіль і олія або є, або
+           * немає; скільки саме їх лишилось, ніхто не рахує, і питати про це
+           * означало б вимагати роботи заради нуля користі. Тому тут увесь
+           * список одразу, а не лише те, що вже додано.
+           */
+          basics.map(([cat, items]) => {
+            const shown = items.filter(
+              (def) => basicsFilter === "all" || (basicsFilter === "have") === pantryKeys.has(def.key),
+            );
+            if (!shown.length) return null;
+            return (
+              <div key={cat} className="overflow-hidden rounded-[10px] border border-line bg-surface">
+                <ListHeader
+                  label={CAT_LABEL[cat]}
+                  aside={`${items.filter((d) => pantryKeys.has(d.key)).length}/${items.length}`}
+                />
+                <div className="grid grid-cols-2 gap-px border-t border-line bg-line">
+                  {shown.map((def) => {
                     const rows = pantry.filter((p) => p.key === def.key);
                     const have = rows.length > 0;
                     const real = rows.filter((r) => !isBareStaple(r));
@@ -1056,44 +1187,55 @@ export default function PantryPage() {
                         : measured.length
                           ? formatSummed(sumQuantities(measured.map((r) => ({ amount: r.amount, unit: r.unit as Unit }))))
                           : "";
-                    // Кілька справжніх покупок під однією галочкою — кажемо скільки: «Олія ✓ (2 товари)».
+                    // Кілька справжніх покупок під однією галочкою — кажемо скільки: «1,85 л · 2 товари».
                     const several = real.length > 1 || real.some((r) => r.productId);
                     // Самої олії немає, але є її різновид — скажемо, щоб не купили зайве.
                     const variant = have
                       ? undefined
                       : pantry.find((p) => p.key !== def.key && satisfies(p.key, def.key));
+                    const meta = [
+                      qty,
+                      several ? `${real.length} ${plural(real.length, "товар", "товари", "товарів")}` : "",
+                      variant ? `є ${lowerFirst(ing(variant.key).label)}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
                     return (
                       <button
                         key={def.key}
                         onClick={() => toggleBasic(def)}
                         aria-pressed={have}
-                        className={`inline-flex items-center gap-1.5 rounded-full border py-2 pl-3 pr-3 text-[13px] font-semibold ${
-                          have ? "border-mint/50 bg-mint/12" : "border-line bg-surface text-muted"
-                        }`}
+                        className="flex h-[46px] min-w-0 select-none items-center gap-[9px] bg-surface pl-3 pr-2.5 text-left"
                       >
-                        <span>{def.emoji}</span>
-                        {def.label}
-                        {qty && <span className="text-[11px] font-bold text-brand">{qty}</span>}
-                        {variant && (
-                          <span className="text-[11px] font-semibold text-mint">
-                            є різновид: {ing(variant.key).label}
+                        <span className="text-base leading-none">{def.emoji}</span>
+                        <span className="flex min-w-0 flex-1 flex-col gap-px">
+                          <span className={cn("truncate text-[13px] font-bold", have ? "text-ink" : "text-faint")}>
+                            {def.label}
                           </span>
-                        )}
-                        {have && <Check size={13} className="text-mint" />}
-                        {several && (
-                          <span className="text-[11px] font-semibold text-muted">
-                            ({real.length} {plural(real.length, "товар", "товари", "товарів")})
-                          </span>
-                        )}
+                          {meta && <span className="truncate text-[11px] font-semibold text-faint">{meta}</span>}
+                        </span>
+                        <span
+                          className={cn(
+                            "grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border-[1.5px] transition-colors",
+                            have ? "border-brand bg-brand" : "border-line-strong bg-transparent",
+                          )}
+                        >
+                          {have && <Check size={12} strokeWidth={3.5} className="text-brand-ink" />}
+                        </span>
                       </button>
                     );
                   })}
+                  {/* Непарна клітинка: без заповнювача там просвічувала б лінія сітки. */}
+                  {shown.length % 2 === 1 && <span aria-hidden className="bg-surface" />}
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+            );
+          })
+        )}
+        {tab === "basics" && basicsShown === 0 && (
+          <p className="py-14 text-center text-[14px] font-bold text-muted">За цим фільтром нічого немає</p>
+        )}
+      </section>
 
       {/* Фото чека: камера на телефоні, галерея на столі */}
       <input
@@ -1108,47 +1250,80 @@ export default function PantryPage() {
         }}
       />
 
-      {/* Як додати продукт */}
+      {/* Як додати продукт: пошук, два-три сканери й нещодавні товари одним дотиком */}
       <Sheet open={addSheet} onClose={() => setAddSheet(false)} title="Додати продукт">
-        <div className="flex flex-col gap-2 pb-4">
-          <AddWay
-            icon={<ScanBarcode size={19} />}
-            title="Сканувати штрихкод"
-            note="Наведи камеру на пачку — продукт знайдеться сам"
-            onClick={() => {
-              setAddSheet(false);
-              setScanOpen(true);
-            }}
-          />
-          <AddWay
-            icon={<ReceiptText size={19} />}
-            title="Сканувати чек"
-            note="QR на касовому чеку — усі покупки одразу"
-            onClick={() => {
-              setAddSheet(false);
-              setReceiptOpen(true);
-            }}
-          />
-          {canReadPhoto && (
-            <AddWay
-              icon={<Camera size={19} />}
-              title="Сфотографувати чек"
-              note="Коли QR немає або він стерся — прочитаємо з фото"
-              onClick={() => {
-                setAddSheet(false);
-                photoInput.current?.click();
-              }}
-            />
-          )}
-          <AddWay
-            icon={<Plus size={19} />}
-            title="Обрати зі списку"
-            note={canUseProducts ? "Товар за назвою чи виробником — або просто тип" : "Пошук по каталогу продуктів"}
+        <div className="flex flex-col gap-3 pb-4">
+          <button
             onClick={() => {
               setAddSheet(false);
               setPicker({ kind: "add" });
             }}
-          />
+            className="flex h-[46px] items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5 text-left"
+          >
+            <Search size={18} className="shrink-0 text-muted" />
+            <span className="truncate text-[15px] font-semibold text-faint">
+              {canUseProducts ? "Назва, виробник або тип" : "Назва продукту"}
+            </span>
+          </button>
+          <div className={cn("grid gap-2", canReadPhoto ? "grid-cols-3" : "grid-cols-2")}>
+            <AddTile
+              icon={<ScanBarcode size={22} />}
+              label="Штрихкод"
+              onClick={() => {
+                setAddSheet(false);
+                setScanOpen(true);
+              }}
+            />
+            <AddTile
+              icon={<ReceiptText size={22} />}
+              label="QR чека"
+              onClick={() => {
+                setAddSheet(false);
+                setReceiptOpen(true);
+              }}
+            />
+            {/* Коли QR немає або він стерся — прочитаємо з фото */}
+            {canReadPhoto && (
+              <AddTile
+                icon={<Camera size={22} />}
+                label="Фото чека"
+                onClick={() => {
+                  setAddSheet(false);
+                  photoInput.current?.click();
+                }}
+              />
+            )}
+          </div>
+          {recent.length > 0 && (
+            <>
+              <p className="px-1 pt-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">
+                Нещодавні товари
+              </p>
+              <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+                {recent.map((p, i) => {
+                  const def = ing(p.typeKey);
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setAddSheet(false);
+                        addProduct(p);
+                      }}
+                      className={cn(
+                        "flex h-[46px] w-full items-center gap-3 px-3.5 text-left active:bg-surface-2",
+                        i > 0 && "border-t border-line",
+                      )}
+                    >
+                      <span className="w-[22px] shrink-0 text-lg leading-none">{def.emoji}</span>
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{p.name}</span>
+                      <span className="max-w-[35%] shrink-0 truncate text-[12px] font-semibold text-faint">{def.label}</span>
+                      <Plus size={16} strokeWidth={2.2} className="shrink-0 text-muted" />
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </Sheet>
 
@@ -1603,30 +1778,23 @@ function recentProducts(products: Readonly<Record<string, Product>>): Product[] 
     .slice(0, 12);
 }
 
-/** Один зі способів покласти продукт у комору. */
-function AddWay({
-  icon,
-  title,
-  note,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  note: string;
-  onClick: () => void;
-}) {
+/** Один зі способів покласти продукт у комору: плитка зі значком і підписом. */
+function AddTile({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
     <button
-      onClick={onClick}
-      className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5 text-left active:bg-surface-2"
+      onClick={() => {
+        haptic(8);
+        onClick();
+      }}
+      className="flex h-[78px] flex-col items-center justify-center gap-2 rounded-[10px] border border-line bg-surface text-[12.5px] font-bold active:bg-surface-2"
     >
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface-2 text-brand">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[14px] font-bold">{title}</span>
-        <span className="block text-[11.5px] leading-snug text-muted">{note}</span>
-      </span>
+      <span className="text-brand">{icon}</span>
+      {label}
     </button>
   );
+}
+
+/** «Різновид» з малої в підписі: «є спред», а не «є Спред». */
+function lowerFirst(text: string): string {
+  return text ? text[0].toLocaleLowerCase("uk") + text.slice(1) : text;
 }

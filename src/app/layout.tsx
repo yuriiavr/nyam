@@ -51,7 +51,7 @@ export const viewport: Viewport = {
    * вибір, якого не мало бути: у темному застосунку на світлому телефоні
    * смуга вгорі малювалась кремовою. Далі колір міняє Providers разом з темою.
    */
-  themeColor: "#0d0a09",
+  themeColor: "#070709",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

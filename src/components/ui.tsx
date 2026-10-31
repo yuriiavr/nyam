@@ -35,9 +35,9 @@ const VARIANTS: Record<ButtonVariant, string> = {
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: "h-9 px-3.5 text-[13px] rounded-xl gap-1.5",
-  md: "h-12 px-5 text-[15px] rounded-2xl gap-2",
-  lg: "h-14 px-6 text-base rounded-xl3 gap-2.5",
+  sm: "h-9 px-3.5 text-[13px] rounded-[8px] gap-1.5",
+  md: "h-12 px-5 text-[15px] rounded-[10px] gap-2",
+  lg: "h-14 px-6 text-base rounded-[12px] gap-2.5",
 };
 
 export interface ButtonProps extends HTMLMotionProps<"button"> {
@@ -98,7 +98,7 @@ export function IconButton({
         rest.onClick?.(e);
       }}
       className={cn(
-        "grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface-2 text-ink transition-colors active:bg-line",
+        "grid h-11 w-11 shrink-0 place-items-center rounded-[10px] bg-surface-2 text-ink transition-colors active:bg-line",
         className,
       )}
       {...rest}
@@ -159,7 +159,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl3 border border-line bg-surface shadow-[var(--shadow-card)]",
+        "rounded-[10px] border border-line bg-surface",
         className,
       )}
       {...rest}
@@ -359,15 +359,15 @@ export function Sheet({
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={handleDragEnd}
             style={{ maxHeight: `min(${maxHeight}, 100%)` }}
-            className="pointer-events-auto absolute bottom-0 left-1/2 flex w-full max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[28px] border border-line bg-bg-elev"
+            className="pointer-events-auto absolute bottom-0 left-1/2 flex w-full max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[20px] border-t border-line bg-bg-elev"
           >
-            <div className="flex cursor-grab justify-center pt-3 pb-1 active:cursor-grabbing">
-              <div className="h-1.5 w-11 rounded-full bg-line" />
+            <div className="flex cursor-grab justify-center pt-2.5 pb-2 active:cursor-grabbing">
+              <div className="h-1 w-9 rounded-full bg-line-strong" />
             </div>
             {title && (
               <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-1">
-                <h2 className="font-display text-lg font-bold">{title}</h2>
-                <IconButton label="Закрити" onClick={onClose} className="h-9 w-9 rounded-xl">
+                <h2 className="min-w-0 flex-1 font-display text-base font-bold">{title}</h2>
+                <IconButton label="Закрити" onClick={onClose} className="h-9 w-9 rounded-[10px]">
                   <X size={17} />
                 </IconButton>
               </div>
@@ -463,6 +463,11 @@ export function EmptyState({
 
 /* ── Segmented control ────────────────────────────────────────────────── */
 
+/**
+ * Перемикач із «повзунком», як у редизайні комори: тонка рамка, повзунок
+ * кольору лінії. `count` — тьмяне число поруч із підписом («У коморі 11»):
+ * воно не мусить кричати, але й ховати його в дужки — зайвий шум.
+ */
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -471,13 +476,13 @@ export function Segmented<T extends string>({
 }: {
   value: T;
   onChange: (v: T) => void;
-  options: Array<{ value: T; label: string }>;
+  options: Array<{ value: T; label: string; count?: ReactNode }>;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "no-scrollbar flex gap-1 overflow-x-auto rounded-2xl bg-surface-2 p-1",
+        "no-scrollbar flex overflow-x-auto rounded-[10px] border border-line bg-surface p-[3px]",
         className,
       )}
     >
@@ -490,17 +495,26 @@ export function Segmented<T extends string>({
               haptic(8);
               onChange(o.value);
             }}
-            className="relative shrink-0 flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-semibold"
+            aria-pressed={active}
+            className="relative min-h-[32px] shrink-0 flex-1 whitespace-nowrap rounded-[7px] px-3 py-1.5 text-[13.5px] font-extrabold"
           >
             {active && (
               <motion.span
                 layoutId={`seg-${options.map((x) => x.value).join()}`}
                 transition={{ type: "spring", stiffness: 480, damping: 38 }}
-                className="absolute inset-0 rounded-xl bg-bg-elev shadow-[var(--shadow-card)]"
+                className="absolute inset-0 rounded-[7px] bg-line shadow-[0_4px_14px_-4px_rgb(0_0_0_/_0.7)] light:shadow-none"
               />
             )}
-            <span className={cn("relative z-10", active ? "text-ink" : "text-muted")}>
+            <span
+              className={cn(
+                "relative z-10 inline-flex items-center gap-1.5 transition-colors",
+                active ? "text-ink" : "text-muted",
+              )}
+            >
               {o.label}
+              {o.count != null && o.count !== "" && (
+                <span className="text-[11.5px] text-faint">{o.count}</span>
+              )}
             </span>
           </button>
         );
@@ -696,7 +710,7 @@ export function QuantityInput({
         placeholder={placeholder}
         disabled={current === "taste"}
         aria-label={label ? `Кількість: ${label}` : "Кількість"}
-        className="h-9 w-[62px] rounded-xl bg-surface-2 px-2 text-center text-[13px] disabled:opacity-40"
+        className="h-9 w-[62px] rounded-[8px] bg-surface-2 px-2 text-center text-[13px] font-semibold disabled:opacity-40"
       />
       <select
         value={current}
@@ -705,7 +719,7 @@ export function QuantityInput({
           onChange({ amount: next === "taste" ? undefined : amount, unit: next });
         }}
         aria-label={label ? `Одиниця для ${label}` : "Одиниця виміру"}
-        className="h-9 w-[76px] shrink-0 rounded-xl bg-surface-2 px-1.5 text-center text-[12px] font-semibold"
+        className="h-9 w-[76px] shrink-0 rounded-[8px] bg-surface-2 px-1.5 text-center text-[12px] font-semibold"
       >
         {groups.map((group) => (
           <optgroup key={group.title} label={group.title}>

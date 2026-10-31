@@ -376,17 +376,24 @@ function distinctStaples(rows: PantryItem[]): PantryItem[] {
 /**
  * Комора для вкладки «У коморі» (F1): прострочене окремо зверху, решта —
  * розділи за CAT_ORDER, у кожному групи за точним типом із підсумком.
+ *
+ * `soonUntil` (YYYY-MM-DD, включно) виносить нагору ще й те, що ось-ось
+ * зіпсується: «Варто вжити» з редизайну — це прострочене разом із цим. Такі
+ * рядки в групи вже не потрапляють, інакше одна пачка висіла б у двох місцях.
+ * Без параметра `soon` порожній і групи ті самі, що й були.
  */
 export function groupPantry(
   rows: PantryItem[],
   products: ProductCache,
   today: string,
-): { expired: PantryItem[]; sections: PantrySection[] } {
+  soonUntil?: string,
+): { expired: PantryItem[]; soon: PantryItem[]; sections: PantrySection[] } {
   const all = distinctStaples(rows);
-  const expired = all
-    .filter((r) => r.expiresAt && r.expiresAt < today)
-    .sort((a, b) => ((a.expiresAt as string) < (b.expiresAt as string) ? -1 : 1));
-  const fresh = all.filter((r) => !(r.expiresAt && r.expiresAt < today));
+  const byDate = (a: PantryItem, b: PantryItem) => ((a.expiresAt as string) < (b.expiresAt as string) ? -1 : 1);
+  const expired = all.filter((r) => r.expiresAt && r.expiresAt < today).sort(byDate);
+  const isSoon = (r: PantryItem) => !!soonUntil && !!r.expiresAt && r.expiresAt >= today && r.expiresAt <= soonUntil;
+  const soon = all.filter(isSoon).sort(byDate);
+  const fresh = all.filter((r) => !(r.expiresAt && r.expiresAt < today) && !isSoon(r));
 
   const byKey = new Map<string, PantryItem[]>();
   for (const row of fresh) {
@@ -411,6 +418,7 @@ export function groupPantry(
 
   return {
     expired,
+    soon,
     sections: CAT_ORDER.filter((cat) => sections.has(cat)).map((cat) => ({
       cat,
       groups: (sections.get(cat) as PantryGroup[]).sort((a, b) =>

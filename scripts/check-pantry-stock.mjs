@@ -172,6 +172,21 @@ console.log("── groupPantry ──");
   const g = S.groupPantry([row({ id: "x1", key: "own_nevidome", amount: 2, unit: "pcs" }), row({ id: "x2", key: "own_nevidome", amount: 200, unit: "g" })], {}, TODAY);
   check("змішані одиниці без ваги штуки → «2 шт · 200 г»", formatSummed(g.sections[0].groups[0].total), "2 шт · 200 г");
 }
+{
+  // «Варто вжити»: до 16.09 включно — нагору, і з групи ця пачка зникає.
+  const rows = [
+    row({ id: "m1", productId: "mlk", amount: 1, unit: "l", expiresAt: "2026-09-20" }),
+    row({ id: "m2", productId: "gal", amount: 900, unit: "ml", expiresAt: "2026-09-16" }),
+    row({ id: "k1", key: "kefir", amount: 400, unit: "ml", expiresAt: "2026-09-11" }),
+    row({ id: "t1", key: "tsybulya", amount: 2, unit: "pcs", expiresAt: "2026-09-13" }),
+  ];
+  const g = S.groupPantry(rows, products, TODAY, "2026-09-16");
+  const groups = Object.fromEntries(g.sections.flatMap((s) => s.groups.map((gr) => [gr.key, gr])));
+  check("скоро: сьогодні й до межі включно, за строком", g.soon.map((r) => r.id), ["t1", "m2"]);
+  check("прострочене окремо від «скоро»", g.expired.map((r) => r.id), ["k1"]);
+  check("у групі лишилась пачка поза межею", groups.moloko.rows.map((r) => r.id), ["m1"]);
+  check("без межі «скоро» порожній", S.groupPantry(rows, products, TODAY).soon, []);
+}
 
 console.log("── Списання за id (D9) ──");
 {

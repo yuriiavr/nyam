@@ -1,14 +1,15 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Chip, QuantityInput, Sheet } from "@/components/ui";
+import { Plus, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { LinkRow } from "@/components/pantry/PantryGroups";
+import { Button, QuantityInput, Sheet } from "@/components/ui";
 import { ing, isOwnKey, lineage } from "@/data/ingredients";
 import { productHints } from "@/lib/product-hints";
 import type { Product } from "@/lib/product-types";
 import type { PantryItem } from "@/lib/types";
 import { formatNumber, formatQuantity } from "@/lib/units";
-import { haptic } from "@/lib/utils";
+import { cn, haptic } from "@/lib/utils";
 
 /*
  * Один рядок комори — одна покупка (F2, I4; «Обрати товар» — I5).
@@ -116,10 +117,13 @@ export function ItemSheet({
     updatePantry(row.id, changes);
   };
 
+  /*
+   * Строк більше не закриває аркуш: унизу є «Готово», а поруч — кількість і
+   * ціна, які часто правлять тим самим заходом.
+   */
   const saveExpiry = (expiresAt: string | undefined) => {
     haptic(10);
     patch({ expiresAt });
-    onClose();
   };
 
   /* ── Ціна ─────────────────────────────────────────────────────────────
@@ -165,78 +169,96 @@ export function ItemSheet({
 
   const evidence = !!(row?.receiptName || row?.barcode);
 
+  /* ── Дії з рядком: картка, «не той», тип, ще, прибрати ── */
+  const links: Array<{ key: string; label: ReactNode; onClick: () => void; tone?: "danger"; icon?: ReactNode }> = [];
+  if (row && def) {
+    if (canUseProducts && row.productId && onOpenProduct) {
+      const productId = row.productId;
+      links.push({ key: "card", label: "Картка товару", onClick: () => onOpenProduct(productId) });
+    }
+    if (canUseProducts && row.productId && onWrongProduct) {
+      links.push({ key: "wrong", label: "Не той товар?", onClick: () => onWrongProduct(row) });
+    }
+    if (onEditType && isOwnKey(row.key)) {
+      links.push({ key: "type", label: `Редагувати тип «${def.label}»`, onClick: () => onEditType(row.key) });
+    }
+    if (onAddMore) {
+      links.push({
+        key: "more",
+        label: "Додати ще",
+        onClick: onAddMore,
+        icon: <Plus size={15} strokeWidth={2.2} className="shrink-0 text-faint" />,
+      });
+    }
+    links.push({
+      key: "remove",
+      label: "Прибрати з комори",
+      tone: "danger",
+      onClick: () => {
+        removePantry(row.id);
+        onRemoved?.(row);
+        onClose();
+      },
+    });
+  }
+
   return (
     <Sheet
       open={!!row}
       onClose={onClose}
-      title={def ? `${def.emoji} ${name}` : ""}
+      title={
+        def ? (
+          <span className="flex items-center gap-3">
+            <span className="text-[26px] leading-none">{def.emoji}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{name}</span>
+              {subtitle && (
+                <span className="block truncate font-sans text-[12px] font-semibold text-faint">{subtitle}</span>
+              )}
+            </span>
+          </span>
+        ) : (
+          ""
+        )
+      }
       footer={
         row ? (
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              className="flex-1"
-              onClick={() => {
-                removePantry(row.id);
-                onRemoved?.(row);
-                onClose();
-              }}
-            >
-              Прибрати з комори
-            </Button>
-            <Button className="flex-1" onClick={onClose}>
-              Готово
-            </Button>
-          </div>
+          <Button full onClick={onClose}>
+            Готово
+          </Button>
         ) : undefined
       }
     >
       {row && def && (
-        <div className="pb-4">
-          {subtitle && <p className="-mt-1 mb-4 text-[12px] text-muted">{subtitle}</p>}
-          {onEditType && isOwnKey(row.key) && (
-            <p className="-mt-2 mb-4 text-[12px] text-muted">
-              Тип «{def.label}» дописали люди ·{" "}
-              <button onClick={() => onEditType(row.key)} className="font-bold text-brand">
-                Редагувати тип
-              </button>
-            </p>
-          )}
-
-          <label className="block text-[12px] font-semibold text-muted">Скільки є вдома</label>
-          <div className="mt-1.5 flex items-center justify-between gap-3">
-            <QuantityInput
-              amount={row.amount}
-              unit={row.unit}
-              defaultUnit={product?.packUnit ?? def.defaultUnit}
-              label={name}
-              allowTaste={false}
-              onChange={({ amount, unit }) => {
-                // Старий вільний текст прибираємо: разом із числом він
-                // конфліктував би за те, що саме показувати.
-                patch({ amount, unit, qty: undefined });
-              }}
-            />
-            {row.amount != null && (
-              <button
-                onClick={() => patch({ amount: undefined, unit: undefined, qty: undefined })}
-                className="text-[12px] font-semibold text-faint"
-              >
-                Прибрати
-              </button>
+        <div className="flex flex-col gap-3 pb-3">
+          <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+            <Field label="Кількість">
+              <QuantityInput
+                amount={row.amount}
+                unit={row.unit}
+                defaultUnit={product?.packUnit ?? def.defaultUnit}
+                label={name}
+                allowTaste={false}
+                onChange={({ amount, unit }) => {
+                  // Старий вільний текст прибираємо: разом із числом він
+                  // конфліктував би за те, що саме показувати.
+                  patch({ amount, unit, qty: undefined });
+                }}
+              />
+              {row.amount != null && (
+                <ClearButton
+                  label="Прибрати кількість"
+                  onClick={() => patch({ amount: undefined, unit: undefined, qty: undefined })}
+                />
+              )}
+            </Field>
+            {row.qty && row.amount == null && (
+              <p className="border-b border-line px-3.5 pb-2.5 text-[11.5px] text-faint">Було записано як «{row.qty}»</p>
             )}
-          </div>
-          {row.qty && row.amount == null && (
-            <p className="mt-1.5 text-[11.5px] text-faint">Було записано як «{row.qty}»</p>
-          )}
 
-          {/* Ціна має сенс лише разом із кількістю: без неї грам не порахувати. */}
-          {row.amount != null && grams != null && grams > 0 && (
-            <>
-              <label className="mt-4 block text-[12px] font-semibold text-muted">
-                Скільки коштувало
-              </label>
-              <div className="mt-1.5 flex items-center gap-2">
+            {/* Ціна має сенс лише разом із кількістю: без неї грам не порахувати. */}
+            {row.amount != null && grams != null && grams > 0 && (
+              <Field label="Ціна" note={`за ${formatQuantity(row.amount, row.unit)} — для вартості страв`}>
                 <input
                   value={paid}
                   onFocus={() => {
@@ -248,130 +270,150 @@ export function ItemSheet({
                     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   }}
                   inputMode="decimal"
-                  placeholder="45,90"
+                  placeholder="0,00"
                   aria-label={`Ціна: ${name}`}
-                  className="h-9 w-[90px] rounded-xl bg-surface-2 px-2 text-center text-[13px]"
+                  className="h-9 w-[84px] rounded-[8px] bg-surface-2 px-2.5 text-right text-[14px] font-bold"
                 />
-                <span className="text-[13px] font-semibold text-muted">₴</span>
-                <span className="text-[11.5px] leading-snug text-faint">
-                  за {formatQuantity(row.amount, row.unit)} — для вартості страв
-                </span>
-              </div>
-            </>
-          )}
+                <span className="text-[14px] font-bold text-muted">₴</span>
+              </Field>
+            )}
 
-          <div className="mt-5 h-px bg-line" />
-
-          {/*
-            Обіцяємо лише те, що застосунок справді робить: продукт із близьким
-            строком підіймається вгору комори, а «Врятувати продукт» збирає з
-            нього страви.
-          */}
-          <p className="mt-4 text-[13px] leading-relaxed text-muted">
-            До якого числа це ще їстівне? Продукт із близьким строком підніметься вгору
-            комори, а «Врятувати продукт» покаже, що з нього приготувати.
-          </p>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {EXPIRY_CHIPS.map((opt) => (
-              <Chip key={opt.days} onClick={() => saveExpiry(inDays(opt.days))}>
-                {opt.label}
-              </Chip>
-            ))}
+            {/*
+              Обіцяємо лише те, що застосунок справді робить: продукт із близьким
+              строком підіймається у «Варто вжити», а «Врятувати продукт» збирає
+              з нього страви.
+            */}
+            <Field label="Їстівне до" divided={false}>
+              <input
+                type="date"
+                value={row.expiresAt ?? ""}
+                onChange={(e) => saveExpiry(e.target.value || undefined)}
+                aria-label={`Їстівне до: ${name}`}
+                className="h-9 min-w-0 rounded-[8px] bg-surface-2 px-2.5 text-[14px] font-bold"
+              />
+              {row.expiresAt && <ClearButton label="Прибрати строк" onClick={() => saveExpiry(undefined)} />}
+            </Field>
+            {/* Швидкі варіанти замість календаря: так зазвичай і думають про продукти. */}
+            <div className="no-scrollbar flex gap-1.5 overflow-x-auto px-3.5 pb-3">
+              {EXPIRY_CHIPS.map((opt) => {
+                const date = inDays(opt.days);
+                const on = row.expiresAt === date;
+                return (
+                  <button
+                    key={opt.days}
+                    onClick={() => saveExpiry(date)}
+                    aria-pressed={on}
+                    className={cn(
+                      "h-8 shrink-0 rounded-[8px] px-3 text-[12.5px] font-bold",
+                      on ? "bg-brand/15 text-brand" : "bg-surface-2 text-muted",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <label className="mt-4 block text-[12px] text-muted">Або точна дата</label>
-          <input
-            type="date"
-            value={row.expiresAt ?? ""}
-            onChange={(e) => saveExpiry(e.target.value || undefined)}
-            className="mt-1.5 h-11 w-full rounded-2xl border border-line bg-surface-2 px-3.5 text-[15px]"
-          />
-
-          {row.expiresAt && (
-            <Button full variant="secondary" className="mt-3" onClick={() => saveExpiry(undefined)}>
-              Прибрати строк
-            </Button>
-          )}
-
-          {/* ── Товар ── */}
-          {canUseProducts && (row.productId ? (
-            <>
-              <div className="mt-5 h-px bg-line" />
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                {onOpenProduct && (
-                  <button
-                    onClick={() => {
-                      haptic(8);
-                      onOpenProduct(row.productId!);
-                    }}
-                    className="inline-flex items-center gap-1 text-[13px] font-bold text-brand"
-                  >
-                    Картка товару <ChevronRight size={15} />
-                  </button>
-                )}
-                {onWrongProduct && (
-                  <Button size="sm" variant="ghost" onClick={() => onWrongProduct(row)}>
-                    Не той товар?
-                  </Button>
-                )}
-              </div>
-            </>
-          ) : !bareStaple(row) && (onChooseProduct || hints?.weighed) ? (
-            <>
-              <div className="mt-5 h-px bg-line" />
-              <div className="mt-4 rounded-2xl border border-line bg-surface p-3.5">
-                {/*
-                  Обіцянка «впізнаватимуть самі» чесна лише тоді, коли є що
-                  запамʼятати — назва з каси чи штрихкод. Рядок, доданий руками,
-                  нічого не навчить (B7), тож йому кажемо про інше: точна назва,
-                  КБЖВ і упаковка.
-                */}
-                <p className="text-[12.5px] leading-snug text-muted">
+          {/* ── Товар без картки: «Уточнити товар» ── */}
+          {canUseProducts && !row.productId && !bareStaple(row) && (onChooseProduct || hints?.weighed) && (
+            <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+              {onChooseProduct && (
+                <LinkRow
+                  tone="brand"
+                  onClick={() => onChooseProduct(row)}
+                  aside={
+                    evidence && (
+                      <span className="shrink-0 font-mono text-[11.5px] text-faint">
+                        {row.receiptName ? "з чека" : "штрихкод"}
+                      </span>
+                    )
+                  }
+                >
+                  <span className="inline-flex items-center gap-2.5">
+                    {evidence && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />}
+                    {evidence ? "Уточнити товар" : "Обрати товар"}
+                  </span>
+                </LinkRow>
+              )}
+              {hints?.weighed && (
+                <LinkRow
+                  divided={!!onChooseProduct}
+                  // Сирий текст каси — лише «звідки». Без нього рядок
+                  // показується типом, а картка йому не потрібна.
+                  onClick={() => patch({ receiptName: undefined })}
+                >
+                  Назвати просто «{def.label}»
+                </LinkRow>
+              )}
+              {/*
+                Обіцянка «впізнаватимуть самі» чесна лише тоді, коли є що
+                запамʼятати — назва з каси чи штрихкод. Рядок, доданий руками,
+                нічого не навчить (B7), тож йому кажемо про інше.
+              */}
+              {onChooseProduct && (
+                <p className="border-t border-line px-3.5 py-2.5 text-[11.5px] leading-snug text-faint">
                   {evidence
                     ? "Один раз — і наступні чеки та сканування впізнаватимуть його самі, у тебе й у всіх."
-                    : "Щоб у коморі була точна назва, КБЖВ і упаковка"}
+                    : "Щоб у коморі була точна назва, КБЖВ і упаковка."}
+                  {row.receiptName && (
+                    <span className="mt-1 block truncate font-mono text-[11px]">З чека: {row.receiptName}</span>
+                  )}
                 </p>
-                {row.receiptName ? (
-                  <p className="mt-1.5 truncate font-mono text-[11px] text-faint">
-                    З чека: {row.receiptName}
-                  </p>
-                ) : row.barcode ? (
-                  <p className="mt-1.5 truncate font-mono text-[11px] text-faint">
-                    Штрихкод {row.barcode}
-                  </p>
-                ) : null}
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {onChooseProduct && (
-                    <Button size="sm" onClick={() => onChooseProduct(row)}>
-                      Обрати товар
-                    </Button>
-                  )}
-                  {hints?.weighed && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        // Сирий текст каси — лише «звідки». Без нього рядок
-                        // показується типом, а картка йому не потрібна.
-                        patch({ receiptName: undefined });
-                      }}
-                    >
-                      Назвати просто «{def.label}»
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : null)}
-
-          {onAddMore && (
-            <Button full variant="ghost" className="mt-4" onClick={onAddMore}>
-              Додати ще
-            </Button>
+              )}
+            </div>
           )}
+
+          <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+            {links.map((link, i) => (
+              <LinkRow key={link.key} divided={i > 0} tone={link.tone} icon={link.icon} onClick={link.onClick}>
+                {link.label}
+              </LinkRow>
+            ))}
+          </div>
         </div>
       )}
     </Sheet>
+  );
+}
+
+/** Рядок картки аркуша: підпис ліворуч, поле праворуч. */
+function Field({
+  label,
+  note,
+  divided = true,
+  children,
+}: {
+  label: string;
+  note?: string;
+  /** Лінія під рядком; ні — коли під ним продовження того самого поля. */
+  divided?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("flex min-h-[50px] items-center gap-2 px-3.5 py-1.5", divided && "border-b border-line")}>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-semibold text-muted">{label}</span>
+        {note && <span className="block truncate text-[11px] text-faint">{note}</span>}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/** Маленький хрестик після поля: «прибрати кількість», «прибрати строк». */
+function ClearButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={() => {
+        haptic(8);
+        onClick();
+      }}
+      aria-label={label}
+      title={label}
+      className="-mr-1.5 grid h-8 w-8 shrink-0 place-items-center text-faint"
+    >
+      <X size={15} />
+    </button>
   );
 }

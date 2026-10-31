@@ -69,7 +69,7 @@ function useTheme() {
     if (!hydrated) return;
     document.documentElement.dataset.theme = theme;
 
-    const color = theme === "light" ? "#fff8f3" : "#0d0a09";
+    const color = theme === "light" ? "#fff8f3" : "#070709";
     const metas = document.querySelectorAll('meta[name="theme-color"]');
 
     // Зайві теги з попередніх версій розмітки прибираємо: поки вони є,

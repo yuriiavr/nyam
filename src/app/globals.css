@@ -6,14 +6,20 @@
 :root {
   color-scheme: dark;
 
-  --bg: #0d0a09;
-  --bg-elev: #141010;
-  --surface: #1a1414;
-  --surface-2: #241c1b;
-  --line: #2e2523;
-  --ink: #fdf6f2;
-  --muted: #a1908a;
-  --faint: #6d5e59;
+  /*
+   * Нейтральна майже чорна шкала з редизайну комори: картка, кнопка й лінія
+   * відрізняються ледь-ледь, а колір лишається тільки за брендом і станом.
+   */
+  --bg: #070709;
+  --bg-elev: #0d0d10;
+  --surface: #121215;
+  --surface-2: #1c1c21;
+  --line: #202025;
+  /* Межа, яку мусить бути видно: порожній чекбокс, поповер, ручка аркуша. */
+  --line-strong: #2b2b31;
+  --ink: #f5f5f7;
+  --muted: #9b9ba3;
+  --faint: #66666e;
 
   --brand: #ff6b35;
   --brand-2: #ffb020;
@@ -49,6 +55,7 @@
   --surface: #ffffff;
   --surface-2: #fdeee3;
   --line: #f0ded1;
+  --line-strong: #e2cbbb;
   --ink: #1c1110;
   --muted: #7d6960;
   --faint: #b4a096;
@@ -68,6 +75,7 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
@@ -112,10 +120,18 @@ body {
   min-height: 100dvh;
 }
 
-button, input, textarea, select { font: inherit; color: inherit; }
-input, textarea { background: transparent; }
-input:focus, textarea:focus, select:focus, button:focus { outline: none; }
-::placeholder { color: var(--faint); }
+/*
+ * Скидання — у шарі base, як і preflight Tailwind. Поза шаром вони
+ * перебивали будь-яку утиліту: кнопка з `text-[13px] font-extrabold
+ * text-brand` малювалась успадкованим 16px/400 білим, а поле з
+ * `bg-surface-2` — прозорим.
+ */
+@layer base {
+  button, input, textarea, select { font: inherit; color: inherit; }
+  input, textarea { background: transparent; }
+  input:focus, textarea:focus, select:focus, button:focus { outline: none; }
+  ::placeholder { color: var(--faint); }
+}
 
 /* Prevent iOS zoom on focus */
 input, textarea, select { font-size: 16px; }

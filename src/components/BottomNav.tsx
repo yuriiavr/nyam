@@ -25,7 +25,11 @@ const TABS: Tab[] = [
 /** Маршрути, де нижня панель заважає (повноекранні режими та форми). */
 const HIDE_ON = [/\/cook$/, /^\/new$/, /^\/scan$/, /^\/auth/];
 
-/** Висота панелі без safe-area — використовується для відступу контенту. */
+/**
+ * Скільки панель займає від низу екрана без safe-area: 14 px повітря під
+ * «пігулкою» і 62 px її самої. Від цього числа відступають контент, тости й
+ * панель «готуєш зараз», тож міняти його — лише разом із розміткою нижче.
+ */
 export const NAV_HEIGHT = 76;
 
 export function useNavHidden(pathname: string): boolean {
@@ -42,81 +46,70 @@ export function BottomNav() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  /*
+   * Плаваюча «пігулка» з редизайну: самі іконки, без підписів — пʼять вкладок
+   * упізнаються з першого дня, а підписи забирали висоту в кожного екрана.
+   * Назви лишаються для скрінрідера (aria-label) і підказкою при наведенні.
+   */
   return (
-    <nav className="fixed bottom-0 left-1/2 z-40 w-full max-w-[560px] -translate-x-1/2">
-      <div className="glass pad-safe-b border-t border-line">
-        <ul className="flex items-stretch justify-around px-2 pt-1.5 pb-1">
-          {TABS.map((tab) => {
-            const active = isActive(tab.href);
-            const Icon = tab.icon;
+    <nav
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 14px)" }}
+      className="pointer-events-none fixed left-1/2 z-40 w-full max-w-[560px] -translate-x-1/2 px-[18px]"
+    >
+      <ul className="pointer-events-auto flex h-[62px] items-center justify-around rounded-[31px] border border-white/[0.07] bg-[rgb(22_22_26_/_0.82)] px-1.5 shadow-[0_18px_40px_-12px_rgb(0_0_0_/_0.8)] backdrop-blur-[24px] backdrop-saturate-[1.6] light:border-line light:bg-white/85 light:shadow-[var(--shadow-card)]">
+        {TABS.map((tab) => {
+          const active = isActive(tab.href);
+          const Icon = tab.icon;
 
-            if (tab.center) {
-              return (
-                <li key={tab.href} className="relative -mt-7 w-[64px]">
-                  <Link
-                    href={tab.href}
-                    onClick={() => haptic(14)}
-                    aria-label={tab.label}
-                    className="flex flex-col items-center gap-1"
-                  >
-                    <motion.span
-                      whileTap={{ scale: 0.9 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 26 }}
-                      className={cn(
-                        "grid h-[54px] w-[54px] place-items-center rounded-[20px] brand-gradient text-brand-ink",
-                        "shadow-[var(--shadow-pop)] ring-4 ring-bg",
-                      )}
-                    >
-                      <Icon size={24} strokeWidth={2.4} />
-                    </motion.span>
-                    <span
-                      className={cn(
-                        "text-[10px] font-bold tracking-tight",
-                        active ? "text-brand" : "text-muted",
-                      )}
-                    >
-                      {tab.label}
-                    </span>
-                  </Link>
-                </li>
-              );
-            }
-
+          if (tab.center) {
             return (
-              <li key={tab.href} className="w-[64px]">
+              <li key={tab.href}>
                 <Link
                   href={tab.href}
-                  onClick={() => haptic(8)}
-                  className="relative flex flex-col items-center gap-1 py-1.5"
+                  onClick={() => haptic(14)}
+                  aria-label={tab.label}
+                  title={tab.label}
+                  aria-current={active ? "page" : undefined}
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="nav-pill"
-                      transition={{ type: "spring", stiffness: 480, damping: 34 }}
-                      className="absolute inset-x-2 top-0 h-[34px] rounded-2xl bg-surface-2"
-                    />
-                  )}
-                  <span className="relative z-10 flex flex-col items-center gap-1">
-                    <Icon
-                      size={21}
-                      strokeWidth={active ? 2.5 : 2}
-                      className={active ? "text-brand" : "text-muted"}
-                    />
-                    <span
-                      className={cn(
-                        "text-[10px] font-bold tracking-tight",
-                        active ? "text-ink" : "text-muted",
-                      )}
-                    >
-                      {tab.label}
-                    </span>
-                  </span>
+                  <motion.span
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 26 }}
+                    className="grid h-11 w-12 place-items-center rounded-[22px] brand-gradient text-brand-ink"
+                  >
+                    <Icon size={22} strokeWidth={2.4} />
+                  </motion.span>
                 </Link>
               </li>
             );
-          })}
-        </ul>
-      </div>
+          }
+
+          return (
+            <li key={tab.href}>
+              <Link
+                href={tab.href}
+                onClick={() => haptic(8)}
+                aria-label={tab.label}
+                title={tab.label}
+                aria-current={active ? "page" : undefined}
+                className="relative grid h-11 w-[52px] place-items-center"
+              >
+                {active && (
+                  <motion.span
+                    layoutId="nav-pill"
+                    transition={{ type: "spring", stiffness: 480, damping: 34 }}
+                    className="absolute inset-0 rounded-[22px] bg-white/[0.08] light:bg-surface-2"
+                  />
+                )}
+                <Icon
+                  size={23}
+                  strokeWidth={2}
+                  className={cn("relative z-10 transition-colors", active ? "text-ink" : "text-muted")}
+                />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }
