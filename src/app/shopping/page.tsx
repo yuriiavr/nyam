@@ -1,19 +1,11 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Check, Plus, Refrigerator, Trash2, X } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { IngredientPicker } from "@/components/IngredientPicker";
 import { NewIngredientSheet } from "@/components/NewIngredientSheet";
 import { TopBar } from "@/components/TopBar";
-import {
-  Button,
-  EmptyState,
-  QuantityInput,
-  Sheet,
-  useToast,
-} from "@/components/ui";
+import { Button, Panel, PanelHeader, QuantityInput, Sheet, useToast } from "@/components/ui";
 import { allIngredients, ing, satisfies } from "@/data/ingredients";
 import { byAisle, shoppingSuggestions } from "@/lib/matching";
 import {
@@ -25,7 +17,7 @@ import {
 } from "@/lib/shopping";
 import { allRecipes, pantryTypes, recipeById, useApp } from "@/lib/store";
 import type { PantryItem, ShoppingItem } from "@/lib/types";
-import { haptic, newId, plural } from "@/lib/utils";
+import { cn, haptic, newId, plural } from "@/lib/utils";
 
 /**
  * Список покупок.
@@ -65,6 +57,8 @@ export default function ShoppingPage() {
   /** Назва для картки власного продукту; null — картка закрита. */
   const [creating, setCreating] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  /** Що пишуть у полі вгорі — далі воно ж пошук у пікері. */
+  const [query, setQuery] = useState("");
 
   const done = shopping.filter((x) => x.done);
   const aisles = useMemo(() => byAisle(shopping), [shopping]);
@@ -187,147 +181,164 @@ export default function ShoppingPage() {
 
   const item = shopping.find((x) => x.id === editing) ?? null;
 
+  const openPicker = () => {
+    haptic(12);
+    setPickerOpen(true);
+  };
+
   return (
     <div className="pb-8">
       <TopBar
-        title="Список покупок"
-        subtitle={
-          shopping.length
-            ? `${shopping.length} ${plural(shopping.length, "позиція", "позиції", "позицій")}${done.length ? ` · ${done.length} у кошику` : ""}`
-            : "Що взяти в магазині"
-        }
+        title="Покупки"
         right={
-          <button
-            onClick={() => {
-              haptic(12);
-              setPickerOpen(true);
-            }}
-            aria-label="Додати в список"
-            className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-brand-ink"
-          >
-            <Plus size={19} />
-          </button>
+          shopping.length > 0 ? (
+            <span className="text-[12px] font-bold text-faint">
+              {shopping.length - done.length > 0 ? `${shopping.length - done.length} купити` : "усе в кошику"}
+            </span>
+          ) : undefined
         }
       />
 
-      {hydrated && shopping.length === 0 ? (
-        <EmptyState
-          emoji="🛒"
-          title="Список порожній"
-          note="Додай, що треба купити: продукт із довідника або будь-що своє — батарейки, воду коту, щось до чаю. А зі сторінки страви сюди можна перенести все, чого бракує на неї."
-          action={
-            <Button onClick={() => setPickerOpen(true)}>Додати позицію</Button>
-          }
-        />
-      ) : (
-        <div className="flex flex-col gap-5 px-4 pt-4">
-          {aisles.map(({ cat, label, items }) => (
-            <section key={cat}>
-              <h2 className="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">
-                {label}
-              </h2>
-              <div className="flex flex-col gap-2">
-                {items.map((entry) => (
-                  <Row
-                    key={entry.id}
-                    item={entry}
-                    forRecipe={
-                      entry.recipeId
-                        ? recipeTitles.get(entry.recipeId)
-                        : undefined
-                    }
-                    onToggle={() => {
-                      haptic(8);
-                      toggleShopping(entry.id);
-                    }}
-                    onEdit={() => setEditing(entry.id)}
-                    onRemove={() => {
-                      haptic(10);
-                      removeShopping(entry.id);
-                    }}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
-
-      {/* Чого немає вдома */}
-      {suggestions.length > 0 && (
-        <section className="px-4 pt-7">
-          <h2 className="font-display text-[17px] font-bold">
-            Чого немає вдома
-          </h2>
-          <p className="mb-3 mt-0.5 text-[11.5px] leading-snug text-faint">
-            Продукти, яких немає в коморі. Спершу ті, що відкривають страви.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {suggestions.map(({ key, unlocks }) => {
-              const def = ing(key);
-              return (
-                <button
-                  key={key}
-                  onClick={() => addOne(catalogItem(key), def.label)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"
-                >
-                  <span>{def.emoji}</span>
-                  {def.label}
-                  {unlocks > 0 && (
-                    <span className="text-[11px] font-bold text-brand">
-                      +{unlocks} {plural(unlocks, "страва", "страви", "страв")}
-                    </span>
-                  )}
-                  <Plus size={13} className="text-brand" />
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Кінець походу */}
-      {done.length > 0 && (
-        <section className="flex flex-col gap-2 px-4 pt-7">
-          <Button full size="lg" onClick={moveToPantry}>
-            <Refrigerator size={18} />
-            Перенести куплене в комору ({done.length})
-          </Button>
-          <Button
-            full
-            variant="secondary"
-            onClick={() => {
-              haptic(10);
-              clearBoughtShopping();
-              toast("Куплене прибрано", "🧹");
-            }}
+      <div className="flex flex-col gap-2.5 px-4 md:px-6 lg:gap-3">
+        {/* Додати: пишеш назву — далі пікер з довідником і «просто рядок» */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            openPicker();
+          }}
+          className="flex h-[46px] items-center gap-2.5 rounded-[10px] border border-line bg-surface pl-3.5 pr-1.5"
+        >
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Додати: молоко, батарейки…"
+            enterKeyHint="go"
+            className="h-full min-w-0 flex-1 text-[15px] font-semibold"
+          />
+          <button
+            type="submit"
+            aria-label="Додати в список"
+            className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[8px] brand-gradient text-brand-ink"
           >
-            <Trash2 size={17} />
-            Просто прибрати куплене
-          </Button>
-        </section>
-      )}
+            <Plus size={17} strokeWidth={2.6} />
+          </button>
+        </form>
 
-      {shopping.length > 0 && (
-        <p className="px-4 pt-6 text-center text-[11.5px] leading-snug text-faint">
-          Список спільний із сімʼєю: те, що ти викреслив у магазині, вдома видно
-          одразу.{" "}
-          <Link href="/pantry" className="font-bold text-brand">
-            Комора
-          </Link>
-        </p>
-      )}
+        {hydrated && shopping.length === 0 && (
+          <Panel>
+            <p className="px-3.5 py-6 text-center text-[13px] font-semibold leading-relaxed text-muted">
+              Список порожній. Додай продукт із довідника або будь-що своє — батарейки, воду коту. Зі сторінки страви
+              сюди переноситься все, чого бракує.
+            </p>
+          </Panel>
+        )}
+
+        {/* Планшет (lg): відділи магазину стовпчиками — як ходиш між полицями */}
+        <div className="contents lg:block lg:columns-3 lg:gap-3">
+        {aisles.map(({ cat, label, items }) => (
+          <Panel key={cat} className="lg:mb-3 lg:break-inside-avoid">
+            <PanelHeader label={label} aside={`${items.filter((x) => x.done).length}/${items.length}`} />
+            {items.map((entry) => (
+              <Row
+                key={entry.id}
+                item={entry}
+                forRecipe={entry.recipeId ? recipeTitles.get(entry.recipeId) : undefined}
+                onToggle={() => {
+                  haptic(8);
+                  toggleShopping(entry.id);
+                }}
+                onEdit={() => setEditing(entry.id)}
+                onRemove={() => {
+                  haptic(10);
+                  removeShopping(entry.id);
+                }}
+              />
+            ))}
+          </Panel>
+        ))}
+        </div>
+
+        {/* Кінець походу */}
+        {done.length > 0 && (
+          <div className="overflow-hidden rounded-[10px] border border-brand/35 bg-surface">
+            <button
+              onClick={moveToPantry}
+              className="flex h-[52px] w-full items-center gap-2.5 px-3.5 text-left active:bg-surface-2"
+            >
+              <Refrigerator size={18} className="text-brand" />
+              <span className="flex-1 text-[14px] font-bold text-brand">Куплене — у комору</span>
+              <span className="text-[12px] font-bold text-faint">{done.length}</span>
+            </button>
+            <button
+              onClick={() => {
+                haptic(10);
+                clearBoughtShopping();
+                toast("Куплене прибрано", "🧹");
+              }}
+              className="flex h-11 w-full items-center gap-2.5 border-t border-line px-3.5 text-left active:bg-surface-2"
+            >
+              <Trash2 size={15} className="text-faint" />
+              <span className="flex-1 text-[13px] font-semibold text-muted">Просто прибрати куплене</span>
+            </button>
+          </div>
+        )}
+
+        {/* Чого немає вдома */}
+        {suggestions.length > 0 && (
+          <Panel>
+            <PanelHeader label="Чого немає вдома" />
+            <div className="grid grid-cols-2 gap-px border-t border-line bg-line lg:grid-cols-4">
+              {suggestions.map(({ key, unlocks }) => {
+                const def = ing(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => addOne(catalogItem(key), def.label)}
+                    className="flex h-[50px] items-center gap-[9px] bg-surface pl-3 pr-2.5 text-left active:bg-surface-2"
+                  >
+                    <span className="text-[16px]">{def.emoji}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-bold">{def.label}</span>
+                      {unlocks > 0 && (
+                        <span className="block truncate text-[11px] font-bold text-brand">
+                          +{unlocks} {plural(unlocks, "страва", "страви", "страв")}
+                        </span>
+                      )}
+                    </span>
+                    <Plus size={15} strokeWidth={2.4} className="shrink-0 text-muted" />
+                  </button>
+                );
+              })}
+            </div>
+          </Panel>
+        )}
+
+        {shopping.length > 0 && (
+          <p className="px-2 pt-1 text-center text-[11.5px] font-semibold leading-snug text-faint">
+            Список спільний із сімʼєю: викреслене в магазині вдома видно одразу.
+          </p>
+        )}
+      </div>
 
       <IngredientPicker
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         title="Що купити"
-        onPick={(def) => addOne(catalogItem(def.key), def.label)}
-        onFree={(text) => addOne(freeItem(text), text)}
+        query={query}
+        onQueryChange={setQuery}
+        onPick={(def) => {
+          addOne(catalogItem(def.key), def.label);
+          setQuery("");
+        }}
+        onFree={(text) => {
+          addOne(freeItem(text), text);
+          setQuery("");
+        }}
         freeHint="Просто рядок у списку: батарейки, вода коту, щось до чаю"
         onCreate={(name) => {
           setPickerOpen(false);
           setCreating(name);
+          setQuery("");
         }}
       />
 
@@ -375,49 +386,43 @@ function Row({
   const qty = shoppingQtyLabel(item);
 
   return (
-    <div
-      className={`flex items-center gap-2 rounded-2xl border pr-2 ${
-        item.done ? "border-mint/40 bg-mint/8" : "border-line bg-surface"
-      }`}
-    >
-      <motion.button
-        whileTap={{ scale: 0.985 }}
+    <div className="flex min-h-[50px] items-center gap-1 border-t border-line pr-1.5">
+      <button
         onClick={onToggle}
         aria-pressed={item.done}
-        className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3 self-stretch py-2 pl-3.5 text-left"
       >
         <span
-          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 ${
-            item.done ? "border-mint bg-mint text-bg" : "border-line"
-          }`}
+          className={cn(
+            "grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border-[1.5px] transition-colors",
+            item.done ? "border-brand bg-brand text-brand-ink" : "border-line-strong",
+          )}
         >
-          {item.done && <Check size={13} strokeWidth={3} />}
+          {item.done && <Check size={12} strokeWidth={3.5} />}
         </span>
-        <span className="text-lg">{shoppingEmoji(item)}</span>
+        <span className="text-[17px]">{shoppingEmoji(item)}</span>
         <span className="min-w-0 flex-1">
           <span
-            className={`block truncate text-[14px] font-semibold ${
-              item.done ? "line-through opacity-60" : ""
-            }`}
+            className={cn(
+              "block truncate text-[14px] font-semibold",
+              item.done ? "text-faint line-through" : "text-ink",
+            )}
           >
             {shoppingLabel(item)}
           </span>
           {forRecipe && (
-            <span className="block truncate text-[11px] text-muted">
-              для «{forRecipe}»
-            </span>
+            <span className="block truncate text-[11.5px] font-semibold text-faint">для «{forRecipe}»</span>
           )}
         </span>
-      </motion.button>
+      </button>
 
       <button
         onClick={onEdit}
         aria-label={`Кількість: ${shoppingLabel(item)}`}
-        className={`shrink-0 rounded-xl px-2 py-1.5 text-[12px] font-bold ${
-          qty
-            ? "bg-surface-2 text-muted"
-            : "border border-dashed border-line text-faint"
-        }`}
+        className={cn(
+          "shrink-0 rounded-[8px] px-2 py-1.5 text-[12.5px] font-bold",
+          qty ? "text-muted" : "border border-dashed border-line-strong text-faint",
+        )}
       >
         {qty || "скільки?"}
       </button>
@@ -425,9 +430,9 @@ function Row({
       <button
         onClick={onRemove}
         aria-label={`Прибрати ${shoppingLabel(item)}`}
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-faint active:bg-surface-2"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-faint active:bg-surface-2"
       >
-        <X size={15} />
+        <X size={14} strokeWidth={2.2} />
       </button>
     </div>
   );
@@ -495,7 +500,7 @@ function ItemSheet({
                 onChange={(e) =>
                   updateShopping(item.id, { text: e.target.value })
                 }
-                className="h-11 w-full rounded-2xl border border-line bg-surface px-3.5 text-[15px]"
+                className="h-11 w-full rounded-[10px] border border-line bg-surface px-3.5 text-[15px]"
               />
             </div>
           )}

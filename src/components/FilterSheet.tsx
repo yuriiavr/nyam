@@ -2,7 +2,7 @@
 
 import { Check, SlidersHorizontal } from "lucide-react";
 import { useMemo } from "react";
-import { Button, Chip, Sheet } from "./ui";
+import { Button, Sheet } from "./ui";
 import { allRecipes, useApp } from "@/lib/store";
 import {
   emptyFilters,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/matching";
 import type { MealType, Mood } from "@/lib/types";
 import { COURSE_LABEL, COURSE_ORDER } from "@/lib/pairing";
-import { MEAL_LABEL, MOOD_META, haptic } from "@/lib/utils";
+import { MEAL_LABEL, MOOD_META, cn, haptic } from "@/lib/utils";
 
 const MEALS: MealType[] = ["breakfast", "lunch", "dinner", "snack", "dessert"];
 const MOODS: Mood[] = [
@@ -50,27 +50,27 @@ function AvoidRecent() {
   const on = days != null;
 
   return (
-    <div className="mt-5">
+    <div className="pt-1">
       <button
         onClick={() => {
           haptic(10);
           setDays(on ? null : 7);
         }}
         aria-pressed={on}
-        className="flex w-full items-start gap-3 rounded-2xl border border-line bg-surface p-3.5 text-left"
+        className="flex w-full items-start gap-3 rounded-[10px] border border-line bg-surface px-3.5 py-3 text-left active:bg-surface-2"
       >
         <span
-          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${
-            on ? "border-brand bg-brand text-brand-ink" : "border-line"
+          className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-[6px] border-[1.5px] ${
+            on ? "border-brand bg-brand text-brand-ink" : "border-line-strong"
           }`}
         >
           {on && <Check size={12} strokeWidth={3.5} />}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[13.5px] font-bold">
+          <span className="block text-[14px] font-semibold leading-snug">
             Не пропонувати те, що готували минулі 7 днів
           </span>
-          <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">
+          <span className="mt-0.5 block text-[11.5px] font-semibold leading-snug text-faint">
             Діє в усіх способах вибору. У пошуку — ні: там шукають конкретну страву.
           </span>
         </span>
@@ -92,12 +92,12 @@ export function FilterButton({
         haptic(10);
         onClick();
       }}
-      className="relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-surface-2"
+      className="relative grid h-[46px] w-[46px] shrink-0 place-items-center rounded-[10px] border border-line bg-surface"
       aria-label="Фільтри"
     >
       <SlidersHorizontal size={17} />
       {count > 0 && (
-        <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full brand-gradient px-1 text-[10px] font-extrabold text-brand-ink">
+        <span className="absolute -right-1 -top-1 grid h-[17px] min-w-[17px] place-items-center rounded-[5px] bg-brand px-1 text-[10px] font-extrabold text-brand-ink">
           {count}
         </span>
       )}
@@ -158,6 +158,7 @@ export function FilterSheet({
         </div>
       }
     >
+      <div className="flex flex-col gap-4 pb-3">
       {!hidePool && (
         <Group title="Звідки брати">
           {POOLS.map((p) => (
@@ -276,8 +277,7 @@ export function FilterSheet({
       </Group>
 
       {suggesting && <AvoidRecent />}
-
-      <div className="h-3" />
+      </div>
     </Sheet>
   );
 }
@@ -290,11 +290,38 @@ function Group({
   children: React.ReactNode;
 }) {
   return (
-    <div className="py-3">
-      <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">
+    <div>
+      <h3 className="mb-2 px-0.5 text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">
         {title}
       </h3>
-      <div className="flex flex-wrap gap-2">{children}</div>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
+  );
+}
+
+/** Чіп фільтра: плаский, як у решті аркушів, — активний підсвічений брендом. */
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={() => {
+        haptic(8);
+        onClick();
+      }}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-8 shrink-0 select-none items-center gap-1.5 rounded-[8px] border px-2.5 text-[12.5px] font-bold transition-colors",
+        active ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted active:bg-surface-2",
+      )}
+    >
+      {children}
+    </button>
   );
 }

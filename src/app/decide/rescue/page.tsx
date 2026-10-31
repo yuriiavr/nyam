@@ -1,18 +1,18 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Plus, ShoppingBasket, Trash2, TriangleAlert } from "lucide-react";
+import { ChevronRight, Plus, ShoppingBasket, Trash2, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, EmptyState } from "@/components/ui";
+import { Button, EmptyState, Panel, PanelHeader } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import { rescueMatches, type RescueMatch, suggestable } from "@/lib/matching";
 import { pantryDisplayName } from "@/lib/pantry";
 import { useApp } from "@/lib/store";
 import type { PantryItem } from "@/lib/types";
-import { expiryInfo, formatMinutes, plural } from "@/lib/utils";
+import { cn, expiryInfo, formatMinutes, plural } from "@/lib/utils";
 
 /**
  * Страви за строками придатності.
@@ -73,45 +73,48 @@ export default function RescuePage() {
             </Link>
           }
         />
-        {expired.length > 0 && <ExpiredNote items={expired} />}
+        {expired.length > 0 && (
+          <div className="px-4">
+            <ExpiredNote items={expired} />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="pb-8">
-      <TopBar
-        title="Врятувати продукт"
-        subtitle={`${expiring.length} ${plural(expiring.length, "продукт псується", "продукти псуються", "продуктів псуються")}`}
-      />
+      {/* Лічильник — у заголовку панелі нижче: довга назва з ним у шапці не вміщалась. */}
+      <TopBar title="Врятувати продукт" />
 
-      {/* Що саме горить — щоб було видно, заради чого все це. */}
-      <section className="px-4 pt-4">
-        <Card className="border-brand-2/40 p-4">
-          <h2 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">
-            Треба з'їсти
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {expiring.map((item) => {
-              const def = ing(item.key);
-              const exp = expiryInfo(item.expiresAt);
-              return (
-                <span
-                  // Дві пачки одного типу з різними строками — два рядки: ключ типу не унікальний.
-                  key={item.id}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-2/50 bg-brand-2/10 px-3 py-1.5 text-[13px] font-semibold"
-                >
-                  <span>{def.emoji}</span>
-                  {pantryDisplayName(item, products)}
-                  <span className="text-[10.5px] font-bold text-brand-2">{exp?.label}</span>
+      <div className="flex flex-col gap-2.5 px-4">
+        {/* Що саме горить — щоб було видно, заради чого все це. */}
+        <Panel>
+          <PanelHeader
+            label="Треба з'їсти"
+            aside={`${expiring.length} ${plural(expiring.length, "продукт псується", "продукти псуються", "продуктів псуються")}`}
+          />
+          {expiring.map((item) => {
+            const def = ing(item.key);
+            const exp = expiryInfo(item.expiresAt);
+            return (
+              <div
+                // Дві пачки одного типу з різними строками — два рядки: ключ типу не унікальний.
+                key={item.id}
+                className="flex h-12 items-center gap-3 border-t border-line px-3.5"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-brand-2/15 text-[17px]">
+                  {def.emoji}
                 </span>
-              );
-            })}
-          </div>
-        </Card>
-      </section>
+                <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+                  {pantryDisplayName(item, products)}
+                </span>
+                <span className="shrink-0 text-[12.5px] font-bold text-brand-2">{exp?.label}</span>
+              </div>
+            );
+          })}
+        </Panel>
 
-      <div className="flex flex-col gap-3 px-4 pt-4">
         {matches.length === 0 ? (
           <EmptyState
             emoji="🤷"
@@ -124,11 +127,20 @@ export default function RescuePage() {
             }
           />
         ) : (
-          matches.map((match, i) => <RescueCard key={match.recipe.id} match={match} index={i} />)
+          <Panel>
+            <PanelHeader
+              label="Що приготувати"
+              tone="brand"
+              aside={`${matches.length} ${plural(matches.length, "страва", "страви", "страв")}`}
+            />
+            {matches.map((match, i) => (
+              <RescueCard key={match.recipe.id} match={match} index={i} />
+            ))}
+          </Panel>
         )}
-      </div>
 
-      {expired.length > 0 && <ExpiredNote items={expired} />}
+        {expired.length > 0 && <ExpiredNote items={expired} />}
+      </div>
     </div>
   );
 }
@@ -141,29 +153,28 @@ export default function RescuePage() {
  */
 function ExpiredNote({ items }: { items: PantryItem[] }) {
   return (
-    <section className="px-4 pt-6">
-      <Card className="flex items-start gap-3 border-berry/40 bg-berry/5 p-4">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-berry/15 text-berry">
-          <TriangleAlert size={17} />
+    <Panel className="border-berry/35">
+      <div className="flex items-start gap-3 px-3.5 py-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-berry/15 text-berry">
+          <TriangleAlert size={18} />
         </span>
         <div className="min-w-0">
-          <p className="text-[13.5px] font-bold">
+          <p className="text-[14px] font-bold">
             {items.length} {plural(items.length, "продукт", "продукти", "продуктів")} уже
             прострочено
           </p>
-          <p className="mt-1 text-[12px] leading-snug text-muted">
+          <p className="mt-0.5 text-[12.5px] font-semibold leading-snug text-muted">
             Їх ми не рятуємо — це вже не про вечерю. Прибери їх з комори, щоб підбір страв не
             розраховував на те, чого немає.
           </p>
-          <Link href="/pantry">
-            <Button size="sm" variant="secondary" className="mt-2.5">
-              <Trash2 size={15} />
-              Розібрати комору
-            </Button>
-          </Link>
         </div>
-      </Card>
-    </section>
+      </div>
+      <Link href="/pantry" className="flex h-12 items-center gap-2.5 border-t border-line px-3.5 active:bg-surface-2">
+        <Trash2 size={16} strokeWidth={2.2} className="text-brand" />
+        <span className="flex-1 text-[14px] font-bold text-brand">Розібрати комору</span>
+        <ChevronRight size={15} strokeWidth={2.2} className="text-faint" />
+      </Link>
+    </Panel>
   );
 }
 
@@ -178,55 +189,55 @@ function RescueCard({ match, index }: { match: RescueMatch; index: number }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.04, 0.3) }}
     >
-      <Card className="overflow-hidden p-0">
-        <Link href={`/recipe/${recipe.id}`} className="flex gap-3 p-3">
-          <RecipeMedia
-            recipe={recipe}
-            className="h-[72px] w-[72px] shrink-0"
-            rounded="rounded-2xl"
-            emojiSize="text-3xl"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <h3 className="min-w-0 flex-1 font-display text-[15px] font-bold leading-tight">
-                {recipe.title}
-              </h3>
+      <Link
+        href={`/recipe/${recipe.id}`}
+        className="flex gap-3 border-t border-line px-3.5 py-3 active:bg-surface-2"
+      >
+        <RecipeMedia
+          recipe={recipe}
+          className="h-14 w-14 shrink-0"
+          rounded="rounded-[8px]"
+          emojiSize="text-[28px]"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2">
+            <h3 className="min-w-0 flex-1 text-[15px] font-extrabold leading-tight">{recipe.title}</h3>
+            <span
+              className={cn(
+                "flex h-5 shrink-0 items-center rounded-[5px] px-1.5 text-[11px] font-extrabold",
+                soonest === 0 ? "bg-berry/15 text-berry" : "bg-brand-2/15 text-brand-2",
+              )}
+            >
+              {soonest === 0 ? "сьогодні" : soonest === 1 ? "завтра" : `${soonest} дні`}
+            </span>
+          </div>
+          <p className="mt-0.5 truncate text-[12px] font-semibold text-muted">
+            {formatMinutes(recipe.timeMin)} · {recipe.cuisine}
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            <span className="mr-0.5 text-[11.5px] font-extrabold text-brand">Врятує {saves.length}:</span>
+            {saves.map((s) => (
               <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
-                  soonest === 0 ? "bg-berry/15 text-berry" : "bg-brand-2/15 text-brand-2"
-                }`}
+                key={s.key}
+                className="inline-flex h-[22px] items-center gap-1 rounded-[6px] bg-brand/10 px-[7px] text-[11.5px] font-bold text-brand"
               >
-                {soonest === 0 ? "сьогодні" : soonest === 1 ? "завтра" : `${soonest} дні`}
+                {ing(s.key).emoji} {ing(s.key).label}
               </span>
-            </div>
-            <p className="mt-1 text-[11.5px] text-muted">
-              {formatMinutes(recipe.timeMin)} · {recipe.cuisine}
-            </p>
+            ))}
+          </div>
 
-            <p className="mt-2 mb-1 text-[11px] font-bold text-mint">
-              Врятує {saves.length}:
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {saves.map((s) => (
-                <span
-                  key={s.key}
-                  className="inline-flex items-center gap-1 rounded-full bg-mint/15 px-2 py-0.5 text-[11px] font-semibold text-mint"
-                >
-                  {ing(s.key).emoji} {ing(s.key).label}
-                </span>
-              ))}
-            </div>
-
-            {missing.length > 0 && (
-              <p className="mt-2 flex items-center gap-1 text-[11px] text-muted">
-                <ShoppingBasket size={11} />
+          {missing.length > 0 && (
+            <p className="mt-1.5 flex items-center gap-1 text-[11.5px] font-semibold text-faint">
+              <ShoppingBasket size={12} className="shrink-0" />
+              <span className="truncate">
                 Бракує: {missing.slice(0, 3).map((k) => ing(k).label).join(", ")}
                 {missing.length > 3 && ` +${missing.length - 3}`}
-              </p>
-            )}
-          </div>
-        </Link>
-      </Card>
+              </span>
+            </p>
+          )}
+        </div>
+      </Link>
     </motion.div>
   );
 }

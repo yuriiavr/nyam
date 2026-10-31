@@ -22,6 +22,8 @@
     "check:gemini": "node scripts/check-gemini.mjs",
     "check:diary": "node scripts/check-diary.mjs",
     "check:menu": "node scripts/check-menu.mjs",
+    "check:restaurants": "node scripts/check-restaurants.mjs",
+    "restaurants:build": "node scripts/build-restaurants.mjs",
     "nutrition:recompute": "node scripts/recompute-nutrition.mjs"
   },
   "dependencies": {

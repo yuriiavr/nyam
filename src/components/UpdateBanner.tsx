@@ -183,9 +183,9 @@ export function UpdateGate({ schema, children }: { schema: number | null; childr
           <div className="mx-auto w-full max-w-[560px] px-3 pt-[62px]">
             <div
               role="alert"
-              className="glass pointer-events-auto flex items-center gap-2.5 rounded-2xl border border-brand/30 py-1.5 pl-3 pr-1.5 shadow-[var(--shadow-card)]"
+              className="pointer-events-auto flex min-h-[48px] items-center gap-2.5 rounded-[12px] border border-brand/40 bg-surface-2 py-1.5 pl-3.5 pr-1.5"
             >
-              <RefreshCw size={16} className="shrink-0 text-brand" />
+              <RefreshCw size={16} strokeWidth={2.4} className="shrink-0 text-brand" />
               <p className="min-w-0 flex-1 text-[12.5px] font-semibold leading-snug">
                 Застосунок оновився. Перезапусти, щоб зміни не загубились
               </p>
@@ -210,13 +210,13 @@ export function UpdateGate({ schema, children }: { schema: number | null; childr
               </Button>
             }
           >
-            <div role="alert" className="flex items-center gap-3 pb-2 pt-1">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl brand-gradient text-brand-ink">
-                <RefreshCw size={22} />
+            <div role="alert" className="flex items-center gap-3 pb-3 pt-1">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-brand/15 text-brand">
+                <RefreshCw size={19} strokeWidth={2.4} />
               </span>
               <div className="min-w-0">
-                <p className="text-[15px] font-bold leading-snug">Застосунок оновився</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-muted">
+                <p className="font-display text-[16px] font-bold leading-snug">Застосунок оновився</p>
+                <p className="mt-0.5 text-[12.5px] font-semibold leading-snug text-muted">
                   Перезапусти, щоб зміни не загубились
                 </p>
               </div>

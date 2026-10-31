@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ProductPicker } from "@/components/ProductPicker";
+import type { RestaurantId } from "@/data/restaurants";
 import { slotAt } from "@/lib/diary";
 import { useApp } from "@/lib/store";
 import type { FoodSource, MealSlot } from "@/lib/types";
@@ -10,6 +11,8 @@ import { AddFoodSheet } from "./AddFoodSheet";
 import { AmountSheet, type FoodTarget } from "./AmountSheet";
 import { DishSheet } from "./DishSheet";
 import { FoodScanner } from "./FoodScanner";
+import { RestaurantDishSheet } from "./RestaurantDishSheet";
+import { RestaurantSheet, type RestaurantPick } from "./RestaurantSheet";
 import { SplitSheet, type SplitRequest } from "./SplitSheet";
 
 type Step =
@@ -19,7 +22,10 @@ type Step =
   | { kind: "search" }
   | { kind: "describe"; text?: string }
   | { kind: "amount"; target: FoodTarget; source: FoodSource }
-  | { kind: "split"; request: SplitRequest };
+  | { kind: "split"; request: SplitRequest }
+  /** Заклади й меню; `at` — одразу меню цього закладу. */
+  | { kind: "restaurant"; at?: RestaurantId }
+  | { kind: "restaurantDish"; pick: RestaurantPick };
 
 /**
  * Усі шляхи «записати зʼїдене» одним ланцюжком аркушів — для щоденника,
@@ -75,6 +81,7 @@ export function useFoodFlows({ day = dateKey(), forUser }: { day?: string; forUs
         onScan={() => setStep({ kind: "scan" })}
         onSearch={() => setStep({ kind: "search" })}
         onDescribe={() => setStep({ kind: "describe" })}
+        onRestaurant={() => setStep({ kind: "restaurant" })}
         onPick={(target) => setStep({ kind: "amount", target, source: "search" })}
         onLeftover={(meal) =>
           setStep({ kind: "split", request: { meal, isNew: false, source: "leftover", slot, day } })
@@ -126,6 +133,34 @@ export function useFoodFlows({ day = dateKey(), forUser }: { day?: string; forUs
       />
 
       <SplitSheet request={step.kind === "split" ? step.request : null} onClose={closeIf("split")} />
+
+      <RestaurantSheet
+        open={step.kind === "restaurant"}
+        onClose={closeIf("restaurant")}
+        initial={step.kind === "restaurant" ? step.at : undefined}
+        onPick={(pick) => setStep({ kind: "restaurantDish", pick })}
+      />
+
+      <RestaurantDishSheet
+        open={step.kind === "restaurantDish"}
+        // «Назад» зі страви — у меню того ж закладу, а не геть із потоку.
+        onClose={() =>
+          setStep((s) => (s.kind === "restaurantDish" ? { kind: "restaurant", at: s.pick.restaurant.id } : s))
+        }
+        pick={step.kind === "restaurantDish" ? step.pick : null}
+        slot={slot}
+        day={day}
+        forUser={forUser}
+        /*
+         * Записали — назад у те саме меню: у закладі рідко беруть одну
+         * страву, бургер, картопля й напій пишуться підряд. Прийом їжі —
+         * той, що щойно вибрали.
+         */
+        onLogged={(entry) => {
+          setSlot(entry.slot);
+          setStep((s) => (s.kind === "restaurantDish" ? { kind: "restaurant", at: s.pick.restaurant.id } : s));
+        }}
+      />
     </>
   );
 

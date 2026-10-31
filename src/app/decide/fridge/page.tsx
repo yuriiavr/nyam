@@ -1,18 +1,18 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Plus, ScanBarcode, ShoppingBasket, X } from "lucide-react";
+import { ChevronRight, Plus, ScanBarcode, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, Chip, EmptyState, Segmented } from "@/components/ui";
+import { Button, EmptyState, Segmented } from "@/components/ui";
 import { ing, knownIngredient, satisfies } from "@/data/ingredients";
 import { fridgeMatches, suggestable } from "@/lib/matching";
 import { pantryCounts } from "@/lib/pantry";
 import { pantryTypes, useApp } from "@/lib/store";
 import type { MatchResult } from "@/lib/types";
-import { formatMinutes, plural } from "@/lib/utils";
+import { cn, formatMinutes, plural } from "@/lib/utils";
 
 type Mode = "ready" | "almost" | "all";
 
@@ -80,7 +80,7 @@ export default function FridgePage() {
   if (hydrated && pantry.length === 0) {
     return (
       <div>
-        <TopBar title="Що в холодильнику" />
+        <TopBar title="Холодильник" />
         <EmptyState
           emoji="🧊"
           title="Спершу наповни комору"
@@ -101,40 +101,34 @@ export default function FridgePage() {
   return (
     <div className="pb-8">
       <TopBar
-        title="Що в холодильнику"
-        subtitle={`${rows} ${plural(rows, "продукт", "продукти", "продуктів")} у коморі`}
+        title="Холодильник"
         right={
-          <Link
-            href="/pantry"
-            aria-label="Комора"
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
-          >
-            <Plus size={18} />
-          </Link>
+          <span className="text-[12px] font-bold text-faint">
+            {rows} {plural(rows, "продукт", "продукти", "продуктів")}
+          </span>
         }
       />
 
-      {withKey && (
-        <div className="px-4 pt-4">
-          <Chip active onClick={() => setWithKey(null)}>
-            {ing(withKey).emoji} Лише з «{ing(withKey).label}» <X size={13} />
-          </Chip>
-        </div>
-      )}
+      <div className="flex flex-col gap-2.5 px-4">
+        {withKey && (
+          <button
+            onClick={() => setWithKey(null)}
+            className="flex h-10 items-center gap-2 self-start rounded-[10px] border border-brand/40 bg-brand/10 px-3 text-[13px] font-bold text-brand"
+          >
+            {ing(withKey).emoji} Лише з «{ing(withKey).label}» <X size={14} />
+          </button>
+        )}
 
-      <div className="px-4 pt-4">
         <Segmented
           value={mode}
           onChange={setMode}
           options={[
-            { value: "ready", label: `Готово (${counts.ready})` },
-            { value: "almost", label: `Майже (${counts.almost})` },
-            { value: "all", label: `Усе (${counts.all})` },
+            { value: "ready", label: "Готово", count: counts.ready },
+            { value: "almost", label: "Майже", count: counts.almost },
+            { value: "all", label: "Усе", count: counts.all },
           ]}
         />
-      </div>
 
-      <div className="flex flex-col gap-3 px-4 pt-4">
         {filtered.length === 0 ? (
           <EmptyState
             emoji="🤔"
@@ -151,6 +145,15 @@ export default function FridgePage() {
         ) : (
           filtered.map((m, i) => <MatchCard key={m.recipe.id} match={m} index={i} />)
         )}
+
+        <Link
+          href="/pantry"
+          className="flex h-12 items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5 active:bg-surface-2"
+        >
+          <Plus size={16} strokeWidth={2.4} className="text-brand" />
+          <span className="flex-1 text-[14px] font-semibold text-brand">Додати продукти в комору</span>
+          <ChevronRight size={15} strokeWidth={2.2} className="text-faint" />
+        </Link>
       </div>
     </div>
   );
@@ -158,7 +161,7 @@ export default function FridgePage() {
 
 function MatchCard({ match, index }: { match: MatchResult; index: number }) {
   const { recipe, pct, missing } = match;
-  const color = pct === 100 ? "var(--mint)" : pct >= 70 ? "var(--brand-2)" : "var(--brand)";
+  const full = missing.length === 0;
 
   return (
     <motion.div
@@ -166,83 +169,34 @@ function MatchCard({ match, index }: { match: MatchResult; index: number }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.04, 0.3) }}
     >
-      <Card className="overflow-hidden p-0">
-        <Link href={`/recipe/${recipe.id}`} className="flex gap-3 p-3">
-          <RecipeMedia
-            recipe={recipe}
-            className="h-[72px] w-[72px] shrink-0"
-            rounded="rounded-2xl"
-            emojiSize="text-3xl"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <h3 className="min-w-0 flex-1 font-display text-[15px] font-bold leading-tight">
-                {recipe.title}
-              </h3>
-              <Ring pct={pct} color={color} />
-            </div>
-            <p className="mt-1 text-[11.5px] text-muted">
+      <Link
+        href={`/recipe/${recipe.id}`}
+        className="block overflow-hidden rounded-[10px] border border-line bg-surface active:bg-surface-2"
+      >
+        <div className="flex items-center gap-3 px-3.5 py-3">
+          <RecipeMedia recipe={recipe} className="h-[52px] w-[52px] shrink-0" rounded="rounded-[8px]" emojiSize="text-[26px]" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14.5px] font-extrabold">{recipe.title}</span>
+            <span className="block truncate text-[12px] font-semibold text-muted">
               {formatMinutes(recipe.timeMin)} · {recipe.cuisine}
-            </p>
-
-            {missing.length === 0 ? (
-              <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-mint/15 px-2.5 py-1 text-[11.5px] font-bold text-mint">
-                ✓ Усе є — можна готувати
-              </p>
-            ) : (
-              <div className="mt-2">
-                <p className="mb-1 flex items-center gap-1 text-[11px] font-bold text-muted">
-                  <ShoppingBasket size={11} />
-                  Бракує {missing.length}:
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {missing.slice(0, 4).map((k) => (
-                    <span
-                      key={k}
-                      className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold"
-                    >
-                      {ing(k).emoji} {ing(k).label}
-                    </span>
-                  ))}
-                  {missing.length > 4 && (
-                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">
-                      +{missing.length - 4}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+            </span>
+          </span>
+          <span className={cn("font-display text-[16px] font-bold", full ? "text-brand" : "text-ink")}>{pct}%</span>
+        </div>
+        <div className="flex flex-col gap-2 px-3.5 pb-3">
+          <div className="h-1 overflow-hidden rounded-[2px] bg-surface-2">
+            <motion.div
+              className={cn("h-full rounded-[2px]", full ? "brand-gradient" : "bg-muted")}
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            />
           </div>
-        </Link>
-      </Card>
+          <p className={cn("text-[12px] font-semibold", full ? "text-brand" : "text-faint")}>
+            {full ? "Усе є вдома" : `Бракує: ${missing.map((k) => ing(k).label.toLowerCase()).join(", ")}`}
+          </p>
+        </div>
+      </Link>
     </motion.div>
-  );
-}
-
-function Ring({ pct, color }: { pct: number; color: string }) {
-  const r = 16;
-  const c = 2 * Math.PI * r;
-  return (
-    <div className="relative grid h-11 w-11 shrink-0 place-items-center">
-      <svg width={44} height={44} viewBox="0 0 44 44" className="absolute -rotate-90">
-        <circle cx={22} cy={22} r={r} fill="none" stroke="var(--line)" strokeWidth={4} />
-        <motion.circle
-          cx={22}
-          cy={22}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={4}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          initial={{ strokeDashoffset: c }}
-          animate={{ strokeDashoffset: c - (c * pct) / 100 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-        />
-      </svg>
-      <span className="relative text-[10.5px] font-extrabold" style={{ color }}>
-        {pct}%
-      </span>
-    </div>
   );
 }

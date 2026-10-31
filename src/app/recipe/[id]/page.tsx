@@ -1,22 +1,19 @@
 "use client";
 
-import { motion } from "framer-motion";
 import {
   Bookmark,
-  ChefHat,
+  Check,
   ChevronLeft,
+  ChevronRight,
   Clock,
-  Flame,
   Heart,
   Minus,
   Pencil,
   Plus,
   RotateCcw,
   Share2,
-  ShoppingBasket,
   Star,
   Trash2,
-  Users,
   UtensilsCrossed,
 } from "lucide-react";
 import Link from "next/link";
@@ -28,8 +25,10 @@ import { RecipeMedia, RecipeRow } from "@/components/RecipeCard";
 import {
   Avatar,
   Button,
-  Card,
   EmptyState,
+  formatKcal,
+  Panel,
+  PanelHeader,
   Sheet,
   Stars,
   useToast,
@@ -54,21 +53,19 @@ import {
 } from "@/lib/store";
 import {
   avgRating,
+  cn,
   compactNumber,
   plural,
-  DIFFICULTY_LABEL,
   formatClock,
   formatMinutes,
   haptic,
-  MEAL_LABEL,
-  MOOD_META,
   newId,
   timeAgo,
 } from "@/lib/utils";
 import * as api from "@/lib/supabase/api";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { recipeCost } from "@/lib/cost";
-import { macroShares, recipeNutrition } from "@/lib/nutrition";
+import { recipeNutrition } from "@/lib/nutrition";
 import { formatSummed, ingredientQtyLabel } from "@/lib/units";
 
 export default function RecipePage() {
@@ -89,7 +86,7 @@ export default function RecipePage() {
    * тож новий батько в дописаному типі перераховує збіг без перезапуску.
    */
   const have = useApp(pantryTypes);
-  useApp((s) => s.customIngredients);
+  const customIngredients = useApp((s) => s.customIngredients);
   /*
    * Картки товарів — для «є 1,9 л»: штучна пачка рахується у грами через свою
    * картку, тож підпис міняється, коли картка приїхала чи змінилась.
@@ -128,6 +125,13 @@ export default function RecipePage() {
       .slice(0, 4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipe?.id, myRecipes, remoteRecipes]);
+
+  // Калорії для метрик угорі — ті самі, що в картці «На порцію».
+  const nutrition = useMemo(
+    () => (recipe ? recipeNutrition(recipe) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recipe, customIngredients],
+  );
 
   // Власні рецепти живуть у localStorage — до рехідрації їх ще не видно.
   if (!recipe && !hydrated) return <div className="min-h-dvh" />;
@@ -177,182 +181,132 @@ export default function RecipePage() {
     }
   };
 
+  const following = followingIds.includes(author.id);
+  const haveCount = recipe.ingredients.length - match.missing.length;
+  const kcal = nutrition ? Math.round(nutrition.perServing.kcal) : null;
+
+  const addMissing = () => {
+    haptic(12);
+    const items = itemsForRecipe(recipe, match.missing, factor);
+    const { fresh, merged } = addShopping(items);
+    toast(
+      fresh > 0
+        ? `${fresh} ${plural(fresh, "позиція", "позиції", "позицій")} у списку покупок`
+        : merged > 0
+          ? "Усе це вже в списку — кількості долито"
+          : "Усе це вже в списку покупок",
+      "🛒",
+    );
+  };
+
   return (
-    <div className="pb-8">
-      {/* Герой */}
-      <div className="relative">
+    <div className="pb-8 lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:pb-0">
+      {/* Герой: на планшеті — ліва колонка на всю висоту, що не гортається */}
+      <div className="relative lg:sticky lg:top-4 lg:m-4 lg:mr-0 lg:h-[calc(100dvh-32px)] lg:overflow-hidden lg:rounded-[16px]">
         <RecipeMedia
           recipe={recipe}
-          className="aspect-[4/3] w-full"
+          className="h-[300px] w-full lg:h-full"
           rounded="rounded-none"
-          emojiSize="text-8xl"
+          emojiSize="text-[110px] lg:text-[140px]"
         />
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-          style={{
-            backgroundImage: "linear-gradient(to top, var(--bg), transparent)",
-          }}
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[90px] lg:hidden"
+          style={{ backgroundImage: "linear-gradient(180deg, transparent, var(--bg))" }}
         />
 
-        <div className="pad-safe-t absolute inset-x-0 top-0 flex items-center justify-between p-3">
-          <button
-            onClick={() => router.back()}
-            aria-label="Назад"
-            className="grid h-11 w-11 place-items-center rounded-2xl bg-black/40 text-white backdrop-blur-md"
-          >
-            <ChevronLeft size={22} />
+        <div className="pad-safe-t absolute inset-x-0 top-0 flex items-center gap-2 px-4 pt-2.5">
+          <button onClick={() => router.back()} aria-label="Назад" className={HERO_BUTTON}>
+            <ChevronLeft size={20} strokeWidth={2.2} />
           </button>
-          <div className="flex gap-2">
-            <button
-              onClick={share}
-              aria-label="Поділитись"
-              className="grid h-11 w-11 place-items-center rounded-2xl bg-black/40 text-white backdrop-blur-md"
-            >
-              <Share2 size={18} />
-            </button>
-            <button
-              onClick={() => {
-                haptic(14);
-                toggleSave(recipe.id);
-                toast(
-                  saved ? "Прибрано зі збережених" : "Збережено в галерею",
-                  "🔖",
-                );
-              }}
-              aria-label="Зберегти"
-              className={`grid h-11 w-11 place-items-center rounded-2xl backdrop-blur-md ${
-                saved
-                  ? "brand-gradient text-brand-ink"
-                  : "bg-black/40 text-white"
-              }`}
-            >
-              <Bookmark size={18} className={saved ? "fill-current" : ""} />
-            </button>
-          </div>
+          <span className="flex-1" />
+          <button onClick={share} aria-label="Поділитись" className={HERO_BUTTON}>
+            <Share2 size={17} />
+          </button>
+          <button
+            onClick={() => {
+              haptic(14);
+              toggleSave(recipe.id);
+              toast(saved ? "Прибрано зі збережених" : "Збережено", "🔖");
+            }}
+            aria-label={saved ? "Прибрати зі збережених" : "Зберегти"}
+            aria-pressed={saved}
+            className={HERO_BUTTON}
+          >
+            <Bookmark size={18} className={saved ? "fill-current" : ""} />
+          </button>
         </div>
       </div>
 
-      {/* Заголовок */}
-      <div className="relative -mt-6 px-4">
-        <div className="flex flex-wrap gap-1.5">
-          {recipe.mealTypes.map((m) => (
-            <span
-              key={m}
-              className="rounded-full bg-brand/15 px-2.5 py-1 text-[11px] font-bold text-brand"
+      <div className="relative -mt-[18px] flex flex-col gap-2.5 px-4 md:px-6 lg:mt-0 lg:min-w-0 lg:gap-3 lg:pb-4 lg:pl-[22px] lg:pt-4">
+        {/* Заголовок */}
+        <div className="flex flex-col gap-1.5">
+          <h1 className="font-display text-[22px] font-bold leading-[1.25] lg:text-[28px] lg:font-extrabold lg:leading-[1.15]">
+            {recipe.title}
+          </h1>
+          <div className="flex items-center gap-2">
+            <Link
+              href={isMine ? "/me" : `/u/${author.id}`}
+              className="flex min-w-0 flex-1 items-center gap-2 text-[12.5px] font-semibold text-muted"
             >
-              {MEAL_LABEL[m]}
-            </span>
-          ))}
-          {recipe.moods.slice(0, 2).map((m) => (
-            <span
-              key={m}
-              className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-muted"
-            >
-              {MOOD_META[m]?.emoji} {MOOD_META[m]?.label}
-            </span>
-          ))}
-        </div>
-
-        <h1 className="mt-3 font-display text-[26px] font-extrabold leading-tight">
-          {recipe.title}
-        </h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-muted">
-          {recipe.description}
-        </p>
-
-        {/* Автор */}
-        <div className="mt-4 flex items-center gap-3">
-          <Link
-            href={isMine ? "/me" : `/u/${author.id}`}
-            className="flex min-w-0 flex-1 items-center gap-2.5"
-          >
-            <Avatar
-              emoji={author.emoji}
-              gradient={author.gradient}
-              src={author.avatar}
-              size={40}
-            />
-            <div className="min-w-0">
-              <p className="truncate text-[13.5px] font-bold">{author.name}</p>
-              <p className="truncate text-[11.5px] text-muted">
-                @{author.handle}
-              </p>
-            </div>
-          </Link>
-          {!isMine && (
-            <Button
-              size="sm"
-              variant={
-                followingIds.includes(author.id) ? "secondary" : "primary"
-              }
-              onClick={() => {
-                toggleFollow(author.id);
-                toast(
-                  followingIds.includes(author.id)
-                    ? "Відписано"
-                    : `Підписка на ${author.name}`,
-                  "👋",
-                );
-              }}
-            >
-              {followingIds.includes(author.id)
-                ? "Ви підписані"
-                : "Підписатись"}
-            </Button>
+              <Avatar emoji={author.emoji} gradient={author.gradient} src={author.avatar} size={22} />
+              <span className="truncate">
+                {author.name}
+                {recipe.cuisine ? ` · ${recipe.cuisine}` : ""}
+              </span>
+            </Link>
+            {!isMine && (
+              <button
+                onClick={() => {
+                  haptic(10);
+                  toggleFollow(author.id);
+                  toast(following ? "Відписано" : `Підписка на ${author.name}`, "👋");
+                }}
+                className={cn(
+                  "h-7 shrink-0 rounded-[8px] px-2.5 text-[12px] font-extrabold",
+                  following ? "bg-surface-2 text-muted" : "bg-brand/15 text-brand",
+                )}
+              >
+                {following ? "Стежу" : "Стежити"}
+              </button>
+            )}
+          </div>
+          {recipe.description && (
+            <p className="text-[13.5px] leading-relaxed text-muted">{recipe.description}</p>
+          )}
+          {/* Копіювати рецепти більше не можна: чужий рецепт зберігають, а не
+              розмножують. Підпис лишається заради копій, зроблених раніше. */}
+          {recipe.sourceId && (
+            <p className="text-[12px] font-semibold text-faint">
+              Копія рецепта —{" "}
+              <Link href={`/recipe/${recipe.sourceId}`} className="font-bold text-brand">
+                оригінал тут
+              </Link>
+            </p>
           )}
         </div>
 
         {/* Метрики */}
-        <div className="mt-4 grid grid-cols-4 gap-2">
+        <Panel className="grid grid-cols-4">
+          <Metric value={formatMinutes(recipe.timeMin)} label="час" />
+          <Metric value={kcal != null ? String(kcal) : "—"} label="ккал" />
           <Metric
-            icon={<Clock size={15} />}
-            value={formatMinutes(recipe.timeMin)}
-            label="час"
-          />
-          <Metric
-            icon={<ChefHat size={15} />}
-            value={DIFFICULTY_LABEL[recipe.difficulty]}
-            label="складність"
-          />
-          <Metric
-            icon={<Star size={15} />}
-            value={rating > 0 ? rating.toFixed(1) : "—"}
-            label={`${compactNumber(stats.ratingCount)} оцінок`}
-          />
-          <Metric
-            icon={<Flame size={15} />}
-            value={compactNumber(stats.cooks)}
-            label="готували"
-          />
-        </div>
-
-        {/* Соціальні дії */}
-        <div className="mt-3 flex gap-2">
-          <Button
-            variant={liked ? "danger" : "secondary"}
-            className="flex-1"
-            onClick={() => {
-              haptic(14);
-              toggleLike(recipe.id);
-            }}
-          >
-            <Heart size={17} className={liked ? "fill-current" : ""} />
-            {compactNumber(stats.likes)}
-          </Button>
-          <Button
-            variant="secondary"
-            className="flex-1"
+            value={rating > 0 ? `★ ${rating.toFixed(1).replace(".", ",")}` : "—"}
+            label={`${compactNumber(stats.ratingCount)} ${plural(stats.ratingCount, "оцінка", "оцінки", "оцінок")}`}
             onClick={() => setRateOpen(true)}
+          />
+          <Metric value={String(recipe.ingredients.length)} label="продуктів" />
+        </Panel>
+
+        {/* Дії: оцінка і «зʼїв» */}
+        <Panel className="grid grid-cols-2 gap-px bg-line">
+          <button
+            onClick={() => setRateOpen(true)}
+            className="flex h-11 items-center justify-center gap-2 bg-surface text-[13.5px] font-bold active:bg-surface-2"
           >
-            <Star
-              size={17}
-              className={myRating ? "fill-brand-2 text-brand-2" : ""}
-            />
+            <Star size={16} className={myRating ? "fill-brand-2 text-brand-2" : "text-muted"} />
             {myRating ? `Твоя оцінка ${myRating}` : "Оцінити"}
-          </Button>
-          <Button
-            variant="secondary"
-            className="flex-1"
+          </button>
+          <button
             onClick={() => {
               haptic(10);
               flows.split({
@@ -368,45 +322,32 @@ export default function RecipePage() {
                 portionEdit: true,
               });
             }}
+            className="flex h-11 items-center justify-center gap-2 bg-surface text-[13.5px] font-bold active:bg-surface-2"
           >
-            <UtensilsCrossed size={17} />
-            Зʼїв
-          </Button>
-        </div>
+            <UtensilsCrossed size={16} className="text-muted" />
+            Зʼїв — у щоденник
+          </button>
+        </Panel>
 
-        {/* Копіювати рецепти більше не можна: чужий рецепт зберігають, а не
-            розмножують. Підпис лишається заради копій, зроблених раніше. */}
-        {recipe.sourceId && (
-          <p className="mt-2.5 text-[12px] text-muted">
-            Копія рецепта{" "}
-            <Link
-              href={`/recipe/${recipe.sourceId}`}
-              className="font-bold text-brand"
-            >
-              оригінал тут
-            </Link>
-          </p>
-        )}
-      </div>
-
-      {/* Інгредієнти */}
-      <section className="px-4 pt-7">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="font-display text-[17px] font-bold">Інгредієнти</h2>
-          <div className="flex items-center gap-1 rounded-full border border-line bg-surface p-1">
+        {/* Інгредієнти */}
+        <Panel>
+          <div className="flex h-[46px] items-center gap-2 pl-3.5 pr-2">
+            <span className="flex-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">
+              Інгредієнти
+              {pantryItems.length > 0 && ` · є ${haveCount} з ${recipe.ingredients.length}`}
+            </span>
             <button
               onClick={() => {
                 haptic(8);
                 setServings(Math.max(1, currentServings - 1));
               }}
               aria-label="Менше порцій"
-              className="grid h-7 w-7 place-items-center rounded-full bg-surface-2"
+              className={STEP_BUTTON}
             >
-              <Minus size={13} />
+              <Minus size={15} strokeWidth={2.4} />
             </button>
-            <span className="flex items-center gap-1 px-1.5 text-[12.5px] font-bold">
-              <Users size={12} />
-              {currentServings}
+            <span className="w-16 text-center text-[13px] font-extrabold">
+              {currentServings} {plural(currentServings, "порція", "порції", "порцій")}
             </span>
             <button
               onClick={() => {
@@ -414,159 +355,99 @@ export default function RecipePage() {
                 setServings(Math.min(20, currentServings + 1));
               }}
               aria-label="Більше порцій"
-              className="grid h-7 w-7 place-items-center rounded-full bg-surface-2"
+              className={STEP_BUTTON}
             >
-              <Plus size={13} />
+              <Plus size={15} strokeWidth={2.4} />
             </button>
           </div>
-        </div>
-
-        {pantryItems.length > 0 && (
-          <div className="mb-3 flex items-center gap-2 rounded-2xl border border-line bg-surface px-3.5 py-2.5">
-            <span className="text-lg">{match.pct === 100 ? "✅" : "🧊"}</span>
-            <p className="flex-1 text-[12.5px] leading-snug">
-              {match.pct === 100 ? (
-                <span className="font-bold text-mint">
-                  Усе є в коморі — можна готувати
-                </span>
-              ) : (
-                <>
-                  Збіг з коморою{" "}
-                  <span className="font-bold text-brand">{match.pct}%</span>,
-                  бракує {match.missing.length}
-                </>
-              )}
-            </p>
-            <Link href="/pantry" className="text-[12px] font-bold text-brand">
-              Комора
-            </Link>
-          </div>
-        )}
-
-        {match.missing.length > 0 && (
-          <div className="mb-3">
-            <Button
-              full
-              variant="secondary"
-              onClick={() => {
-                haptic(12);
-                const items = itemsForRecipe(recipe, match.missing, factor);
-                const { fresh, merged } = addShopping(items);
-                toast(
-                  fresh > 0
-                    ? `${fresh} ${plural(fresh, "позиція", "позиції", "позицій")} у списку покупок`
-                    : merged > 0
-                      ? "Усе це вже в списку — кількості долито"
-                      : "Усе це вже в списку покупок",
-                  "🛒",
-                );
-              }}
-            >
-              <ShoppingBasket size={17} />
-              Додати в список покупок · {match.missing.length}
-            </Button>
-            <p className="mt-1.5 text-center text-[11px] text-faint">
-              Кількості — на {currentServings}{" "}
-              {plural(currentServings, "порцію", "порції", "порцій")}
-            </p>
-          </div>
-        )}
-
-        <Card className="divide-y divide-line p-0">
+          <div className="lg:grid lg:grid-cols-2">
           {recipe.ingredients.map((item) => {
             const def = ing(item.key);
             // Базове позначається наявним лише тоді, коли воно справді в коморі.
             const inStock = have.has(canonicalKey(item.key));
             const stockNote = inStock ? pantryNote(item.key, pantryItems, products) : "";
+            // Різновид називаємо: інакше людина шукала б звичайне молоко, якого немає.
+            const variant = stockNote.startsWith("є:") ? stockNote : "";
             return (
               <div
                 key={item.key}
-                className="flex items-center gap-3 px-3.5 py-3"
+                title={stockNote || undefined}
+                className="flex min-h-[46px] items-center gap-3 border-t border-line px-3.5 py-2 lg:even:border-l"
               >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-lg">
-                  {item.label ? "🏷️" : def.emoji}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold">
-                    {item.label ?? def.label}
-                    {item.optional && (
-                      <span className="ml-1.5 text-[11px] font-normal text-faint">
-                        (за бажанням)
-                      </span>
-                    )}
-                  </p>
-                  {pantryItems.length > 0 && (
-                    <p
-                      className={`text-[11px] ${inStock ? "text-mint" : "text-faint"}`}
-                    >
-                      {inStock ? stockNote : "треба купити"}
-                    </p>
+                <span
+                  className={cn(
+                    "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px]",
+                    inStock ? "border-brand bg-brand text-brand-ink" : "border-line-strong",
                   )}
-                </div>
-                <span className="shrink-0 text-[13px] font-bold text-muted">
-                  {ingredientQtyLabel(item, factor)}
+                >
+                  {inStock && <Check size={11} strokeWidth={3.5} />}
                 </span>
+                <span className="min-w-0 flex-1">
+                  <span className={cn("block text-[14px] font-semibold", inStock ? "text-ink" : "text-muted")}>
+                    {item.label ?? def.label}
+                    {item.optional && <span className="ml-1.5 text-[11px] font-semibold text-faint">за бажанням</span>}
+                  </span>
+                  {variant && <span className="block truncate text-[11px] font-semibold text-faint">{variant}</span>}
+                </span>
+                <span className="shrink-0 text-[12.5px] font-bold text-muted">{ingredientQtyLabel(item, factor)}</span>
               </div>
             );
           })}
-        </Card>
-      </section>
-
-      {/* Харчова цінність */}
-      <NutritionCard recipe={recipe} servings={currentServings} />
-      <CostCard recipe={recipe} servings={currentServings} />
-      <PairingSuggestions recipe={recipe} className="px-4" />
-      <DrinkPicks recipe={recipe} className="px-4" />
-
-      {/* Кроки */}
-      <section className="px-4 pt-7">
-        <h2 className="mb-3 font-display text-[17px] font-bold">
-          Приготування · {recipe.steps.length} кроків
-        </h2>
-        <div className="flex flex-col gap-2.5">
-          {recipe.steps.map((step, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.3 }}
-              className="flex gap-3 rounded-2xl border border-line bg-surface p-3.5"
+          </div>
+          {match.missing.length > 0 && (
+            <button
+              onClick={addMissing}
+              className="flex h-12 w-full items-center gap-2.5 border-t border-line px-3.5 text-left active:bg-surface-2"
             >
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full brand-gradient text-[12px] font-extrabold text-brand-ink">
+              <Plus size={16} strokeWidth={2.4} className="text-brand" />
+              <span className="flex-1 text-[14px] font-bold text-brand">Відсутнє — у список покупок</span>
+              <span className="text-[12px] font-bold text-faint">{match.missing.length}</span>
+            </button>
+          )}
+        </Panel>
+
+        {/* Кроки */}
+        <Panel>
+          <PanelHeader label="Кроки" aside={recipe.steps.length} />
+          {recipe.steps.map((step, i) => (
+            <div key={i} className="flex gap-3 border-t border-line px-3.5 py-3">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[7px] bg-surface-2 text-[12px] font-extrabold text-brand">
                 {i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] leading-relaxed">{step.text}</p>
+                <p className="text-[13.5px] leading-[1.5] text-ink/85">{step.text}</p>
                 {step.tip && (
-                  <p className="mt-2 rounded-xl bg-surface-2 px-3 py-2 text-[12.5px] leading-snug text-muted">
-                    💡 {step.tip}
-                  </p>
+                  <p className="mt-1.5 text-[12.5px] leading-snug text-muted">💡 {step.tip}</p>
                 )}
                 {step.timerSec && (
-                  <p className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-bold text-brand">
+                  <p className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-bold text-brand">
                     <Clock size={11} />
                     {Math.round(step.timerSec / 60)} хв
                   </p>
                 )}
               </div>
-            </motion.div>
+            </div>
           ))}
-        </div>
-      </section>
+        </Panel>
 
-      {/* Керування власним рецептом */}
-      {isMine && (
-        <section className="px-4 pt-6">
-          <div className="flex gap-2">
-            <Link href={`/new?edit=${recipe.id}`} className="flex-1">
-              <Button variant="secondary" full>
-                <Pencil size={16} />
-                Редагувати
-              </Button>
+        {/* Харчова цінність і ціна */}
+        <NutritionCard recipe={recipe} servings={currentServings} />
+        <CostCard recipe={recipe} servings={currentServings} />
+        <PairingSuggestions recipe={recipe} />
+        <DrinkPicks recipe={recipe} />
+
+        {/* Керування власним рецептом */}
+        {isMine && (
+          <Panel>
+            <Link
+              href={`/new?edit=${recipe.id}`}
+              className="flex h-12 items-center gap-2.5 px-3.5 active:bg-surface-2"
+            >
+              <Pencil size={16} className="text-muted" />
+              <span className="flex-1 text-[14px] font-semibold">Редагувати рецепт</span>
+              <ChevronRight size={15} strokeWidth={2.2} className="text-faint" />
             </Link>
-            <Button
-              variant="danger"
+            <button
               onClick={() => {
                 if (confirm(`Видалити «${recipe.title}»?`)) {
                   deleteRecipe(recipe.id);
@@ -574,43 +455,53 @@ export default function RecipePage() {
                   router.push("/me");
                 }
               }}
-              className="w-12 px-0"
-              aria-label="Видалити"
+              className="flex h-12 w-full items-center gap-2.5 border-t border-line px-3.5 text-left active:bg-surface-2"
             >
-              <Trash2 size={16} />
-            </Button>
-          </div>
-        </section>
-      )}
+              <Trash2 size={16} className="text-berry" />
+              <span className="flex-1 text-[14px] font-semibold text-berry">Видалити рецепт</span>
+            </button>
+          </Panel>
+        )}
 
-      <CommentsSection recipe={recipe} />
+        <CommentsSection recipe={recipe} />
 
-      {/* Схожі */}
-      {similar.length > 0 && (
-        <section className="px-4 pt-7">
-          <h2 className="mb-3 font-display text-[17px] font-bold">
-            Схожі страви
-          </h2>
-          <div className="flex flex-col gap-2.5">
+        {/* Схожі */}
+        {similar.length > 0 && (
+          <Panel>
+            <PanelHeader label="Схожі страви" />
             {similar.map((r) => (
-              <RecipeRow key={r.id} recipe={r} href={`/recipe/${r.id}`} />
+              <RecipeRow key={r.id} recipe={r} href={`/recipe/${r.id}`} flat />
             ))}
-          </div>
-        </section>
-      )}
+          </Panel>
+        )}
 
-      {/*
-        Липка кнопка «Готувати». Готування, яке лишили посеред кроків, —
-        «Продовжити» з тим самим кроком і таймерами; поруч «скинути», щоб
-        почати наново. Над панеллю «готуєш зараз», якщо вона є (--cook-dock).
-      */}
-      <div
-        className="fixed inset-x-0 z-30 mx-auto flex w-full max-w-[560px] gap-2 px-4"
-        style={{ bottom: "calc(84px + env(safe-area-inset-bottom) + var(--cook-dock, 0px))" }}
-      >
-        <Link href={`/recipe/${recipe.id}/cook`} className="min-w-0 flex-1">
-          <Button full size="lg" className="shadow-[var(--shadow-pop)]">
-            <ChefHat size={19} />
+        {/*
+          Липка кнопка «Готувати». Готування, яке лишили посеред кроків, —
+          «Продовжити» з тим самим кроком і таймерами; поруч «скинути», щоб
+          почати наново. Над панеллю «готуєш зараз», якщо вона є (--cook-dock).
+        */}
+        <div
+          className="fixed inset-x-0 z-30 mx-auto flex w-full max-w-[560px] gap-2 px-4 md:left-[92px] md:max-w-[720px] md:px-6 lg:sticky lg:inset-x-auto lg:mx-0 lg:mt-1 lg:max-w-none lg:px-0 bottom-[calc(84px_+_env(safe-area-inset-bottom)_+_var(--cook-dock,0px))] md:bottom-[calc(16px_+_var(--cook-dock,0px))] lg:bottom-4"
+        >
+          <button
+            onClick={() => {
+              haptic(14);
+              toggleLike(recipe.id);
+            }}
+            aria-label={liked ? "Прибрати вподобання" : "Вподобати"}
+            aria-pressed={liked}
+            className={cn(
+              "grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[12px] border border-line-strong bg-surface-2",
+              liked ? "text-brand" : "text-ink",
+            )}
+          >
+            <Heart size={20} className={liked ? "fill-current" : ""} />
+          </button>
+          <Link
+            href={`/recipe/${recipe.id}/cook`}
+            onClick={() => haptic(12)}
+            className="flex h-[52px] min-w-0 flex-1 items-center justify-center gap-2 rounded-[12px] px-4 brand-gradient text-[15.5px] font-extrabold text-brand-ink shadow-[0_14px_36px_-12px_rgb(255_107_53_/_0.6)]"
+          >
             {cooking && isStarted(cooking) ? (
               <span className="truncate">
                 Продовжити
@@ -621,42 +512,35 @@ export default function RecipePage() {
                     : ` · ${formatClock(timerLeft(cookTimer.timer, cookNow))}`)}
               </span>
             ) : (
-              "Готувати покроково"
+              "Почати готувати"
             )}
-          </Button>
-        </Link>
-        {cooking && isStarted(cooking) && (
-          <Button
-            variant="secondary"
-            size="lg"
-            className="glass w-14 shrink-0 border border-line px-0 shadow-[var(--shadow-pop)]"
-            aria-label="Скинути готування й почати спочатку"
-            onClick={() => {
-              const timers = Object.keys(cooking.timers).length;
-              const note = timers > 0 ? " Таймери цього рецепта зупиняться." : "";
-              if (!confirm(`Скинути готування «${recipe.title}»?${note}`)) return;
-              endSession(recipe.id);
-              toast("Готування скинуто", "↩️");
-            }}
-          >
-            <RotateCcw size={18} />
-          </Button>
-        )}
+          </Link>
+          {cooking && isStarted(cooking) && (
+            <button
+              className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-[12px] border border-line-strong bg-surface-2"
+              aria-label="Скинути готування й почати спочатку"
+              onClick={() => {
+                const timers = Object.keys(cooking.timers).length;
+                const note = timers > 0 ? " Таймери цього рецепта зупиняться." : "";
+                if (!confirm(`Скинути готування «${recipe.title}»?${note}`)) return;
+                endSession(recipe.id);
+                toast("Готування скинуто", "↩️");
+              }}
+            >
+              <RotateCcw size={18} />
+            </button>
+          )}
+        </div>
       </div>
-      <div className="h-16" />
+
+      <div className="h-20 lg:hidden" />
 
       {flows.ui}
 
       {/* Оцінка */}
-      <Sheet
-        open={rateOpen}
-        onClose={() => setRateOpen(false)}
-        title="Оціни страву"
-      >
+      <Sheet open={rateOpen} onClose={() => setRateOpen(false)} title="Оціни страву">
         <div className="flex flex-col items-center gap-4 py-4">
-          <p className="text-center text-[13.5px] text-muted">
-            Наскільки вдалася «{recipe.title}»?
-          </p>
+          <p className="text-center text-[13.5px] text-muted">Наскільки вдалася «{recipe.title}»?</p>
           <Stars
             value={myRating ?? 0}
             size={34}
@@ -666,34 +550,31 @@ export default function RecipePage() {
               setTimeout(() => setRateOpen(false), 420);
             }}
           />
-          {myRating && (
-            <p className="text-[12px] text-muted">
-              Твоя поточна оцінка: {myRating} з 5
-            </p>
-          )}
+          {myRating && <p className="text-[12px] text-muted">Твоя поточна оцінка: {myRating} з 5</p>}
         </div>
       </Sheet>
     </div>
   );
 }
 
-function Metric({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface px-2 py-2.5 text-center">
-      <span className="mx-auto mb-1 grid w-fit place-items-center text-brand">
-        {icon}
-      </span>
-      <p className="truncate text-[12.5px] font-bold leading-tight">{value}</p>
-      <p className="mt-0.5 truncate text-[10px] text-muted">{label}</p>
-    </div>
+const HERO_BUTTON =
+  "grid h-[38px] w-[38px] place-items-center rounded-[10px] bg-[rgb(8_8_10_/_0.55)] text-white backdrop-blur-md";
+const STEP_BUTTON = "grid h-[30px] w-[30px] place-items-center rounded-[8px] bg-surface-2 active:bg-line";
+
+function Metric({ value, label, onClick }: { value: string; label: string; onClick?: () => void }) {
+  const cls = "flex min-w-0 flex-col items-center gap-[3px] py-2.5 [&:not(:first-child)]:border-l [&:not(:first-child)]:border-line";
+  const inner = (
+    <>
+      <span className="max-w-full truncate px-1 text-[15px] font-extrabold">{value}</span>
+      <span className="max-w-full truncate px-1 text-[11px] font-semibold text-faint">{label}</span>
+    </>
+  );
+  return onClick ? (
+    <button onClick={onClick} className={cn(cls, "active:bg-surface-2")}>
+      {inner}
+    </button>
+  ) : (
+    <div className={cls}>{inner}</div>
   );
 }
 
@@ -704,13 +585,7 @@ function Metric({
  * лишилась половина»), у довідника — з покриттям. Якщо половина складу без
  * даних, число оманливе, і чесніше сказати про це, ніж робити вигляд точності.
  */
-function NutritionCard({
-  recipe,
-  servings,
-}: {
-  recipe: Recipe;
-  servings: number;
-}) {
+function NutritionCard({ recipe, servings }: { recipe: Recipe; servings: number }) {
   // КБЖВ дописаного різновиду без власних чисел береться з батька — з каталогу.
   const customIngredients = useApp((s) => s.customIngredients);
   const n = useMemo(() => recipeNutrition(recipe), [recipe, customIngredients]);
@@ -722,80 +597,53 @@ function NutritionCard({
     fat: Math.round(n.perServing.fat * 10) / 10,
     carbs: Math.round(n.perServing.carbs * 10) / 10,
   };
-  const shares = macroShares(n.perServing);
   const low = n.coverage < 0.6;
   // Рецепт у базі — отже, ШІ його порахує (чи вже рахує); демо-набір без бекенду — ні.
   const aiPending = n.source === "catalog" && isSupabaseConfigured && api.isUuid(recipe.id);
 
   return (
-    <section className="px-4 pt-7">
-      <h2 className="mb-3 font-display text-[17px] font-bold">На порцію</h2>
-      <Card className="p-4">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="font-display text-[30px] font-extrabold leading-none">
-              {per.kcal}
-            </p>
-            <p className="mt-1 text-[12px] text-muted">ккал у порції</p>
-          </div>
-          <p className="text-right text-[11.5px] leading-snug text-faint">
-            {servings} {plural(servings, "порція", "порції", "порцій")} ·{" "}
-            {Math.round(per.kcal * servings)} ккал разом
-          </p>
-        </div>
+    <Panel>
+      <div className="flex h-9 items-center justify-between px-3.5">
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">На порцію</span>
+        <span className="text-[13px] font-extrabold">{formatKcal(per.kcal)} ккал</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2.5 border-t border-line px-3.5 py-3">
+        <MacroCell label="Білки" color="var(--macro-protein)" value={per.protein} />
+        <MacroCell label="Жири" color="var(--macro-fat)" value={per.fat} />
+        <MacroCell label="Вуглеводи" color="var(--macro-carbs)" value={per.carbs} />
+      </div>
+      <p className="border-t border-line px-3.5 py-2.5 text-[11px] font-semibold leading-relaxed text-faint">
+        {servings} {plural(servings, "порція", "порції", "порцій")} · {formatKcal(per.kcal * servings)} ккал разом.{" "}
+        {n.source === "ai" ? (
+          <>
+            Порахував ШІ за складом і кроками.
+            {n.note && ` ${n.note}`}
+          </>
+        ) : (
+          <>
+            {aiPending
+              ? "Поки це оцінка за довідником — ШІ порахує точніше за складом і кроками."
+              : low
+                ? `Оцінка приблизна: пораховано лише ${Math.round(n.coverage * 100)}% складу.`
+                : "Оцінка за довідковими даними, без утрат при готуванні."}
+            {aiPending && low && ` Пораховано лише ${Math.round(n.coverage * 100)}% складу.`}
+            {n.skipped.length > 0 && ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
+          </>
+        )}
+      </p>
+    </Panel>
+  );
+}
 
-        {/* Смужка розподілу БЖВ за калоріями, а не за грамами:
-            грам жиру дає вдвічі більше енергії за грам білка. */}
-        <div className="mt-3 flex h-2 gap-[2px] overflow-hidden rounded-full bg-surface-2">
-          <div
-            style={{
-              width: `${shares.protein * 100}%`,
-              background: "var(--macro-protein)",
-            }}
-            className="rounded-full"
-          />
-          <div
-            style={{
-              width: `${shares.fat * 100}%`,
-              background: "var(--macro-fat)",
-            }}
-            className="rounded-full"
-          />
-          <div
-            style={{
-              width: `${shares.carbs * 100}%`,
-              background: "var(--macro-carbs)",
-            }}
-            className="rounded-full"
-          />
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-          <Macro label="Білки" value={per.protein} tone="text-macro-protein" />
-          <Macro label="Жири" value={per.fat} tone="text-macro-fat" />
-          <Macro label="Вуглеводи" value={per.carbs} tone="text-macro-carbs" />
-        </div>
-
-        <p className="mt-3 text-[11px] leading-relaxed text-faint">
-          {n.source === "ai" ? (
-            <>
-              Порахував ШІ за складом і кроками приготування.
-              {n.note && ` ${n.note}`}
-            </>
-          ) : (
-            <>
-              {aiPending
-                ? "Поки це оцінка за довідником продуктів — ШІ порахує точніше за складом і кроками."
-                : low
-                  ? `Оцінка приблизна: пораховано лише ${Math.round(n.coverage * 100)}% складу.`
-                  : "Оцінка за довідковими даними продуктів — без урахування втрат при готуванні."}
-              {aiPending && low && ` Пораховано лише ${Math.round(n.coverage * 100)}% складу.`}
-              {n.skipped.length > 0 && ` Без даних: ${n.skipped.slice(0, 4).join(", ")}.`}
-            </>
-          )}
-        </p>
-      </Card>
-    </section>
+function MacroCell({ label, color, value }: { label: string; color: string; value: number }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="flex items-center gap-[5px] text-[11.5px] font-bold text-muted">
+        <span className="h-[7px] w-[7px] rounded-[2px]" style={{ background: color }} />
+        {label}
+      </span>
+      <span className="text-[15px] font-extrabold">{String(value).replace(".", ",")} г</span>
+    </div>
   );
 }
 
@@ -812,7 +660,7 @@ function NutritionCard({
 function CommentsSection({ recipe }: { recipe: Recipe }) {
   const account = useApp((s) => s.account);
   const profile = useApp((s) => s.profile);
-  const remoteProfiles = useApp((s) => s.remoteProfiles);
+  useApp((s) => s.remoteProfiles);
 
   const [comments, setComments] = useState<RecipeComment[] | null>(null);
   const [draft, setDraft] = useState("");
@@ -862,12 +710,9 @@ function CommentsSection({ recipe }: { recipe: Recipe }) {
   };
 
   return (
-    <section className="px-4 pt-7">
-      <h2 className="mb-3 font-display text-[17px] font-bold">
-        Враження{comments?.length ? ` · ${comments.length}` : ""}
-      </h2>
-
-      <Card className="p-3">
+    <Panel>
+      <PanelHeader label="Враження" aside={comments?.length || undefined} />
+      <div className="border-t border-line px-3.5 py-2.5">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value.slice(0, 1000))}
@@ -876,66 +721,51 @@ function CommentsSection({ recipe }: { recipe: Recipe }) {
           className="w-full resize-none bg-transparent text-[14px] leading-relaxed"
         />
         <div className="mt-1 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-faint">{draft.length}/1000</span>
-          <Button
-            size="sm"
-            onClick={send}
-            disabled={!draft.trim()}
-            loading={sending}
-          >
+          <span className="text-[11px] font-semibold text-faint">{draft.length}/1000</span>
+          <Button size="sm" onClick={send} disabled={!draft.trim()} loading={sending}>
             Надіслати
           </Button>
         </div>
-      </Card>
+      </div>
 
       {comments === null ? (
-        <p className="mt-3 text-[12.5px] text-muted">Читаю коментарі…</p>
+        <p className="border-t border-line px-3.5 py-3 text-[12.5px] font-semibold text-muted">Читаю коментарі…</p>
       ) : comments.length === 0 ? (
-        <p className="mt-3 text-[12.5px] text-muted">
+        <p className="border-t border-line px-3.5 py-3 text-[12.5px] font-semibold text-muted">
           Ще ніхто не писав. Приготуєш — розкажи, як вийшло.
         </p>
       ) : (
-        <div className="mt-3 flex flex-col gap-2.5">
-          {comments.map((comment) => {
-            const author = profileById(useApp.getState(), comment.authorId);
-            // Прибрати може той, хто написав, і автор рецепта у себе під стравою.
-            const canRemove =
-              comment.authorId === account.id || recipe.authorId === profile.id;
+        comments.map((comment) => {
+          const author = profileById(useApp.getState(), comment.authorId);
+          // Прибрати може той, хто написав, і автор рецепта у себе під стравою.
+          const canRemove = comment.authorId === account.id || recipe.authorId === profile.id;
 
-            return (
-              <Card key={comment.id} className="flex gap-2.5 p-3">
-                <Avatar
-                  emoji={author.emoji}
-                  gradient={author.gradient}
-                  src={author.avatar}
-                  size={34}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-baseline gap-2 text-[13px] font-bold">
-                    <span className="truncate">{author.name}</span>
-                    <span className="shrink-0 text-[11px] font-normal text-faint">
-                      {timeAgo(comment.createdAt)}
-                    </span>
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed">
-                    {comment.body}
-                  </p>
-                </div>
-                {canRemove && (
-                  <button
-                    onClick={() => void remove(comment.id)}
-                    aria-label="Прибрати коментар"
-                    className="h-8 w-8 shrink-0 text-faint"
-                  >
-                    <Trash2 size={14} className="mx-auto" />
-                  </button>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+          return (
+            <div key={comment.id} className="flex gap-2.5 border-t border-line px-3.5 py-3">
+              <Avatar emoji={author.emoji} gradient={author.gradient} src={author.avatar} size={32} />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-baseline gap-2 text-[13px] font-bold">
+                  <span className="truncate">{author.name}</span>
+                  <span className="shrink-0 text-[11px] font-semibold text-faint">{timeAgo(comment.createdAt)}</span>
+                </p>
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-ink/85">
+                  {comment.body}
+                </p>
+              </div>
+              {canRemove && (
+                <button
+                  onClick={() => void remove(comment.id)}
+                  aria-label="Прибрати коментар"
+                  className="h-8 w-8 shrink-0 text-faint"
+                >
+                  <Trash2 size={14} className="mx-auto" />
+                </button>
+              )}
+            </div>
+          );
+        })
       )}
-    </section>
+    </Panel>
   );
 }
 
@@ -951,9 +781,7 @@ function pantryNote(needKey: string, pantry: PantryItem[], products: Record<stri
   // Разом по всіх пачках, що годяться: Галичина 900 мл + Молокія 1 л — «1,9 л».
   const amount = formatSummed(availableFor(needKey, pantry, products));
   if (exact) return amount ? `є в коморі · ${amount}` : "є в коморі";
-  const variants = [
-    ...new Set(pantry.filter((p) => satisfies(p.key, need)).map((p) => p.key)),
-  ];
+  const variants = [...new Set(pantry.filter((p) => satisfies(p.key, need)).map((p) => p.key))];
   const names = variants.map((key) => ing(key).label).join(", ");
   return amount ? `є: ${names} · ${amount}` : `є: ${names}`;
 }
@@ -987,78 +815,29 @@ function CostCard({ recipe, servings }: { recipe: Recipe; servings: number }) {
   const total = Math.round(cost.perServing * servings);
 
   return (
-    <section className="px-4 pt-7">
-      <h2 className="mb-3 font-display text-[17px] font-bold">
-        Скільки коштує
-      </h2>
-      <Card className="p-4">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="font-display text-[30px] font-extrabold leading-none">
-              {partial && (
-                <span className="text-[15px] font-bold text-muted">від </span>
-              )}
-              {perServing}{" "}
-              <span className="text-[15px] font-bold text-muted">₴</span>
-            </p>
-            <p className="mt-1 text-[12px] text-muted">за порцію</p>
-          </div>
-          <p className="text-right text-[11.5px] leading-snug text-faint">
-            {servings} {plural(servings, "порція", "порції", "порцій")} ·{" "}
-            {total} ₴ разом
-          </p>
+    <Panel>
+      <div className="flex h-9 items-center justify-between px-3.5">
+        <span className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">Скільки коштує</span>
+        <span className="text-[13px] font-extrabold">
+          {partial && "від "}
+          {perServing} ₴ / порція
+        </span>
+      </div>
+      {cost.top.map((part) => (
+        <div key={part.key} className="flex h-11 items-center gap-2.5 border-t border-line px-3.5">
+          <span className="text-[17px]">{ing(part.key).emoji}</span>
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">{ing(part.key).label}</span>
+          <span className="shrink-0 text-[12.5px] font-bold text-muted">
+            {part.cost < 10 ? part.cost.toFixed(1).replace(".", ",") : Math.round(part.cost)} ₴
+          </span>
         </div>
-
-        {cost.top.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1.5">
-            {cost.top.map((part) => (
-              <div
-                key={part.key}
-                className="flex items-center gap-2 rounded-2xl bg-surface-2 px-3 py-2"
-              >
-                <span className="text-base">{ing(part.key).emoji}</span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-                  {ing(part.key).label}
-                </span>
-                <span className="shrink-0 text-[12.5px] font-bold text-muted">
-                  {part.cost < 10
-                    ? part.cost.toFixed(1)
-                    : Math.round(part.cost)}{" "}
-                  ₴
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <p className="mt-3 text-[11px] leading-relaxed text-faint">
-          За цінами з твоїх чеків.{" "}
-          {partial
-            ? `Ціни відомі для ${Math.round(cost.coverage * 100)}% складу — решту не враховано.`
-            : "Ціни відомі для всього складу."}
-        </p>
-      </Card>
-    </section>
-  );
-}
-
-function Macro({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-surface-2 py-2.5">
-      <p
-        className={`font-display text-[17px] font-extrabold leading-none ${tone}`}
-      >
-        {value} г
+      ))}
+      <p className="border-t border-line px-3.5 py-2.5 text-[11px] font-semibold leading-relaxed text-faint">
+        {servings} {plural(servings, "порція", "порції", "порцій")} · {total} ₴ разом. За цінами з твоїх чеків.{" "}
+        {partial
+          ? `Ціни відомі для ${Math.round(cost.coverage * 100)}% складу — решту не враховано.`
+          : "Ціни відомі для всього складу."}
       </p>
-      <p className="mt-1 text-[11px] text-muted">{label}</p>
-    </div>
+    </Panel>
   );
 }

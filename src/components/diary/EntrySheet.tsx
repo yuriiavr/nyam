@@ -1,11 +1,10 @@
 "use client";
 
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Segmented, Sheet, useToast } from "@/components/ui";
+import { Button, Panel, Sheet, formatKcal, useToast } from "@/components/ui";
 import {
   SLOT_META,
-  SLOT_ORDER,
   entryNutrition,
   forGrams,
   mealNutrition,
@@ -14,11 +13,21 @@ import {
   scaleNutrition,
 } from "@/lib/diary";
 import { pantryDisplayName } from "@/lib/pantry";
+import {
+  amountLabel,
+  dishById,
+  dishGrams,
+  dishNutrition,
+  maxPortions,
+  portionsOfEntry,
+  restaurantOfProductId,
+} from "@/lib/restaurants";
 import { diaryUserId, recipeById, useApp } from "@/lib/store";
 import type { FoodEntry, MealSlot, Nutrition } from "@/lib/types";
 import { formatNumber } from "@/lib/units";
 import { haptic } from "@/lib/utils";
-import { nutritionLine } from "@/components/ProductEditorSheet";
+import { KcalAside, MacroCells, SheetTitle, SlotRow, StepButton } from "./SheetParts";
+import { useRestaurantMenus } from "./useRestaurantMenus";
 
 /**
  * Один запис щоденника: скільки, коли, прибрати.
@@ -41,6 +50,13 @@ export function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClos
   const meal = entry?.mealId ? meals.find((m) => m.id === entry.mealId) : undefined;
   const recipe = meal?.recipeId ? recipeById(useApp.getState(), meal.recipeId) : undefined;
 
+  /* Страва із закладу правиться порціями з офіційного меню, а не грамами. */
+  const restaurant = restaurantOfProductId(entry?.productId);
+  const menus = useRestaurantMenus(restaurant ? [restaurant.id] : []);
+  const menu = restaurant ? menus[restaurant.id] : undefined;
+  const dish = restaurant && menu && entry?.productId ? dishById(menu, restaurant.id, entry.productId) : undefined;
+  const [dishPortions, setDishPortions] = useState(1);
+
   useEffect(() => {
     if (!entry) return;
     setGrams(entry.grams != null ? formatNumber(entry.grams, 0) : "");
@@ -48,6 +64,11 @@ export function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClos
     setSlot(entry.slot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry]);
+
+  // Меню могло доїхати вже після відкриття.
+  useEffect(() => {
+    if (entry && dish) setDishPortions(portionsOfEntry(dish, entry));
+  }, [entry, dish]);
 
   if (!entry) return null;
 
@@ -61,17 +82,20 @@ export function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClos
     (entry.nutrition && entry.grams ? scaleNutrition(entry.nutrition, 100 / entry.grams) : undefined);
 
   const amount = Number(grams.replace(",", "."));
-  const byGrams = !entry.mealId && entry.grams != null;
+  const byGrams = !entry.mealId && entry.grams != null && !dish;
   const total = meal ? mealNutrition(meal, recipe) : undefined;
   const share = meal ? Math.min(1, portions / meal.servings) : entry.share;
+  const dishGramsNext = dish ? dishGrams(dish, dishPortions) : undefined;
 
-  const next: Nutrition | undefined = byGrams
-    ? per100 && amount > 0
-      ? forGrams(per100, amount)
-      : undefined
-    : meal && total && share
-      ? roundNutrition(scaleNutrition(total, share))
-      : entryNutrition(entry, () => meal, () => recipe);
+  const next: Nutrition | undefined = dish
+    ? dishNutrition(dish, dishPortions)
+    : byGrams
+      ? per100 && amount > 0
+        ? forGrams(per100, amount)
+        : undefined
+      : meal && total && share
+        ? roundNutrition(scaleNutrition(total, share))
+        : entryNutrition(entry, () => meal, () => recipe);
 
   const valid = byGrams ? amount > 0 && amount <= 5000 : !meal || portions > 0;
 
@@ -80,6 +104,7 @@ export function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClos
     updateFoodEntry(entry.id, {
       slot,
       ...(byGrams ? { grams: amount } : {}),
+      ...(dishGramsNext != null ? { grams: dishGramsNext } : {}),
       ...(meal && share ? { share: Math.round(share * 1000) / 1000 } : {}),
       nutrition: next,
     });
@@ -96,88 +121,156 @@ export function EntrySheet({ entry, onClose }: { entry: FoodEntry | null; onClos
     onClose();
   };
 
+  // Під назвою — що саме записано: прийом їжі й кількість.
+  const amountNote = dish
+    ? portionLabel(dishPortions)
+    : byGrams
+    ? amount > 0
+      ? `${formatNumber(amount, 0)} г`
+      : ""
+    : meal
+      ? `${portionLabel(portions)} з ${formatNumber(meal.servings, 2)}`
+      : "";
+  const subtitle = [SLOT_META[slot].label, amountNote].filter(Boolean).join(" · ");
+
   return (
     <Sheet
       open={!!entry}
       onClose={onClose}
       title={
-        <span className="flex items-center gap-2">
-          <span className="text-xl">{entry.emoji}</span>
-          <span className="min-w-0 truncate">{entry.title}</span>
-        </span>
+        <SheetTitle
+          emoji={entry.emoji}
+          title={entry.title}
+          sub={subtitle}
+          aside={next && <KcalAside kcal={formatKcal(next.kcal)} />}
+        />
       }
       footer={
         editable ? (
-          <div className="flex gap-2">
-            <Button variant="secondary" size="lg" onClick={remove} aria-label="Прибрати запис">
-              <Trash2 size={18} />
-            </Button>
-            <Button full size="lg" disabled={!valid} onClick={save}>
-              Зберегти{next ? ` · ${next.kcal} ккал` : ""}
-            </Button>
-          </div>
+          <Button full disabled={!valid} onClick={save}>
+            Зберегти{next ? ` · ${next.kcal} ккал` : ""}
+          </Button>
         ) : undefined
       }
     >
-      <div className="flex flex-col gap-4 pb-2">
+      <div className="flex flex-col gap-3 pb-3">
+        {restaurant && (
+          <p className="-mb-1 px-0.5 text-[12px] font-semibold text-faint">
+            {restaurant.name}
+            {dish?.amount ? ` · порція ${amountLabel(dish)}` : ""}
+          </p>
+        )}
         {next ? (
-          <p className="text-[13px] text-muted">{nutritionLine(next)}</p>
+          // Заклад, що публікує лише калорії: нулі в Б/Ж/В виглядали б як справжні числа.
+          restaurant?.kcalOnly ? (
+            <Panel className="px-3.5 py-3 text-[12.5px] font-semibold text-muted">
+              {formatNumber(next.kcal, 0)} ккал · Б/Ж/В заклад не публікує
+            </Panel>
+          ) : (
+            <Panel>
+              <MacroCells nutrition={next} />
+            </Panel>
+          )
         ) : (
-          <p className="text-[13px] text-muted">Калорії невідомі — у товару чи страви немає КБЖВ.</p>
+          <Panel className="px-3.5 py-3 text-[12.5px] font-semibold text-muted">
+            Калорії невідомі — у товару чи страви немає КБЖВ.
+          </Panel>
+        )}
+        {dish?.note && (
+          <Panel className="px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-muted">{dish.note}</Panel>
         )}
 
         {!editable && (
-          <p className="rounded-2xl bg-surface-2 px-3 py-2.5 text-[12.5px] leading-snug text-muted">
+          <Panel className="px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-muted">
             Це чужий щоденник — правити його може лише власник.
-          </p>
+          </Panel>
         )}
 
-        {editable && byGrams && (
-          <label className="flex items-center gap-2">
-            <input
-              value={grams}
-              onChange={(e) => setGrams(e.target.value.replace(/[^\d.,]/g, ""))}
-              inputMode="decimal"
-              aria-label="Скільки грамів"
-              className="h-12 w-28 rounded-2xl border border-line bg-surface px-3 text-center font-display text-[20px] font-bold"
-            />
-            <span className="text-[15px] font-semibold text-muted">г</span>
-          </label>
-        )}
-
-        {editable && meal && (
-          <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-3.5 py-3">
-            <div>
-              <p className="text-[12px] text-muted">Зʼїв із {portionLabel(meal.servings)}</p>
-              <p className="font-display text-[20px] font-extrabold">{portionLabel(portions)}</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                aria-label="Менше"
-                disabled={portions <= 0.25}
-                onClick={() => setPortions((p) => Math.max(0.25, p - 0.25))}
-                className="grid h-9 w-9 place-items-center rounded-xl bg-bg-elev active:bg-line disabled:opacity-35"
+        {editable && dish && (
+          <Panel>
+            <div className="flex h-[54px] items-center gap-2 pl-3.5 pr-2">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold text-muted">Зʼїв</span>
+                {dishGramsNext != null && (
+                  <span className="block truncate text-[11.5px] font-semibold text-faint">
+                    {amountLabel(dish, dishPortions)}
+                  </span>
+                )}
+              </span>
+              <StepButton
+                label="Менше"
+                disabled={dishPortions <= 0.5}
+                onClick={() => setDishPortions((p) => Math.max(0.5, p - 0.5))}
               >
-                <Minus size={16} />
-              </button>
-              <button
-                aria-label="Більше"
-                disabled={portions >= meal.servings}
-                onClick={() => setPortions((p) => Math.min(meal.servings, p + 0.25))}
-                className="grid h-9 w-9 place-items-center rounded-xl bg-bg-elev active:bg-line disabled:opacity-35"
+                <Minus size={16} strokeWidth={2.4} />
+              </StepButton>
+              <span className="w-[92px] text-center text-[14px] font-extrabold tabular-nums">
+                {portionLabel(dishPortions)}
+              </span>
+              <StepButton
+                label="Більше"
+                disabled={dishPortions >= maxPortions(dish)}
+                onClick={() => setDishPortions((p) => Math.min(maxPortions(dish), p + 0.5))}
               >
-                <Plus size={16} />
-              </button>
+                <Plus size={16} strokeWidth={2.4} />
+              </StepButton>
             </div>
-          </div>
+          </Panel>
         )}
 
         {editable && (
-          <Segmented
-            value={slot}
-            onChange={setSlot}
-            options={SLOT_ORDER.map((s) => ({ value: s, label: SLOT_META[s].label }))}
-          />
+          <Panel>
+            {byGrams && (
+              <label className="flex h-[50px] items-center gap-2 border-b border-line px-3.5">
+                <span className="flex-1 text-[14px] font-semibold text-muted">Вага</span>
+                <input
+                  value={grams}
+                  onChange={(e) => setGrams(e.target.value.replace(/[^\d.,]/g, ""))}
+                  inputMode="decimal"
+                  aria-label="Скільки грамів"
+                  className="h-8 w-[84px] rounded-[8px] bg-surface-2 px-2.5 text-right text-[14px] font-bold"
+                />
+                <span className="text-[14px] font-bold text-muted">г</span>
+              </label>
+            )}
+
+            {meal && (
+              <div className="flex h-[54px] items-center gap-2 border-b border-line pl-3.5 pr-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-semibold text-muted">Зʼїв</span>
+                  <span className="block truncate text-[11.5px] font-semibold text-faint">
+                    із {portionLabel(meal.servings)}
+                  </span>
+                </span>
+                <StepButton
+                  label="Менше"
+                  disabled={portions <= 0.25}
+                  onClick={() => setPortions((p) => Math.max(0.25, p - 0.25))}
+                >
+                  <Minus size={16} strokeWidth={2.4} />
+                </StepButton>
+                <span className="w-[92px] text-center text-[14px] font-extrabold tabular-nums">
+                  {portionLabel(portions)}
+                </span>
+                <StepButton
+                  label="Більше"
+                  disabled={portions >= meal.servings}
+                  onClick={() => setPortions((p) => Math.min(meal.servings, p + 0.25))}
+                >
+                  <Plus size={16} strokeWidth={2.4} />
+                </StepButton>
+              </div>
+            )}
+
+            <SlotRow value={slot} onChange={setSlot} />
+
+            <button
+              onClick={remove}
+              className="flex h-12 w-full items-center border-t border-line px-3.5 text-left text-[14px] font-semibold text-berry active:bg-surface-2"
+            >
+              Прибрати запис
+            </button>
+          </Panel>
         )}
       </div>
     </Sheet>

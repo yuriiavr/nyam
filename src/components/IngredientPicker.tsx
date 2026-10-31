@@ -91,16 +91,16 @@ export function IngredientPicker({
   return (
     <Sheet open={open} onClose={onClose} title={title}>
       <div className="sticky top-0 z-10 -mx-5 mb-2 bg-bg-elev px-5 pb-3">
-        <div className="flex h-12 items-center gap-2 rounded-2xl border border-line bg-surface px-3.5">
-          <Search size={17} className="shrink-0 text-muted" />
+        <div className="flex h-[46px] items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5">
+          <Search size={18} className="shrink-0 text-muted" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={placeholder}
-            className="h-full flex-1 text-[15px]"
+            className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold placeholder:text-faint"
           />
           {q && (
-            <button onClick={() => setQ("")} aria-label="Очистити">
+            <button onClick={() => setQ("")} aria-label="Очистити" className="-mr-1.5 grid h-8 w-8 place-items-center">
               <X size={16} className="text-muted" />
             </button>
           )}
@@ -114,16 +114,16 @@ export function IngredientPicker({
             setQ("");
             onClose();
           }}
-          className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-brand/50 bg-brand/5 px-3.5 py-3 text-left"
+          className="mb-2.5 flex min-h-[54px] w-full items-center gap-3 rounded-[10px] border border-brand/40 bg-brand/10 px-3.5 py-2 text-left"
         >
-          <span className="text-lg">📝</span>
+          <span className="w-[22px] shrink-0 text-lg leading-none">📝</span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[14px] font-bold">
               «{typed}»
             </span>
-            <span className="block text-[11.5px] text-muted">{freeHint}</span>
+            <span className="block text-[11.5px] font-semibold text-faint">{freeHint}</span>
           </span>
-          <Plus size={16} className="shrink-0 text-brand" />
+          <Plus size={16} strokeWidth={2.4} className="shrink-0 text-brand" />
         </button>
       )}
 
@@ -134,21 +134,21 @@ export function IngredientPicker({
             setQ("");
             onClose();
           }}
-          className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-line bg-surface px-3.5 py-3 text-left"
+          className="mb-2.5 flex min-h-[54px] w-full items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5 py-2 text-left active:bg-surface-2"
         >
-          <span className="text-lg">📦</span>
+          <span className="w-[22px] shrink-0 text-lg leading-none">📦</span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[14px] font-bold">Створити «{typed}»</span>
-            <span className="block text-[11.5px] text-muted">
+            <span className="block truncate text-[14px] font-bold text-brand">Створити «{typed}»</span>
+            <span className="block text-[11.5px] font-semibold text-faint">
               Свій продукт у каталозі — з мірою й калоріями
             </span>
           </span>
-          <Plus size={16} className="shrink-0 text-brand" />
+          <Plus size={16} strokeWidth={2.4} className="shrink-0 text-brand" />
         </button>
       )}
 
       {list.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-muted">
+        <p className="py-8 text-center text-[13px] font-semibold text-muted">
           {onFree || onCreate
             ? "У довіднику такого немає — але його можна створити рядком вище."
             : "Нічого не знайшлось. Спробуй іншу назву."}
@@ -157,10 +157,10 @@ export function IngredientPicker({
         <div className="flex flex-col gap-4 pb-4">
           {grouped.map(([cat, items]) => (
             <div key={cat}>
-              <h3 className="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">
+              <h3 className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">
                 {CAT_LABEL[cat]}
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {items.map((def) => {
                   const own = editOwn && isOwnKey(def.key);
                   const pick = (
@@ -175,8 +175,8 @@ export function IngredientPicker({
                       }}
                       className={
                         own
-                          ? "inline-flex items-center gap-1.5 py-2 pl-3 pr-1 text-[13px] font-semibold"
-                          : "inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"
+                          ? "inline-flex h-9 items-center gap-1.5 pl-3 pr-1 text-[13px] font-semibold"
+                          : "inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line bg-surface px-3 text-[13px] font-semibold active:bg-surface-2"
                       }
                     >
                       <span>{def.emoji}</span>
@@ -184,18 +184,18 @@ export function IngredientPicker({
                       {/* Різновид видно одразу: «Молоко безлактозне › Молоко» — і
                           ясно, що рецепти з молоком його теж рахують. */}
                       {ancestors(def.key).length > 0 && (
-                        <span className="text-[11px] font-normal text-faint">
+                        <span className="text-[11px] font-semibold text-faint">
                           › {ing(ancestors(def.key)[0]).label}
                         </span>
                       )}
-                      {pickIcon && <Plus size={13} className="text-brand" />}
+                      {pickIcon && <Plus size={13} strokeWidth={2.4} className="text-brand" />}
                     </button>
                   );
                   // Дописаний тип: вибір і олівець — дві окремі кнопки в одному чипі (кнопка в кнопці недійсна).
                   return own ? (
                     <span
                       key={def.key}
-                      className="inline-flex items-center rounded-full border border-line bg-surface pr-1 active:bg-surface-2"
+                      className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface pr-1 active:bg-surface-2"
                     >
                       {pick}
                       <EditTypeButton typeKey={def.key} icon />

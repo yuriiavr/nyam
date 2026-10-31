@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#030304;min-height:100%}
+body{color:#f5f5f7;font-family:Manrope,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#ff6b35;text-decoration:none}a:hover{color:#ffb020}
+*{box-sizing:border-box}
+input{font:inherit;color:inherit;outline:none;border:none}
+input::placeholder{color:#66666e}
+.scr::-webkit-scrollbar{display:none}
+</style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px">
+  <div style="width:390px;height:844px;border-radius:44px;overflow:hidden;position:relative;background:#070709;border:1px solid #202025;box-shadow:0 40px 90px -30px rgba(0,0,0,.9)">
+
+    <div style="height:46px;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0;font-size:15px;font-weight:700"><span>9:41</span><span style="width:26px;height:12px;border:1.5px solid #f5f5f7;border-radius:4px;padding:1.5px"><span style="display:block;width:80%;height:100%;background:#f5f5f7;border-radius:1.5px"></span></span></div>
+
+    <sc-if value="{{ isPantry }}" hint-placeholder-val="{{ true }}">
+    <div style="height:52px;padding:0 16px 0 20px;display:flex;align-items:center;gap:8px">
+      <div style="flex:1;font-family:Unbounded;font-size:22px;font-weight:700">Комора</div>
+      <div onClick="{{ onShopping }}" style="position:relative;width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 11-1 9"></path><path d="m19 11-4-7"></path><path d="M2 11h20"></path><path d="m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4"></path><path d="M4.5 15.5h15"></path><path d="m5 11 4-7"></path><path d="m9 11 1 9"></path></svg><span style="position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:5px;background:#ff6b35;color:#1a0d05;font-size:10px;font-weight:800;display:grid;place-items:center">3</span></div>
+      <div onClick="{{ onLibrary }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h20"></path><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"></path></svg></div>
+      <div onClick="{{ onScan }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M8 7v10"></path><path d="M12 7v10"></path><path d="M17 7v10"></path></svg></div>
+      <div onClick="{{ onOpenAdd }}" style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:grid;place-items:center;cursor:pointer"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></div>
+    </div>
+
+    <div style="padding:2px 16px 14px;display:flex;gap:8px">
+      <div onClick="{{ onToggleTab }}" style="flex:1;position:relative;height:40px;padding:3px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;cursor:pointer;user-select:none">
+        <div style="position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:7px;background:#202025;box-shadow:0 4px 14px -4px rgba(0,0,0,.7);transition:transform .32s cubic-bezier(.34,1.3,.64,1);transform:translateX({{ thumbX }})"></div>
+        <div style="position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13.5px;font-weight:800;transition:color .2s;color:{{ tab0Color }}">У коморі<span style="font-size:11.5px;color:#66666e">{{ stockCount }}</span></div>
+        <div style="position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13.5px;font-weight:800;transition:color .2s;color:{{ tab1Color }}">Базові<span style="font-size:11.5px;color:#66666e">{{ basicsLabel }}</span></div>
+      </div>
+      <div onClick="{{ onToggleFilter }}" style="flex:none;width:40px;height:40px;border-radius:10px;background:#121215;border:1px solid {{ filterBorder }};display:grid;place-items:center;cursor:pointer;position:relative"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{ filterStroke }}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg></div>
+    </div>
+
+    <div class="scr" style="position:absolute;top:154px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+
+      <sc-if value="{{ isStock }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:10px">
+
+          <sc-if value="{{ filterChipShow }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#9b9ba3">Фільтр: <span style="color:#f5f5f7">{{ filterLabel }}</span><span onClick="{{ onClearFilter }}" style="margin-left:auto;color:#ff6b35;font-weight:800;cursor:pointer">Скинути</span></div>
+          </sc-if>
+
+          <sc-if value="{{ showUrgent }}" hint-placeholder-val="{{ true }}">
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:44px;display:flex;align-items:center;gap:10px;padding:0 10px 0 14px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9b9ba3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+                <span style="flex:1;font-size:14px;font-weight:800">Варто вжити</span>
+                <span onClick="{{ onRescue }}" style="height:30px;padding:0 8px 0 10px;border-radius:7px;background:#1c1c21;font-size:12.5px;font-weight:800;display:flex;align-items:center;gap:2px;cursor:pointer">Що приготувати<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+              </div>
+              <sc-for list="{{ urgentRows }}" as="r" hint-placeholder-count="3">
+                <div style="position:relative;height:46px;border-top:1px solid #202025;background:#f43f6a;overflow:hidden">
+                  <div onClick="{{ r.onRemove }}" style="position:absolute;right:0;top:0;bottom:0;width:84px;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;cursor:pointer">Прибрати</div>
+                  <div onPointerDown="{{ r.onDown }}" onPointerMove="{{ r.onMove }}" onPointerUp="{{ r.onUp }}" onPointerCancel="{{ r.onUp }}" style="position:absolute;inset:0;background:#121215;display:flex;align-items:center;gap:12px;padding:0 14px;touch-action:pan-y;cursor:pointer;user-select:none;transform:translateX({{ r.tx }});transition:{{ r.trans }}">
+                    <span style="font-size:18px;width:22px">{{ r.emoji }}</span>
+                    <span style="flex:1;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span>
+                    <span style="font-size:12px;font-weight:600;color:#9b9ba3">{{ r.qty }}</span>
+                    <span style="width:78px;text-align:right;font-size:12px;font-weight:800;color:{{ r.expColor }}">{{ r.exp }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-for list="{{ sections }}" as="s" hint-placeholder-count="2">
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">{{ s.label }}</span><span style="font-size:11.5px;font-weight:700;color:#66666e">{{ s.count }}</span></div>
+              <sc-for list="{{ s.entries }}" as="e" hint-placeholder-count="2">
+                <div>
+                  <sc-if value="{{ e.isGroup }}" hint-placeholder-val="{{ false }}">
+                    <div style="border-top:1px solid #202025">
+                      <div style="height:46px;display:flex;align-items:center;padding:0 4px 0 14px">
+                        <div onClick="{{ e.openGroup }}" style="flex:1;height:100%;display:flex;align-items:center;gap:12px;cursor:pointer;min-width:0">
+                          <span style="font-size:18px;width:22px">{{ e.emoji }}</span>
+                          <span style="flex:1;font-size:14px;font-weight:800">{{ e.type }} <span style="font-weight:600;color:#66666e">· {{ e.count }}</span></span>
+                          <span style="font-size:12.5px;font-weight:700;color:#9b9ba3">{{ e.total }}</span>
+                        </div>
+                        <div onClick="{{ e.toggle }}" style="width:38px;height:38px;display:grid;place-items:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .2s;transform:rotate({{ e.rot }})"><path d="m6 9 6 6 6-6"></path></svg></div>
+                      </div>
+                      <sc-if value="{{ e.open }}" hint-placeholder-val="{{ true }}">
+                        <div style="background:#0d0d10">
+                          <sc-for list="{{ e.rows }}" as="r" hint-placeholder-count="2">
+                            <div style="position:relative;height:40px;border-top:1px solid #202025;background:#f43f6a;overflow:hidden">
+                              <div onClick="{{ r.onRemove }}" style="position:absolute;right:0;top:0;bottom:0;width:84px;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;cursor:pointer">Прибрати</div>
+                              <div onPointerDown="{{ r.onDown }}" onPointerMove="{{ r.onMove }}" onPointerUp="{{ r.onUp }}" onPointerCancel="{{ r.onUp }}" style="position:absolute;inset:0;background:#0d0d10;display:flex;align-items:center;gap:12px;padding:0 14px 0 48px;touch-action:pan-y;cursor:pointer;user-select:none;transform:translateX({{ r.tx }});transition:{{ r.trans }}">
+                                <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#cfcfd5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.short }}</span>
+                                <span style="font-size:12px;font-weight:600;color:#9b9ba3">{{ r.qty }}</span>
+                                <span style="width:52px;text-align:right;font-size:12px;font-weight:600;color:#66666e">{{ r.exp }}</span>
+                              </div>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ e.isSingle }}" hint-placeholder-val="{{ true }}">
+                    <div style="position:relative;height:46px;border-top:1px solid #202025;background:#f43f6a;overflow:hidden">
+                      <div onClick="{{ e.row.onRemove }}" style="position:absolute;right:0;top:0;bottom:0;width:84px;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;cursor:pointer">Прибрати</div>
+                      <div onPointerDown="{{ e.row.onDown }}" onPointerMove="{{ e.row.onMove }}" onPointerUp="{{ e.row.onUp }}" onPointerCancel="{{ e.row.onUp }}" style="position:absolute;inset:0;background:#121215;display:flex;align-items:center;gap:12px;padding:0 14px;touch-action:pan-y;cursor:pointer;user-select:none;transform:translateX({{ e.row.tx }});transition:{{ e.row.trans }}">
+                        <span style="font-size:18px;width:22px">{{ e.row.emoji }}</span>
+                        <span style="flex:1;min-width:0;display:flex;align-items:center;gap:7px"><span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.row.name }}</span><sc-if value="{{ e.row.refine }}" hint-placeholder-val="{{ false }}"><span style="flex:none;width:6px;height:6px;border-radius:50%;background:#ff6b35"></span></sc-if></span>
+                        <span style="font-size:12px;font-weight:600;color:#9b9ba3">{{ e.row.qty }}</span>
+                        <span style="width:52px;text-align:right;font-size:12px;font-weight:600;color:#66666e">{{ e.row.exp }}</span>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:60px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
+              <div style="font-size:44px">🧊</div>
+              <div style="font-family:Unbounded;font-size:16px;font-weight:700">Тут порожньо</div>
+              <div onClick="{{ onOpenAdd }}" style="height:44px;padding:0 18px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:14px;font-weight:800;display:flex;align-items:center;cursor:pointer">Додати продукт</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isBasics }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ basics }}" as="b" hint-placeholder-count="3">
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">{{ b.label }}</span><span style="font-size:11.5px;font-weight:700;color:#66666e">{{ b.count }}</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#202025;border-top:1px solid #202025">
+                <sc-for list="{{ b.items }}" as="it" hint-placeholder-count="4">
+                  <div onClick="{{ it.toggle }}" style="height:46px;background:#121215;display:flex;align-items:center;gap:9px;padding:0 10px 0 12px;cursor:pointer;user-select:none">
+                    <span style="font-size:16px">{{ it.emoji }}</span>
+                    <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ it.color }}">{{ it.label }}</span><sc-if value="{{ it.meta }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;color:#66666e;white-space:nowrap">{{ it.meta }}</span></sc-if></span>
+                    <span style="flex:none;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;transition:background .15s;background:{{ it.boxBg }};border:1.5px solid {{ it.boxBorder }}"><sc-if value="{{ it.have }}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a0d05" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    </sc-if>
+
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:60px;display:flex;align-items:center;gap:12px;padding:0 0 0 4px">
+          <span onClick="{{ navMe }}" style="width:40px;height:40px;border-radius:50%;background:#1c1c21;display:grid;place-items:center;font-size:20px;cursor:pointer">👩‍🍳</span>
+          <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#9b9ba3">Добрий вечір</div><div style="font-family:Unbounded;font-size:17px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Що будемо їсти?</div></div>
+          <span style="height:30px;padding:0 9px;border-radius:8px;background:#121215;border:1px solid #202025;display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:800"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>5</span>
+          <span onClick="{{ onSettings }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg></span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;padding-top:6px">
+          <div onClick="{{ onDiary }}" style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden;cursor:pointer">
+            <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Сьогодні</span><span style="font-size:12px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:2px">Щоденник<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+            <div style="padding:12px 14px 14px;border-top:1px solid #202025;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:baseline;gap:6px"><span style="font-family:Unbounded;font-size:24px;font-weight:700">1 240</span><span style="font-size:13px;font-weight:700;color:#9b9ba3">з 2 000 ккал</span></div>
+              <div style="height:8px;border-radius:4px;background:#1c1c21;overflow:hidden"><div style="width:62%;height:100%;background:linear-gradient(90deg,#ff6b35,#ffb020);border-radius:4px"></div></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11.5px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:2px;background:#38bdf8"></span>Білки</span><div style="height:4px;border-radius:2px;background:#1c1c21"><div style="width:56%;height:100%;background:#38bdf8;border-radius:2px"></div></div><span style="font-size:12px;font-weight:700">62 <span style="color:#66666e">/ 110 г</span></span></div>
+                <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11.5px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:2px;background:#ffb020"></span>Жири</span><div style="height:4px;border-radius:2px;background:#1c1c21"><div style="width:68%;height:100%;background:#ffb020;border-radius:2px"></div></div><span style="font-size:12px;font-weight:700">48 <span style="color:#66666e">/ 70 г</span></span></div>
+                <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11.5px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:2px;background:#34d399"></span>Вуглеводи</span><div style="height:4px;border-radius:2px;background:#1c1c21"><div style="width:56%;height:100%;background:#34d399;border-radius:2px"></div></div><span style="font-size:12px;font-weight:700">140 <span style="color:#66666e">/ 250 г</span></span></div>
+              </div>
+            </div>
+          </div>
+
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Зараз готують</span><span onClick="{{ navSearch }}" style="font-size:12px;font-weight:700;color:#ff6b35;display:flex;align-items:center;gap:2px;cursor:pointer">Усе<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+            <div class="scr" style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding:12px 14px 14px;border-top:1px solid #202025">
+              <sc-for list="{{ trending }}" as="t" hint-placeholder-count="3">
+                <div onClick="{{ t.open }}" style="flex:0 0 136px;display:flex;flex-direction:column;gap:8px;cursor:pointer">
+                  <div style="position:relative;height:136px;border-radius:8px;display:grid;place-items:center;font-size:50px;overflow:hidden;background:{{ t.bg }}"><span style="filter:drop-shadow(0 6px 12px rgba(0,0,0,.35))">{{ t.emoji }}</span>
+                    <sc-if value="{{ t.rank }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:7px;left:7px;height:20px;padding:0 7px;border-radius:6px;background:rgba(8,8,10,.6);backdrop-filter:blur(8px);font-size:10.5px;font-weight:800;display:flex;align-items:center;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ffb020" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"></path><path d="m22 7-8.5 8.5-5-5L2 17"></path></svg>#{{ t.rank }}</span></sc-if>
+                    <span style="position:absolute;top:7px;right:7px;height:20px;padding:0 7px;border-radius:6px;background:rgba(8,8,10,.6);backdrop-filter:blur(8px);font-size:10.5px;font-weight:800;display:flex;align-items:center;gap:3px"><span style="color:#ffb020">★</span>{{ t.rating }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:3px"><div style="font-size:13px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.title }}</div><div style="font-size:11.5px;font-weight:600;color:#66666e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.meta }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Схоже на твій смак</span></div>
+            <sc-for list="{{ forYou }}" as="y" hint-placeholder-count="3">
+              <div onClick="{{ y.open }}" style="height:58px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid #202025;cursor:pointer">
+                <span style="width:38px;height:38px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:20px;flex:none">{{ y.emoji }}</span>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ y.title }}</span><span style="font-size:12px;font-weight:600;color:#66666e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ y.reason }}</span></div>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-for list="{{ feed }}" as="p" hint-placeholder-count="2">
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:52px;display:flex;align-items:center;gap:10px;padding:0 14px">
+                <span style="width:32px;height:32px;border-radius:50%;background:#1c1c21;display:grid;place-items:center;font-size:16px">{{ p.avatar }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">{{ p.author }}</div><div style="font-size:11.5px;font-weight:600;color:#66666e">{{ p.handle }}</div></div>
+                <span style="height:22px;padding:0 7px;border-radius:5px;background:#1c1c21;font-size:10.5px;font-weight:700;color:#9b9ba3;display:flex;align-items:center">{{ p.cuisine }}</span>
+              </div>
+              <div onClick="{{ p.open }}" style="cursor:pointer;border-top:1px solid #202025">
+                <div style="position:relative;height:220px;background:#1c1c21;display:grid;place-items:center;font-size:76px">{{ p.emoji }}
+                  <div style="position:absolute;left:10px;bottom:10px;display:flex;gap:6px"><span style="height:24px;padding:0 8px;border-radius:6px;background:rgba(12,12,13,.75);font-size:11.5px;font-weight:700;display:flex;align-items:center">{{ p.time }}</span><span style="height:24px;padding:0 8px;border-radius:6px;background:rgba(12,12,13,.75);font-size:11.5px;font-weight:700;display:flex;align-items:center">★ {{ p.rating }}</span></div>
+                </div>
+                <div style="padding:12px 14px 4px;display:flex;flex-direction:column;gap:4px"><div style="font-family:Unbounded;font-size:15px;font-weight:700;line-height:1.3">{{ p.title }}</div><div style="font-size:13px;line-height:1.45;color:#9b9ba3">{{ p.desc }}</div></div>
+              </div>
+              <div style="height:48px;display:flex;align-items:center;gap:4px;padding:0 8px">
+                <span onClick="{{ p.like }}" style="height:36px;padding:0 8px;border-radius:8px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;cursor:pointer;user-select:none;color:{{ p.likeColor }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="{{ p.likeFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>{{ p.likes }}</span>
+                <span onClick="{{ p.save }}" style="width:36px;height:36px;border-radius:8px;display:grid;place-items:center;cursor:pointer;color:{{ p.saveColor }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="{{ p.saveFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path></svg></span>
+                <span style="margin-left:auto;padding-right:6px;font-size:11.5px;font-weight:600;color:#66666e">{{ p.cooked }}</span>
+              </div>
+            </div>
+          </sc-for>
+
+          <div onClick="{{ onNewRecipe }}" style="border-radius:10px;background:#121215;border:1px solid #202025;height:60px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer">
+            <span style="width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></span>
+            <span style="flex:1;font-size:14px;font-weight:700">Додати свій рецепт</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDiary }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 170px">
+        <div style="height:56px;display:flex;align-items:center;gap:10px">
+          <span onClick="{{ navFeed }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span>
+          <div style="flex:1;font-family:Unbounded;font-size:20px;font-weight:700">Щоденник</div>
+          <span onClick="{{ onDiarySettings }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg></span>
+          <sc-if value="{{ diaryOwn }}" hint-placeholder-val="{{ true }}"><span onClick="{{ onAddFood }}" style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:grid;place-items:center;cursor:pointer"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></span></sc-if>
+        </div>
+
+        <div style="padding:2px 0 12px">
+          <div onClick="{{ onTogglePerson }}" style="position:relative;height:44px;padding:3px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;cursor:pointer;user-select:none">
+            <div style="position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:7px;background:#202025;box-shadow:0 4px 14px -4px rgba(0,0,0,.7);transition:transform .32s cubic-bezier(.34,1.3,.64,1);transform:translateX({{ personThumb }})"></div>
+            <sc-for list="{{ people }}" as="pp" hint-placeholder-count="2">
+              <div style="position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13.5px;font-weight:800;transition:color .2s;color:{{ pp.color }}"><span style="width:26px;height:26px;border-radius:50%;background:#1c1c21;display:grid;place-items:center;font-size:14px">{{ pp.emoji }}</span>{{ pp.label }}</div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 8px">
+              <span onClick="{{ dPrev }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;cursor:pointer;opacity:{{ dPrevOp }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span>
+              <span style="font-family:Unbounded;font-size:14px;font-weight:700">{{ dLabel }}</span>
+              <span onClick="{{ dNext }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;cursor:pointer;opacity:{{ dNextOp }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+            </div>
+            <div style="border-top:1px solid #202025;padding:16px 14px;display:flex;align-items:center;gap:18px">
+              <div style="position:relative;width:104px;height:104px;flex:none">
+                <svg width="104" height="104" style="transform:rotate(-90deg)"><defs><linearGradient id="ringg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6b35"></stop><stop offset="1" stop-color="#ffb020"></stop></linearGradient></defs><circle cx="52" cy="52" r="47" fill="none" stroke="#1c1c21" stroke-width="10"></circle><circle cx="52" cy="52" r="47" fill="none" stroke="{{ ringStroke }}" stroke-width="10" stroke-linecap="round" stroke-dasharray="295.3" stroke-dashoffset="{{ ringOff }}" style="transition:stroke-dashoffset .6s cubic-bezier(.2,.9,.3,1)"></circle></svg>
+                <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font-family:Unbounded;font-size:21px;font-weight:700;line-height:1">{{ dKcal }}</span><span style="font-size:11px;font-weight:600;color:#9b9ba3;margin-top:3px">з 2 000</span></div>
+              </div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font-size:12px;font-weight:600;color:#9b9ba3">{{ leftLabel }}</span>
+                <span style="font-family:Unbounded;font-size:22px;font-weight:700;color:{{ leftColor }}">{{ leftVal }} <span style="font-family:Manrope;font-size:13px;font-weight:700;color:#9b9ba3">ккал</span></span>
+                <span style="font-size:11.5px;font-weight:600;color:#66666e;margin-top:2px">{{ dMeta }}</span>
+              </div>
+            </div>
+            <div style="border-top:1px solid #202025;padding:12px 14px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+              <sc-for list="{{ macros }}" as="m" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11.5px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:2px;background:{{ m.color }}"></span>{{ m.label }}</span><div style="height:4px;border-radius:2px;background:#1c1c21;overflow:hidden"><div style="height:100%;border-radius:2px;transition:width .5s ease;width:{{ m.w }};background:{{ m.color }}"></div></div><span style="font-size:12px;font-weight:700">{{ m.val }} <span style="color:#66666e">/ {{ m.goal }} г</span></span></div>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ showFresh }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ onSplit }}" style="border-radius:10px;background:#121215;border:1px solid rgba(255,107,53,.35);height:60px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer">
+              <span style="font-size:24px">🥗</span>
+              <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">Грецький салат</div><div style="font-size:12px;font-weight:600;color:#9b9ba3">Приготовано — хто скільки зʼїв?</div></div>
+              <span style="font-size:13px;font-weight:800;color:#ff6b35;display:flex;align-items:center;gap:2px">Розділити<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showVoice }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ onVoice }}" style="border-radius:10px;background:#121215;border:1px solid #202025;height:60px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer">
+              <span style="font-size:24px">🍝</span>
+              <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">Паста з томатами</div><div style="font-size:12px;font-weight:600;color:#9b9ba3;display:flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 19v3"></path></svg>Голосом — що взяли з комори?</div></div>
+              <span style="font-size:13px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:2px">Перевірити<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showLeft }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ onLeftover }}" style="border-radius:10px;background:#121215;border:1px solid #202025;height:60px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer">
+              <span style="font-size:24px">🍲</span>
+              <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">Червоний борщ</div><div style="font-size:12px;font-weight:600;color:#9b9ba3">Лишилось {{ leftPortions }}</div></div>
+              <span style="font-size:13px;font-weight:800;color:#ff6b35;display:flex;align-items:center;gap:2px">Доїсти<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+            </div>
+          </sc-if>
+
+          <sc-for list="{{ slots }}" as="sl" hint-placeholder-count="4">
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:46px;display:flex;align-items:center;gap:10px;padding:0 8px 0 14px">
+                <span style="font-size:17px">{{ sl.emoji }}</span>
+                <span style="flex:1;font-size:14.5px;font-weight:800">{{ sl.label }}</span>
+                <span style="font-size:12.5px;font-weight:700;color:#9b9ba3">{{ sl.kcal }}</span>
+                <sc-if value="{{ sl.canAdd }}" hint-placeholder-val="{{ true }}"><span onClick="{{ sl.add }}" style="width:30px;height:30px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;cursor:pointer;color:#ff6b35"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></span></sc-if>
+              </div>
+              <sc-for list="{{ sl.rows }}" as="en" hint-placeholder-count="1">
+                <div onClick="{{ en.open }}" style="height:54px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid #202025;cursor:pointer">
+                  <span style="font-size:20px;width:24px">{{ en.emoji }}</span>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ en.title }}</span><span style="font-size:11.5px;font-weight:600;color:#66666e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ en.sub }}</span></div>
+                  <span style="font-size:13.5px;font-weight:800;color:{{ en.kcalColor }}">{{ en.kcal }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Два тижні</span><span style="font-size:11.5px;font-weight:600;color:#66666e;display:flex;align-items:center;gap:5px"><span style="width:12px;border-top:1.5px dashed #66666e"></span>ціль</span></div>
+            <div style="border-top:1px solid #202025;padding:14px 12px 10px">
+              <div style="position:relative;height:126px;display:flex;align-items:flex-end;gap:4px">
+                <span style="position:absolute;left:0;right:0;border-top:1.5px dashed #3a3a42;pointer-events:none;bottom:{{ goalLine }}"></span>
+                <sc-for list="{{ chart }}" as="d" hint-placeholder-count="14">
+                  <div onClick="{{ d.pick }}" style="flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;cursor:pointer">
+                    <div style="width:100%;border-radius:4px 4px 2px 2px;transition:height .4s ease,opacity .2s;height:{{ d.h }};background:{{ d.color }};opacity:{{ d.op }}"></div>
+                    <span style="font-size:10px;font-weight:800;text-align:center;color:{{ d.labelColor }}">{{ d.n }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:56px;display:flex;align-items:center;gap:10px">
+          <span onClick="{{ onBack }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span>
+          <div style="flex:1;font-family:Unbounded;font-size:20px;font-weight:700">Налаштування</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:72px;display:flex;align-items:center;gap:12px;padding:0 14px">
+              <span style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ff6b35,#ffb020);display:grid;place-items:center;font-size:24px">👩‍🍳</span>
+              <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:800">Ірина Мельник</div><div style="font-size:12.5px;font-weight:600;color:#66666e">iryna.melnyk@gmail.com</div></div>
+            </div>
+            <div onClick="{{ onFamily }}" style="height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid #202025;cursor:pointer">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span style="flex:1;font-size:14px;font-weight:600">Сімʼя</span><span style="font-size:12.5px;font-weight:600;color:#66666e">3 учасники</span>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+            </div>
+          </div>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Щоденник</span></div>
+            <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 14px;border-top:1px solid #202025"><span style="flex:1;font-size:14px;font-weight:600">Денна ціль</span><input value="{{ kcalGoal }}" onChange="{{ onKcalGoal }}" inputmode="numeric" placeholder="без цілі" style="width:84px;height:32px;border-radius:8px;background:#1c1c21;padding:0 10px;text-align:right;font-size:14px;font-weight:700"><span style="width:30px;font-size:13px;font-weight:700;color:#9b9ba3">ккал</span></div>
+            <div style="padding:10px 14px 12px;border-top:1px solid #202025;display:flex;flex-direction:column;gap:8px">
+              <span style="font-size:14px;font-weight:600">Білки · жири · вуглеводи</span>
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">
+                <sc-for list="{{ macroGoals }}" as="mg" hint-placeholder-count="3">
+                  <label style="min-width:0;height:36px;border-radius:8px;background:#1c1c21;display:flex;align-items:center;gap:6px;padding:0 10px"><span style="width:7px;height:7px;border-radius:2px;background:{{ mg.color }}"></span><span style="font-size:12.5px;font-weight:800;color:#9b9ba3">{{ mg.label }}</span><input value="{{ mg.val }}" onChange="{{ mg.onChange }}" inputmode="numeric" style="flex:1;min-width:0;width:0;background:transparent;text-align:right;font-size:14px;font-weight:700"><span style="font-size:12px;color:#66666e">г</span></label>
+                </sc-for>
+              </div>
+            </div>
+            <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 8px 0 14px;border-top:1px solid #202025"><span style="flex:1;font-size:14px;font-weight:600">Мій апетит</span><span onClick="{{ appetiteMinus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">−</span><span style="width:76px;text-align:center;font-size:13.5px;font-weight:800">{{ appetite }}</span><span onClick="{{ appetitePlus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">+</span></div>
+            <div onClick="{{ tShare }}" style="height:52px;display:flex;align-items:center;gap:8px;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Сімʼя бачить мій щоденник</span><span style="position:relative;width:44px;height:26px;border-radius:13px;transition:background .2s;background:{{ shareBg }}"><span style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;transform:translateX({{ shareX }})"></span></span></div>
+          </div>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Що пропонувати</span></div>
+            <div onClick="{{ tAvoid }}" style="height:56px;display:flex;align-items:center;gap:8px;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">Без повторів за 7 днів</div><div style="font-size:11.5px;font-weight:600;color:#66666e">Не пропонувати те, що вже готували</div></div><span style="position:relative;width:44px;height:26px;border-radius:13px;transition:background .2s;background:{{ avoidBg }}"><span style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;transform:translateX({{ avoidX }})"></span></span></div>
+          </div>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Сповіщення</span></div>
+            <div onClick="{{ tPush }}" style="height:56px;display:flex;align-items:center;gap:8px;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">На цьому пристрої</div><div style="font-size:11.5px;font-weight:600;color:#66666e">Таймер, строки в коморі, коментарі</div></div><span style="position:relative;width:44px;height:26px;border-radius:13px;transition:background .2s;background:{{ pushBg }}"><span style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;transform:translateX({{ pushX }})"></span></span></div>
+            <sc-if value="{{ pushOn }}" hint-placeholder-val="{{ false }}"><div onClick="{{ onPushTest }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600;color:#ff6b35">Надіслати пробне</span></div></sc-if>
+          </div>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Голосовий помічник</span></div>
+            <sc-for list="{{ keys }}" as="k" hint-placeholder-count="1">
+              <div style="height:54px;display:flex;align-items:center;gap:12px;padding:0 6px 0 14px;border-top:1px solid #202025">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#9b9ba3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"></path><path d="m21 2-9.6 9.6"></path><circle cx="7.5" cy="15.5" r="5.5"></circle></svg>
+                <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">{{ k.label }} <span style="color:#66666e;font-weight:500">…{{ k.hint }}</span></div><div style="font-size:11.5px;font-weight:600;color:#66666e">{{ k.used }}</div></div>
+                <span onClick="{{ k.revoke }}" style="width:36px;height:36px;border-radius:8px;display:grid;place-items:center;cursor:pointer;color:#66666e"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg></span>
+              </div>
+            </sc-for>
+            <div onClick="{{ onNewKey }}" style="height:48px;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg><span style="flex:1;font-size:14px;font-weight:600;color:#ff6b35">Створити ключ для Claude чи Gemini</span></div>
+          </div>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Вигляд</span></div>
+            <div style="padding:10px 14px 12px;border-top:1px solid #202025">
+              <div onClick="{{ tTheme }}" style="position:relative;height:40px;padding:3px;border-radius:9px;background:#0d0d10;border:1px solid #202025;display:flex;cursor:pointer;user-select:none">
+                <div style="position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:6px;background:#202025;transition:transform .32s cubic-bezier(.34,1.3,.64,1);transform:translateX({{ themeX }})"></div>
+                <div style="position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:7px;font-size:13.5px;font-weight:800;color:{{ theme0 }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>Темна</div>
+                <div style="position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:7px;font-size:13.5px;font-weight:800;color:{{ theme1 }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>Світла</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Про Ням</span></div>
+            <div onClick="{{ onInstall }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Встановити застосунок</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+            <div onClick="{{ onPrivacy }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Конфіденційність</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+            <div onClick="{{ onTerms }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Умови використання</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+          </div>
+
+          <div onClick="{{ onLogout }}" style="border-radius:10px;background:#121215;border:1px solid #202025;height:50px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:#f43f6a;font-size:14px;font-weight:700"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>Вийти з акаунта</div>
+          <div style="text-align:center;font-size:11.5px;font-weight:600;color:#66666e;padding:4px 0">Ням 0.1.0 · 4 власні рецепти</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isExplore }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:56px;display:flex;align-items:center"><div style="font-family:Unbounded;font-size:22px;font-weight:700">Пошук</div></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="height:46px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;align-items:center;gap:10px;padding:0 14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9b9ba3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><input value="{{ xq }}" onChange="{{ onXq }}" placeholder="Борщ, паста, курка, «швидко»…" style="flex:1;height:100%;background:transparent;font-size:15px;font-weight:600"></div>
+          <div style="position:relative;height:40px;padding:3px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;user-select:none">
+            <div style="position:absolute;top:3px;bottom:3px;left:3px;width:calc(25% - 1.5px);border-radius:7px;background:#202025;transition:transform .32s cubic-bezier(.34,1.3,.64,1);transform:translateX({{ xThumb }})"></div>
+            <sc-for list="{{ xTabs }}" as="xt" hint-placeholder-count="4"><div onClick="{{ xt.pick }}" style="position:relative;flex:1;display:grid;place-items:center;font-size:13px;font-weight:800;cursor:pointer;transition:color .2s;color:{{ xt.color }}">{{ xt.label }}</div></sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px;padding-top:4px">
+            <sc-for list="{{ xRes }}" as="r" hint-placeholder-count="4">
+              <div onClick="{{ r.open }}" style="display:flex;flex-direction:column;gap:8px;cursor:pointer;min-width:0">
+                <div style="position:relative;aspect-ratio:1;border-radius:10px;display:grid;place-items:center;font-size:52px;background:{{ r.bg }}"><span style="filter:drop-shadow(0 6px 12px rgba(0,0,0,.35))">{{ r.emoji }}</span><span style="position:absolute;top:7px;right:7px;height:20px;padding:0 7px;border-radius:6px;background:rgba(8,8,10,.6);font-size:10.5px;font-weight:800;display:flex;align-items:center;gap:3px"><span style="color:#ffb020">★</span>{{ r.rating }}</span></div>
+                <div style="min-width:0"><div style="font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</div><div style="font-size:11.5px;font-weight:600;color:#66666e">{{ r.meta }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ xEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px 0;text-align:center;font-size:14px;font-weight:700;color:#9b9ba3">Нічого не знайшлось</div></sc-if>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden;margin-top:6px">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Кухарі спільноти</span></div>
+            <sc-for list="{{ chefs }}" as="c" hint-placeholder-count="3">
+              <div style="height:58px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid #202025">
+                <span style="width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:19px;background:{{ c.bg }}">{{ c.emoji }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">{{ c.name }}</div><div style="font-size:11.5px;font-weight:600;color:#66666e">{{ c.meta }}</div></div>
+                <span onClick="{{ c.follow }}" style="height:32px;padding:0 12px;border-radius:8px;font-size:12.5px;font-weight:800;display:flex;align-items:center;cursor:pointer;background:{{ c.btnBg }};color:{{ c.btnColor }}">{{ c.btn }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isDecide }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:56px;display:flex;align-items:center"><div style="font-family:Unbounded;font-size:22px;font-weight:700">Вирішити</div></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;gap:6px;padding:0 14px"><svg width="13" height="13" viewBox="0 0 24 24" fill="#ff6b35" stroke="none"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#ff6b35">Найшвидше</span></div>
+            <div style="padding:12px 14px 14px;border-top:1px solid #202025;display:flex;flex-direction:column;gap:12px">
+              <div><div style="font-family:Unbounded;font-size:17px;font-weight:700">Просто скажи, що готувати</div><div style="font-size:12.5px;font-weight:600;color:#9b9ba3;margin-top:4px">Врахує смак, комору і час доби</div></div>
+              <sc-if value="{{ hasInstant }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ inst.open }}" style="display:flex;align-items:center;gap:12px;padding:8px;border-radius:10px;background:#0d0d10;border:1px solid #202025;cursor:pointer">
+                  <span style="width:56px;height:56px;border-radius:8px;display:grid;place-items:center;font-size:28px;flex:none;background:{{ inst.bg }}">{{ inst.emoji }}</span>
+                  <div style="flex:1;min-width:0"><div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#66666e">Твій вердикт</div><div style="font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ inst.title }}</div><div style="font-size:12px;font-weight:600;color:#9b9ba3">{{ inst.meta }}</div></div>
+                  <span style="font-size:13px;font-weight:800;color:#ff6b35;padding-right:6px">Готую ›</span>
+                </div>
+              </sc-if>
+              <div onClick="{{ onInstant }}" style="height:48px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15px;font-weight:800;display:grid;place-items:center;cursor:pointer">{{ instantBtn }}</div>
+            </div>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Способи вибору</span></div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#202025;border-top:1px solid #202025">
+              <sc-for list="{{ methods }}" as="m" hint-placeholder-count="6">
+                <div onClick="{{ m.open }}" style="grid-column:{{ m.span }};background:#121215;padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer;min-height:112px">
+                  <span style="width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:21px;background:{{ m.tint }}">{{ m.emoji }}</span>
+                  <div><div style="font-size:14px;font-weight:800">{{ m.title }}</div><div style="font-size:11.5px;font-weight:600;color:#66666e;margin-top:2px;line-height:1.35">{{ m.note }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRoulette }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:56px;display:flex;align-items:center;gap:10px">
+          <span onClick="{{ onBack }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span>
+          <div style="flex:1;font-family:Unbounded;font-size:20px;font-weight:700">Рулетка</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;align-items:center;padding-top:6px">
+          <div style="position:relative;width:300px;height:300px">
+            <div style="position:absolute;left:50%;top:-6px;transform:translateX(-50%);z-index:2;width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-top:20px solid #ff6b35;filter:drop-shadow(0 4px 8px rgba(255,107,53,.5))"></div>
+            <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #202025;background:repeating-conic-gradient(#16161a 0deg 22.5deg,#1c1c21 22.5deg 45deg);transition:transform 3.2s cubic-bezier(.17,.67,.15,1);transform:rotate({{ wheelRot }})">
+              <sc-for list="{{ wheel }}" as="w" hint-placeholder-count="8">
+                <span style="position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;display:grid;place-items:center;font-size:30px;transform:{{ w.tf }}">{{ w.emoji }}</span>
+              </sc-for>
+            </div>
+            <div style="position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:linear-gradient(135deg,#ff6b35,#ffb020);box-shadow:0 0 0 6px #070709;display:grid;place-items:center;font-size:22px">🎲</div>
+          </div>
+          <div onClick="{{ onSpin }}" style="width:100%;height:50px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15.5px;font-weight:800;display:grid;place-items:center;cursor:pointer;opacity:{{ spinOp }}">{{ spinLabel }}</div>
+          <sc-if value="{{ hasSpinRes }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ spinRes.open }}" style="width:100%;border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden;cursor:pointer">
+              <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#ff6b35">Доля обрала</span></div>
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 14px 12px;border-top:1px solid #202025">
+                <span style="width:56px;height:56px;border-radius:8px;display:grid;place-items:center;font-size:28px;flex:none;background:{{ spinRes.bg }}">{{ spinRes.emoji }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:800">{{ spinRes.title }}</div><div style="font-size:12px;font-weight:600;color:#9b9ba3">{{ spinRes.meta }}</div></div>
+                <span style="font-size:13px;font-weight:800;color:#ff6b35">Готувати ›</span>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFridge }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:56px;display:flex;align-items:center;gap:10px">
+          <span onClick="{{ onBack }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span>
+          <div style="flex:1;min-width:0"><div style="font-family:Unbounded;font-size:19px;font-weight:700">Холодильник</div></div>
+          <span style="font-size:12px;font-weight:700;color:#66666e">{{ fridgeCount }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ fridge }}" as="r" hint-placeholder-count="4">
+            <div onClick="{{ r.open }}" style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px">
+                <span style="width:52px;height:52px;border-radius:8px;display:grid;place-items:center;font-size:26px;flex:none;background:{{ r.bg }}">{{ r.emoji }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</div><div style="font-size:12px;font-weight:600;color:#9b9ba3">{{ r.meta }}</div></div>
+                <span style="font-family:Unbounded;font-size:16px;font-weight:700;color:{{ r.pctColor }}">{{ r.pct }}</span>
+              </div>
+              <div style="padding:0 14px 12px;display:flex;flex-direction:column;gap:8px">
+                <div style="height:4px;border-radius:2px;background:#1c1c21;overflow:hidden"><div style="height:100%;border-radius:2px;width:{{ r.pct }};background:{{ r.barBg }}"></div></div>
+                <div style="font-size:12px;font-weight:600;color:{{ r.missColor }}">{{ r.miss }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRecipe }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:0;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 0 180px">
+        <div style="position:relative;height:300px;display:grid;place-items:center;font-size:110px;background:{{ rc.bg }}">
+          <span style="filter:drop-shadow(0 12px 24px rgba(0,0,0,.35))">{{ rc.emoji }}</span>
+          <div style="position:absolute;left:0;right:0;bottom:0;height:90px;background:linear-gradient(180deg,transparent,#070709)"></div>
+          <span onClick="{{ onBack }}" style="position:absolute;top:52px;left:16px;width:38px;height:38px;border-radius:10px;background:rgba(8,8,10,.55);backdrop-filter:blur(10px);display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span>
+          <span onClick="{{ rc.save }}" style="position:absolute;top:52px;right:16px;width:38px;height:38px;border-radius:10px;background:rgba(8,8,10,.55);backdrop-filter:blur(10px);display:grid;place-items:center;cursor:pointer;color:#fff"><svg width="18" height="18" viewBox="0 0 24 24" fill="{{ rc.saveFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path></svg></span>
+        </div>
+        <div style="padding:0 16px;margin-top:-18px;position:relative;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-family:Unbounded;font-size:22px;font-weight:700;line-height:1.25">{{ rc.title }}</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:#9b9ba3"><span style="width:22px;height:22px;border-radius:50%;background:#1c1c21;display:grid;place-items:center;font-size:12px">{{ rc.avatar }}</span>{{ rc.author }} · {{ rc.cuisine }}</div>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))">
+            <sc-for list="{{ rc.stats }}" as="st" hint-placeholder-count="4"><div style="padding:10px 0;display:flex;flex-direction:column;align-items:center;gap:3px;border-left:1px solid {{ st.border }}"><span style="font-size:15px;font-weight:800">{{ st.val }}</span><span style="font-size:11px;font-weight:600;color:#66666e">{{ st.label }}</span></div></sc-for>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:46px;display:flex;align-items:center;gap:8px;padding:0 8px 0 14px"><span style="flex:1;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Інгредієнти · є {{ rc.haveCount }}</span><span onClick="{{ rc.minus }}" style="width:30px;height:30px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:16px;font-weight:700;cursor:pointer;user-select:none">−</span><span style="width:64px;text-align:center;font-size:13px;font-weight:800">{{ rc.servings }}</span><span onClick="{{ rc.plus }}" style="width:30px;height:30px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:16px;font-weight:700;cursor:pointer;user-select:none">+</span></div>
+            <sc-for list="{{ rc.ings }}" as="ig" hint-placeholder-count="5">
+              <div style="height:46px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid #202025">
+                <span style="flex:none;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;background:{{ ig.boxBg }};border:1.5px solid {{ ig.boxBorder }}"><sc-if value="{{ ig.have }}" hint-placeholder-val="{{ true }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#1a0d05" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+                <span style="flex:1;font-size:14px;font-weight:600;color:{{ ig.color }}">{{ ig.label }}</span>
+                <span style="font-size:12.5px;font-weight:700;color:#9b9ba3">{{ ig.qty }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ rc.hasMissing }}" hint-placeholder-val="{{ false }}"><div onClick="{{ rc.toShop }}" style="height:48px;display:flex;align-items:center;gap:10px;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg><span style="flex:1;font-size:14px;font-weight:700;color:#ff6b35">Відсутнє — у список покупок</span><span style="font-size:12px;font-weight:700;color:#66666e">{{ rc.missCount }}</span></div></sc-if>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Кроки</span></div>
+            <sc-for list="{{ rc.steps }}" as="sp" hint-placeholder-count="3">
+              <div style="display:flex;gap:12px;padding:12px 14px;border-top:1px solid #202025"><span style="flex:none;width:24px;height:24px;border-radius:7px;background:#1c1c21;display:grid;place-items:center;font-size:12px;font-weight:800;color:#ff6b35">{{ sp.n }}</span><span style="font-size:13.5px;line-height:1.5;color:#cfcfd5">{{ sp.text }}</span></div>
+            </sc-for>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">На порцію</span><span style="font-size:13px;font-weight:800">{{ rc.kcal }} ккал</span></div>
+            <div style="padding:12px 14px;border-top:1px solid #202025;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+              <sc-for list="{{ rc.macros }}" as="m" hint-placeholder-count="3"><div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:11.5px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:2px;background:{{ m.color }}"></span>{{ m.label }}</span><span style="font-size:15px;font-weight:800">{{ m.val }} г</span></div></sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;left:16px;right:16px;bottom:96px;z-index:14;display:flex;gap:8px">
+        <span onClick="{{ rc.like }}" style="width:52px;height:52px;border-radius:12px;background:#1c1c21;border:1px solid #2b2b31;display:grid;place-items:center;cursor:pointer;color:{{ rc.likeColor }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="{{ rc.likeFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg></span>
+        <div onClick="{{ rc.cook }}" style="flex:1;height:52px;border-radius:12px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15.5px;font-weight:800;display:grid;place-items:center;cursor:pointer;box-shadow:0 14px 36px -12px rgba(255,107,53,.6)">Почати готувати</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isMe }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:56px;display:flex;align-items:center;gap:8px">
+          <div style="flex:1;font-family:Unbounded;font-size:22px;font-weight:700">Профіль</div>
+          <span onClick="{{ onSettings }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"></path><path d="M14 17H5"></path><circle cx="17" cy="17" r="3"></circle><circle cx="7" cy="7" r="3"></circle></svg></span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:14px;padding:14px">
+              <span style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#ff6b35,#ffb020);display:grid;place-items:center;font-size:32px;flex:none">👩‍🍳</span>
+              <div style="flex:1;min-width:0"><div style="font-family:Unbounded;font-size:17px;font-weight:700">Ірина Мельник</div><div style="font-size:12.5px;font-weight:600;color:#66666e">@iryna</div><div style="font-size:12.5px;line-height:1.4;color:#9b9ba3;margin-top:4px">Готую швидко і без зайвого посуду</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid #202025">
+              <sc-for list="{{ meStats }}" as="st" hint-placeholder-count="4"><div style="padding:10px 0;display:flex;flex-direction:column;align-items:center;gap:2px;border-left:1px solid {{ st.border }}"><span style="font-family:Unbounded;font-size:16px;font-weight:700;color:{{ st.color }}">{{ st.val }}</span><span style="font-size:11px;font-weight:600;color:#66666e">{{ st.label }}</span></div></sc-for>
+            </div>
+            <div onClick="{{ onEditProfile }}" style="height:46px;display:flex;align-items:center;justify-content:center;gap:6px;border-top:1px solid #202025;font-size:13.5px;font-weight:700;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"></path></svg>Редагувати профіль</div>
+          </div>
+          <div style="position:relative;height:40px;padding:3px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;user-select:none">
+            <div style="position:absolute;top:3px;bottom:3px;left:3px;width:calc(25% - 1.5px);border-radius:7px;background:#202025;transition:transform .32s cubic-bezier(.34,1.3,.64,1);transform:translateX({{ meThumb }})"></div>
+            <sc-for list="{{ meTabs }}" as="mt" hint-placeholder-count="4"><div onClick="{{ mt.pick }}" style="position:relative;flex:1;display:grid;place-items:center;font-size:12.5px;font-weight:800;cursor:pointer;transition:color .2s;color:{{ mt.color }}">{{ mt.label }}</div></sc-for>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <sc-for list="{{ meList }}" as="r" hint-placeholder-count="3">
+              <div onClick="{{ r.open }}" style="height:64px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid {{ r.border }};cursor:pointer">
+                <span style="width:44px;height:44px;border-radius:8px;display:grid;place-items:center;font-size:22px;flex:none;background:{{ r.bg }}">{{ r.emoji }}</span>
+                <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</div><div style="font-size:12px;font-weight:600;color:#66666e">{{ r.meta }}</div></div>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+              </div>
+            </sc-for>
+            <sc-if value="{{ meEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:36px 14px;text-align:center;font-size:13.5px;font-weight:700;color:#66666e">{{ meEmptyText }}</div></sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isShopping }}" hint-placeholder-val="{{ false }}">
+      <div class="scr" style="position:absolute;top:46px;left:0;right:0;bottom:0;overflow-y:auto;scrollbar-width:none;padding:0 16px 120px">
+        <div style="height:56px;display:flex;align-items:center;gap:10px">
+          <span onClick="{{ onBack }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span>
+          <div style="flex:1;font-family:Unbounded;font-size:20px;font-weight:700">Покупки</div>
+          <span style="font-size:12px;font-weight:700;color:#66666e">{{ shopCount }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="height:46px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;align-items:center;gap:10px;padding:0 6px 0 14px"><input value="{{ shopQ }}" onChange="{{ onShopQ }}" onKeyDown="{{ onShopKey }}" placeholder="Додати: молоко, батарейки…" style="flex:1;height:100%;background:transparent;font-size:15px;font-weight:600"><span onClick="{{ onShopAdd }}" style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:grid;place-items:center;cursor:pointer"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></span></div>
+          <sc-for list="{{ aisles }}" as="a" hint-placeholder-count="2">
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">{{ a.label }}</span><span style="font-size:11.5px;font-weight:700;color:#66666e">{{ a.count }}</span></div>
+              <sc-for list="{{ a.items }}" as="it" hint-placeholder-count="2">
+                <div onClick="{{ it.toggle }}" style="height:50px;display:flex;align-items:center;gap:12px;padding:0 6px 0 14px;border-top:1px solid #202025;cursor:pointer;user-select:none">
+                  <span style="flex:none;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;background:{{ it.boxBg }};border:1.5px solid {{ it.boxBorder }}"><sc-if value="{{ it.done }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a0d05" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+                  <span style="font-size:17px">{{ it.emoji }}</span>
+                  <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;text-decoration:{{ it.deco }};color:{{ it.color }}">{{ it.label }}</div><sc-if value="{{ it.forR }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;font-weight:600;color:#66666e">для «{{ it.forR }}»</div></sc-if></div>
+                  <span style="font-size:12.5px;font-weight:700;color:#9b9ba3">{{ it.qty }}</span>
+                  <span onClick="{{ it.remove }}" style="width:32px;height:32px;display:grid;place-items:center;color:#66666e"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+          <sc-if value="{{ hasDone }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ onToPantry }}" style="border-radius:10px;background:#121215;border:1px solid rgba(255,107,53,.35);height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z"></path><path d="M5 10h14"></path><path d="M15 7v6"></path></svg><span style="flex:1;font-size:14px;font-weight:700;color:#ff6b35">Куплене — у комору</span><span style="font-size:12px;font-weight:700;color:#66666e">{{ doneCount }}</span></div>
+          </sc-if>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Чого немає вдома</span></div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#202025;border-top:1px solid #202025">
+              <sc-for list="{{ shopSugg }}" as="sg" hint-placeholder-count="4">
+                <div onClick="{{ sg.add }}" style="height:50px;background:#121215;display:flex;align-items:center;gap:9px;padding:0 10px 0 12px;cursor:pointer"><span style="font-size:16px">{{ sg.emoji }}</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">{{ sg.label }}</div><div style="font-size:11px;font-weight:700;color:#ff6b35">{{ sg.unlocks }}</div></div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9b9ba3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isCook }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;top:46px;left:0;right:0;bottom:0;display:flex;flex-direction:column">
+        <div style="height:56px;display:flex;align-items:center;gap:10px;padding:0 16px">
+          <span onClick="{{ ck.exit }}" style="width:38px;height:38px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span>
+          <div style="flex:1;min-width:0"><div style="font-family:Unbounded;font-size:16px;font-weight:700">{{ ck.head }}</div><div style="font-size:12px;font-weight:600;color:#66666e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ck.title }}</div></div>
+          <sc-if value="{{ ck.timerChip }}" hint-placeholder-val="{{ false }}"><span onClick="{{ ck.toTimerStep }}" style="height:32px;padding:0 10px;border-radius:8px;background:rgba(255,107,53,.14);color:#ff6b35;font-size:13px;font-weight:800;display:flex;align-items:center;gap:5px;cursor:pointer;font-variant-numeric:tabular-nums"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="14" y1="2" y2="2"></line><line x1="12" x2="15" y1="14" y2="11"></line><circle cx="12" cy="14" r="8"></circle></svg>{{ ck.timerChip }}</span></sc-if>
+        </div>
+        <div style="height:3px;background:#1c1c21"><div style="height:100%;background:linear-gradient(90deg,#ff6b35,#ffb020);transition:width .4s ease;width:{{ ck.progress }}"></div></div>
+
+        <sc-if value="{{ ck.isPrep }}" hint-placeholder-val="{{ false }}">
+          <div class="scr" style="flex:1;overflow-y:auto;scrollbar-width:none;padding:14px 16px">
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Дістань продукти</span><span style="font-size:12px;font-weight:700;color:#66666e">{{ ck.checkedText }}</span></div>
+              <sc-for list="{{ ck.ings }}" as="ig" hint-placeholder-count="5">
+                <div style="height:52px;display:flex;align-items:center;border-top:1px solid #202025">
+                  <div onClick="{{ ig.toggle }}" style="flex:1;min-width:0;height:100%;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer;user-select:none">
+                    <span style="flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;transition:background .15s;background:{{ ig.boxBg }};border:1.5px solid {{ ig.boxBorder }}"><sc-if value="{{ ig.on }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a0d05" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>
+                    <span style="flex:1;font-size:14px;font-weight:600;text-decoration:{{ ig.deco }};color:{{ ig.color }}">{{ ig.label }}</span>
+                  </div>
+                  <span onClick="{{ ig.weigh }}" style="height:100%;display:flex;align-items:center;gap:6px;padding:0 14px;font-size:12.5px;font-weight:700;cursor:pointer;color:{{ ig.wColor }}">{{ ig.qty }}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"></path><path d="M7 21h10"></path><path d="M12 3v18"></path><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path></svg></span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ ck.isStep }}" hint-placeholder-val="{{ false }}">
+          <div class="scr" style="flex:1;overflow-y:auto;scrollbar-width:none;padding:28px 22px 16px;display:flex;flex-direction:column">
+            <span style="font-family:Unbounded;font-size:64px;font-weight:700;line-height:1;color:#202025">{{ ck.num }}</span>
+            <p style="margin:16px 0 0;font-size:21px;font-weight:600;line-height:1.5;text-wrap:pretty">{{ ck.text }}</p>
+            <sc-if value="{{ ck.tip }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:18px;display:flex;gap:10px;padding:12px 14px;border-radius:10px;background:#121215;border:1px solid #202025"><span style="font-size:15px">💡</span><span style="font-size:13.5px;line-height:1.5;color:#9b9ba3">{{ ck.tip }}</span></div>
+            </sc-if>
+            <div style="margin-top:22px;border-radius:12px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <sc-if value="{{ ck.noTimer }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+                  <span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Таймер на цей крок</span>
+                  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">
+                    <sc-for list="{{ ck.presets }}" as="p" hint-placeholder-count="4"><span onClick="{{ p.set }}" style="height:38px;border-radius:8px;display:grid;place-items:center;font-size:13.5px;font-weight:800;cursor:pointer;background:{{ p.bg }};color:{{ p.color }}">{{ p.label }}</span></sc-for>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ ck.hasTimer }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:10px;padding:14px">
+                  <span style="flex:1;font-family:Unbounded;font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;color:{{ ck.clockColor }}">{{ ck.clock }}</span>
+                  <span onClick="{{ ck.reset }}" style="width:42px;height:42px;border-radius:10px;background:#1c1c21;display:grid;place-items:center;cursor:pointer;color:#9b9ba3"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></span>
+                  <span onClick="{{ ck.playPause }}" style="width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:grid;place-items:center;cursor:pointer"><sc-if value="{{ ck.running }}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></sc-if><sc-if value="{{ ck.paused }}" hint-placeholder-val="{{ true }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-left:2px"><path d="M6 4v16l14-8z"></path></svg></sc-if></span>
+                </div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ ck.running }}" hint-placeholder-val="{{ false }}"><div style="margin-top:8px;text-align:center;font-size:11.5px;font-weight:600;color:#66666e">Можна йти на інший крок — таймер іде далі</div></sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ ck.isDone }}" hint-placeholder-val="{{ false }}">
+          <div class="scr" style="flex:1;overflow-y:auto;scrollbar-width:none;padding:18px 16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 0 8px"><span style="width:96px;height:96px;border-radius:24px;display:grid;place-items:center;font-size:52px;background:{{ ck.bg }}">{{ ck.emoji }}</span><span style="font-family:Unbounded;font-size:24px;font-weight:700">Смачного!</span></div>
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Списано з комори</span></div>
+              <sc-for list="{{ ck.spent }}" as="sp" hint-placeholder-count="3"><div style="height:44px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025"><span style="flex:1;font-size:14px;font-weight:600">{{ sp.label }}</span><span style="font-size:12.5px;font-weight:700;color:#9b9ba3">{{ sp.qty }}</span></div></sc-for>
+              <div onClick="{{ ck.undoSpent }}" style="height:44px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="font-size:13.5px;font-weight:700;color:#9b9ba3">Повернути в комору</span></div>
+            </div>
+            <div onClick="{{ ck.split }}" style="border-radius:10px;background:#121215;border:1px solid rgba(255,107,53,.35);height:56px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer"><span style="font-size:20px">🍽️</span><span style="flex:1;font-size:14px;font-weight:700">{{ ck.splitText }}</span><span style="font-size:13px;font-weight:800;color:#ff6b35">›</span></div>
+            <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+              <div style="height:36px;display:flex;align-items:center;padding:0 14px"><span style="font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9b9ba3">Як вийшло?</span></div>
+              <div style="display:flex;justify-content:center;gap:8px;padding:10px 0 14px;border-top:1px solid #202025">
+                <sc-for list="{{ ck.stars }}" as="st" hint-placeholder-count="5"><span onClick="{{ st.pick }}" style="font-size:32px;cursor:pointer;transition:transform .15s;color:{{ st.color }}">★</span></sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="padding:12px 16px 30px;border-top:1px solid #202025;background:rgba(7,7,9,.9);display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:8px">
+            <sc-if value="{{ ck.canPrev }}" hint-placeholder-val="{{ false }}"><span onClick="{{ ck.prev }}" style="width:54px;height:52px;border-radius:12px;background:#1c1c21;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></span></sc-if>
+            <div onClick="{{ ck.next }}" style="flex:1;height:52px;border-radius:12px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer">{{ ck.nextLabel }}</div>
+          </div>
+          <sc-if value="{{ ck.isPrep }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;font-size:11.5px;font-weight:600;color:#66666e">{{ ck.checkedText }} готово</div></sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ filterOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ onCloseFilter }}" style="position:absolute;inset:0;z-index:20"></div>
+      <div style="position:absolute;right:16px;top:150px;width:236px;z-index:21;border-radius:12px;background:#1c1c21;border:1px solid #2b2b31;box-shadow:0 24px 60px -16px rgba(0,0,0,.9);padding:4px">
+        <sc-for list="{{ filterOptions }}" as="o" hint-placeholder-count="4">
+          <div onClick="{{ o.pick }}" style="height:40px;border-radius:8px;display:flex;align-items:center;gap:10px;padding:0 10px;font-size:13.5px;cursor:pointer;background:{{ o.bg }};color:{{ o.color }};font-weight:{{ o.weight }}"><span style="flex:1">{{ o.label }}</span><span style="font-size:12px;opacity:.7">{{ o.count }}</span></div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <div style="position:absolute;left:16px;right:16px;bottom:96px;z-index:30;height:46px;display:flex;align-items:center;gap:10px;padding:0 6px 0 14px;border-radius:12px;background:#1f1f24;box-shadow:0 12px 30px -10px rgba(0,0,0,.8);transition:transform .25s ease,opacity .25s ease;transform:translateY({{ toastY }});opacity:{{ toastOp }};pointer-events:{{ toastPE }}">
+      <span style="flex:1;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ toastText }}</span>
+      <sc-if value="{{ toastAction }}" hint-placeholder-val="{{ false }}"><span onClick="{{ onToastAction }}" style="height:34px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:800;color:#ff6b35;display:flex;align-items:center;cursor:pointer">{{ toastAction }}</span></sc-if>
+    </div>
+
+    <div style="position:absolute;left:18px;right:18px;bottom:22px;z-index:15;transition:transform .3s ease;transform:translateY({{ navY }});height:62px;border-radius:31px;background:rgba(22,22,26,.82);backdrop-filter:blur(24px) saturate(160%);border:1px solid rgba(253,246,242,.07);box-shadow:0 18px 40px -12px rgba(0,0,0,.8);display:flex;align-items:center;justify-content:space-around;padding:0 6px">
+      <span onClick="{{ navFeed }}" style="width:52px;height:44px;border-radius:22px;display:grid;place-items:center;cursor:pointer;background:{{ homeNavBg }};color:{{ homeNavColor }}"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>
+      <span onClick="{{ navSearch }}" style="width:52px;height:44px;border-radius:22px;display:grid;place-items:center;cursor:pointer;background:{{ navSearchBg }};color:{{ navSearchColor }}"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"></path></svg></span>
+      <span onClick="{{ navDecide }}" style="width:48px;height:44px;border-radius:22px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:grid;place-items:center;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg></span>
+      <span onClick="{{ navPantry }}" style="width:52px;height:44px;border-radius:22px;display:grid;place-items:center;cursor:pointer;background:{{ pantryNavBg }};color:{{ pantryNavColor }}"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z"></path><path d="M5 10h14"></path><path d="M15 7v6"></path></svg></span>
+      <span onClick="{{ navMe }}" style="width:52px;height:44px;border-radius:22px;display:grid;place-items:center;cursor:pointer;background:{{ navMeBg }};color:{{ navMeColor }}"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
+    </div>
+
+    <div onClick="{{ onCloseSheet }}" style="position:absolute;inset:0;z-index:40;background:rgba(0,0,0,.6);transition:opacity .25s ease;opacity:{{ backOp }};pointer-events:{{ backPE }}"></div>
+    <div class="scr" style="position:absolute;left:0;right:0;bottom:0;z-index:41;max-height:90%;overflow-y:auto;scrollbar-width:none;background:#0d0d10;border-radius:20px 20px 0 0;border-top:1px solid #202025;touch-action:pan-y;transition:{{ sheetTrans }};transform:translateY({{ sheetY }})" onPointerDown="{{ onSheetDown }}" onPointerMove="{{ onSheetMove }}" onPointerUp="{{ onSheetUp }}" onPointerCancel="{{ onSheetUp }}">
+      <div onClick="{{ onCloseSheet }}" style="padding:10px 0 8px;cursor:grab"><div style="width:36px;height:4px;border-radius:9px;background:#2b2b31;margin:0 auto"></div></div>
+
+      <sc-if value="{{ isItemSheet }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:8px 20px 14px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:26px">{{ cur.emoji }}</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-family:Unbounded;font-size:16px;font-weight:700">{{ cur.name }}</span><span style="font-size:12px;color:#66666e;font-weight:600">{{ cur.path }}</span></div>
+        </div>
+        <div style="padding:0 16px;display:flex;flex-direction:column;gap:12px">
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:50px;display:flex;align-items:center;padding:0 8px 0 14px;gap:8px"><span style="flex:1;font-size:14px;font-weight:600;color:#9b9ba3">Кількість</span><span onClick="{{ cur.minus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">−</span><span style="width:80px;text-align:center;font-size:15px;font-weight:800">{{ cur.qty }}</span><span onClick="{{ cur.plus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">+</span></div>
+            <div style="height:50px;display:flex;align-items:center;padding:0 14px;gap:6px;border-top:1px solid #202025"><span style="flex:1;font-size:14px;font-weight:600;color:#9b9ba3">Ціна</span><input value="{{ cur.price }}" onChange="{{ cur.onPrice }}" inputmode="decimal" placeholder="0,00" style="width:84px;height:32px;border-radius:8px;background:#1c1c21;padding:0 10px;text-align:right;font-size:14px;font-weight:700"><span style="font-size:14px;font-weight:700;color:#9b9ba3">₴</span></div>
+            <div style="height:50px;display:flex;align-items:center;padding:0 14px;gap:8px;border-top:1px solid #202025"><span style="flex:1;font-size:14px;font-weight:600;color:#9b9ba3">Їстівне до</span><input type="date" value="{{ cur.exp }}" onChange="{{ cur.onExp }}" style="height:32px;border-radius:8px;background:#1c1c21;padding:0 10px;font-size:14px;font-weight:700;color-scheme:dark"></div>
+          </div>
+          <sc-if value="{{ cur.refine }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ cur.onRefine }}" style="border-radius:10px;background:#121215;border:1px solid #202025;height:48px;display:flex;align-items:center;gap:10px;padding:0 14px;cursor:pointer"><span style="width:6px;height:6px;border-radius:50%;background:#ff6b35"></span><span style="flex:1;font-size:14px;font-weight:700">Уточнити товар</span><span style="font-size:11.5px;color:#66666e;font-family:ui-monospace,monospace">з чека</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+          </sc-if>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div onClick="{{ cur.onCard }}" style="height:48px;display:flex;align-items:center;padding:0 14px;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Картка товару</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+            <div onClick="{{ cur.onWrong }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Не той товар?</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+            <div onClick="{{ cur.onMore }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Додати ще</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></div>
+            <div onClick="{{ cur.onRemove }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600;color:#f43f6a">Прибрати з комори</span></div>
+          </div>
+        </div>
+        <div style="padding:14px 16px 30px"><div onClick="{{ onCloseSheet }}" style="height:48px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15px;font-weight:800;display:grid;place-items:center;cursor:pointer">Готово</div></div>
+      </sc-if>
+
+      <sc-if value="{{ isGroupSheet }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:8px 20px 14px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:26px">{{ grp.emoji }}</span>
+          <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-family:Unbounded;font-size:16px;font-weight:700">{{ grp.type }}</span><span style="font-size:12px;color:#66666e;font-weight:600">{{ grp.countText }}</span></div>
+          <span style="font-family:Unbounded;font-size:20px;font-weight:700">{{ grp.total }}</span>
+        </div>
+        <div style="padding:0 16px;display:flex;flex-direction:column;gap:12px">
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <sc-for list="{{ grp.rows }}" as="r" hint-placeholder-count="2">
+              <div onClick="{{ r.open }}" style="height:48px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid {{ r.border }};cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">{{ r.short }}</span><span style="font-size:12px;font-weight:600;color:#9b9ba3">{{ r.qty }}</span><span style="width:52px;text-align:right;font-size:12px;font-weight:600;color:#66666e">{{ r.exp }}</span></div>
+            </sc-for>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div onClick="{{ grp.onEdit }}" style="height:48px;display:flex;align-items:center;padding:0 14px;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Редагувати тип</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+            <div onClick="{{ grp.onMerge }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="flex:1;font-size:14px;font-weight:600">Це дублікат іншого типу</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#66666e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></div>
+          </div>
+        </div>
+        <div style="padding:14px 16px 30px;display:flex;gap:8px">
+          <div onClick="{{ grp.onMore }}" style="flex:1;height:48px;border-radius:10px;background:#1c1c21;font-size:15px;font-weight:700;display:grid;place-items:center;cursor:pointer">Додати ще</div>
+          <div onClick="{{ grp.onRecipes }}" style="flex:1.3;height:48px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15px;font-weight:800;display:grid;place-items:center;cursor:pointer">Рецепти з цим</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isEntrySheet }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:8px 20px 14px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:28px">{{ ent.emoji }}</span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-family:Unbounded;font-size:16px;font-weight:700">{{ ent.title }}</span><span style="font-size:12px;color:#66666e;font-weight:600">{{ ent.sub }}</span></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end"><span style="font-family:Unbounded;font-size:20px;font-weight:700">{{ ent.kcal }}</span><span style="font-size:11px;font-weight:600;color:#9b9ba3">ккал</span></div>
+        </div>
+        <div style="padding:0 16px;display:flex;flex-direction:column;gap:12px">
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <sc-for list="{{ ent.macros }}" as="m" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:11.5px;font-weight:700;color:#9b9ba3;display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:2px;background:{{ m.color }}"></span>{{ m.label }}</span><span style="font-size:15px;font-weight:800">{{ m.val }} г</span></div>
+            </sc-for>
+          </div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <div style="height:50px;display:flex;align-items:center;padding:0 8px 0 14px;gap:8px"><span style="flex:1;font-size:14px;font-weight:600;color:#9b9ba3">Порція</span><span onClick="{{ ent.minus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">−</span><span style="width:64px;text-align:center;font-size:15px;font-weight:800">×{{ ent.mult }}</span><span onClick="{{ ent.plus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">+</span></div>
+            <div style="padding:10px 14px 12px;border-top:1px solid #202025;display:flex;flex-direction:column;gap:8px"><span style="font-size:14px;font-weight:600;color:#9b9ba3">Прийом їжі</span>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:3px;border-radius:9px;background:#0d0d10;border:1px solid #202025">
+                <sc-for list="{{ ent.slots }}" as="so" hint-placeholder-count="4">
+                  <span onClick="{{ so.pick }}" style="height:32px;border-radius:6px;display:grid;place-items:center;font-size:12.5px;font-weight:700;cursor:pointer;background:{{ so.bg }};color:{{ so.color }}">{{ so.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <div onClick="{{ ent.remove }}" style="height:48px;display:flex;align-items:center;padding:0 14px;border-top:1px solid #202025;cursor:pointer"><span style="font-size:14px;font-weight:600;color:#f43f6a">Видалити запис</span></div>
+          </div>
+        </div>
+        <div style="padding:14px 16px 30px"><div onClick="{{ onCloseSheet }}" style="height:48px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15px;font-weight:800;display:grid;place-items:center;cursor:pointer">Готово</div></div>
+      </sc-if>
+
+      <sc-if value="{{ isSplitSheet }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:8px 20px 14px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:28px">🥗</span>
+          <div style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-family:Unbounded;font-size:16px;font-weight:700">Хто їв?</span><span style="font-size:12px;color:#66666e;font-weight:600">Грецький салат · 4 порції</span></div>
+        </div>
+        <div style="padding:0 16px">
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <sc-for list="{{ splitRows }}" as="sp" hint-placeholder-count="3">
+              <div style="height:54px;display:flex;align-items:center;gap:10px;padding:0 8px 0 14px;border-top:1px solid {{ sp.border }}"><span style="width:32px;height:32px;border-radius:50%;background:#1c1c21;display:grid;place-items:center;font-size:16px">{{ sp.emoji }}</span><span style="flex:1;font-size:14px;font-weight:700">{{ sp.label }}</span><span onClick="{{ sp.minus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">−</span><span style="width:70px;text-align:center;font-size:14px;font-weight:800">{{ sp.val }}</span><span onClick="{{ sp.plus }}" style="width:32px;height:32px;border-radius:8px;background:#1c1c21;display:grid;place-items:center;font-size:17px;font-weight:700;cursor:pointer;user-select:none">+</span></div>
+            </sc-for>
+          </div>
+          <div style="padding:10px 4px 0;font-size:12px;font-weight:600;color:#66666e">{{ splitLeft }}</div>
+        </div>
+        <div style="padding:14px 16px 30px"><div onClick="{{ onSplitSave }}" style="height:48px;border-radius:10px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:15px;font-weight:800;display:grid;place-items:center;cursor:pointer">Записати</div></div>
+      </sc-if>
+
+      <sc-if value="{{ isFoodSheet }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:8px 16px 30px;display:flex;flex-direction:column;gap:12px">
+          <div style="padding:0 4px;display:flex;align-items:baseline;justify-content:space-between"><span style="font-family:Unbounded;font-size:16px;font-weight:700">Додати їжу</span><span style="font-size:12.5px;font-weight:700;color:#9b9ba3">{{ foodSlotLabel }}</span></div>
+          <div style="height:46px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;align-items:center;gap:10px;padding:0 14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9b9ba3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><input value="{{ fquery }}" onChange="{{ onFQuery }}" placeholder="Знайди або опиши словами" style="flex:1;height:100%;background:transparent;font-size:15px;font-weight:600"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div onClick="{{ onFoodScan }}" style="height:76px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M8 7v10"></path><path d="M12 7v10"></path><path d="M17 7v10"></path></svg>Штрихкод</div>
+            <div onClick="{{ onFoodPhoto }}" style="height:76px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>Фото страви</div>
+            <div onClick="{{ onFoodPantry }}" style="height:76px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z"></path><path d="M5 10h14"></path><path d="M15 7v6"></path></svg>З комори</div>
+          </div>
+          <div style="padding:4px 4px 0;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#66666e">{{ foodTitle }}</div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <sc-if value="{{ foodDescribe }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ onDescribe }}" style="height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer"><span style="font-size:18px">✨</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700;color:#ff6b35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Порахувати «{{ fquery }}»</div><div style="font-size:11.5px;font-weight:600;color:#66666e">КБЖВ з опису страви</div></div></div>
+            </sc-if>
+            <sc-for list="{{ foods }}" as="fd" hint-placeholder-count="5">
+              <div onClick="{{ fd.add }}" style="height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid {{ fd.border }};cursor:pointer"><span style="font-size:20px;width:24px">{{ fd.emoji }}</span><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">{{ fd.title }}</div><div style="font-size:11.5px;font-weight:600;color:#66666e">{{ fd.amount }}</div></div><span style="font-size:13px;font-weight:800">{{ fd.kcal }}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAddSheet }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:8px 16px 30px;display:flex;flex-direction:column;gap:12px">
+          <span style="padding:0 4px;font-family:Unbounded;font-size:16px;font-weight:700">Додати продукт</span>
+          <div style="height:46px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;align-items:center;gap:10px;padding:0 14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9b9ba3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><input value="{{ query }}" onChange="{{ onQuery }}" placeholder="Назва, виробник або тип" style="flex:1;height:100%;background:transparent;font-size:15px;font-weight:600"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+            <div onClick="{{ onScan }}" style="height:78px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M8 7v10"></path><path d="M12 7v10"></path><path d="M17 7v10"></path></svg>Штрихкод</div>
+            <div onClick="{{ onReceiptQr }}" style="height:78px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path><path d="M14 8H8"></path><path d="M16 12H8"></path><path d="M13 16H8"></path></svg>QR чека</div>
+            <div onClick="{{ onReceiptPhoto }}" style="height:78px;border-radius:10px;background:#121215;border:1px solid #202025;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff6b35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>Фото чека</div>
+          </div>
+          <div style="padding:4px 4px 0;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#66666e">{{ resultsTitle }}</div>
+          <div style="border-radius:10px;background:#121215;border:1px solid #202025;overflow:hidden">
+            <sc-for list="{{ results }}" as="c" hint-placeholder-count="5">
+              <div onClick="{{ c.add }}" style="height:46px;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid {{ c.border }};cursor:pointer"><span style="font-size:18px;width:22px">{{ c.emoji }}</span><span style="flex:1;font-size:14px;font-weight:600">{{ c.name }}</span><span style="font-size:12px;color:#66666e;font-weight:600">{{ c.type }}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9b9ba3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></div>
+            </sc-for>
+            <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ onCreateType }}" style="height:46px;display:flex;align-items:center;gap:12px;padding:0 14px;cursor:pointer;font-size:14px;font-weight:700;color:#ff6b35">＋ Створити «{{ query }}»</div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TODAY = new Date('2026-10-30T00:00:00');
+const CATS = [['dairy','Молочне'],['veg','Овочі й фрукти'],['meat','Мʼясо й риба'],['grain','Крупи й макарони'],['drinks','Напої']];
+const CAT_LABEL = Object.fromEntries(CATS);
+const addDays = (n) => { const d = new Date(TODAY); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const ITEMS = [
+  { id: '1', key: 'kefir', emoji: '🥛', type: 'Кефір', name: 'Кефір Галичина 2,5%', cat: 'dairy', amount: 900, unit: 'мл', exp: '2026-10-28', price: '' },
+  { id: '2', key: 'chicken', emoji: '🍗', type: 'Курка', name: 'Курячі стегна', cat: 'meat', amount: 1, unit: 'кг', exp: '2026-10-31', price: '189' },
+  { id: '3', key: 'spinach', emoji: '🥬', type: 'Шпинат', name: 'Шпинат', cat: 'veg', amount: 200, unit: 'г', exp: '2026-11-01', price: '' },
+  { id: '4', key: 'milk', emoji: '🥛', type: 'Молоко', name: 'Молоко Галичина 2,5%', short: 'Галичина 2,5%', cat: 'dairy', amount: 900, unit: 'мл', exp: '2026-11-05', price: '45,90' },
+  { id: '5', key: 'milk', emoji: '🥛', type: 'Молоко', name: 'Молоко Яготинське 3,2%', short: 'Яготинське 3,2%', cat: 'dairy', amount: 1, unit: 'л', exp: '2026-11-08', price: '' },
+  { id: '6', key: 'cheese', emoji: '🧀', type: 'Сир твердий', name: 'СИР ТВ КОМО 50%', cat: 'dairy', amount: 200, unit: 'г', exp: '2026-11-20', price: '', refine: true },
+  { id: '7', key: 'eggs', emoji: '🥚', type: 'Яйця', name: 'Яйця', cat: 'dairy', amount: 10, unit: 'шт', exp: '2026-11-14', price: '' },
+  { id: '8', key: 'potato', emoji: '🥔', type: 'Картопля', name: 'Картопля', cat: 'veg', amount: 2, unit: 'кг', exp: '', price: '' },
+  { id: '9', key: 'tomato', emoji: '🍅', type: 'Помідори', name: 'Помідори', cat: 'veg', amount: 500, unit: 'г', exp: '2026-11-07', price: '' },
+  { id: '10', key: 'buckwheat', emoji: '🌾', type: 'Гречка', name: 'Гречка Сто пудів', cat: 'grain', amount: 1, unit: 'кг', exp: '2027-03-01', price: '' },
+  { id: '11', key: 'juice', emoji: '🧃', type: 'Сік', name: 'Сік Sandora апельсин', cat: 'drinks', amount: 1, unit: 'л', exp: '2027-01-10', price: '' },
+];
+const CATALOG = [
+  { key: 'yogurt', emoji: '🥣', type: 'Йогурт', name: 'Йогурт Галичина 2,5%', cat: 'dairy', amount: 300, unit: 'г' },
+  { key: 'milk', emoji: '🥛', type: 'Молоко', name: 'Молоко Ферма 2,5%', short: 'Ферма 2,5%', cat: 'dairy', amount: 900, unit: 'мл' },
+  { key: 'sourcream', emoji: '🥛', type: 'Сметана', name: 'Сметана Простонаше 20%', cat: 'dairy', amount: 350, unit: 'г' },
+  { key: 'butter', emoji: '🧈', type: 'Масло', name: 'Масло Президент 82%', cat: 'dairy', amount: 200, unit: 'г' },
+  { key: 'chicken_fillet', emoji: '🍗', type: 'Курка', name: 'Філе куряче', cat: 'meat', amount: 1, unit: 'кг' },
+  { key: 'banana', emoji: '🍌', type: 'Банани', name: 'Банани', cat: 'veg', amount: 1, unit: 'кг' },
+  { key: 'apple', emoji: '🍎', type: 'Яблука', name: 'Яблука Голден', cat: 'veg', amount: 1, unit: 'кг' },
+  { key: 'onion', emoji: '🧅', type: 'Цибуля', name: 'Цибуля ріпчаста', cat: 'veg', amount: 1, unit: 'кг' },
+  { key: 'pasta', emoji: '🍝', type: 'Макарони', name: 'Спагетті Barilla', cat: 'grain', amount: 500, unit: 'г' },
+  { key: 'rice', emoji: '🍚', type: 'Рис', name: 'Рис круглий', cat: 'grain', amount: 1, unit: 'кг' },
+];
+const BASICS = [
+  { label: 'Спеції й соуси', items: [['salt','🧂','Сіль',1],['pepper','🌶️','Перець',1],['honey','🍯','Мед',0],['tpaste','🥫','Томатна паста',1,'70 г'],['garlic','🧄','Часник',0],['bay','🌿','Лавровий лист',1]] },
+  { label: 'Олії й жири', items: [['oil','🫒','Олія',1,'1,85 л · 2 товари',2],['butterb','🧈','Масло',0,'є спред']] },
+  { label: 'Бакалія', items: [['riceb','🍚','Рис',1,'2 кг'],['flour','🌾','Борошно',1],['sugar','🍬','Цукор',1],['pastab','🍝','Макарони',0],['oat','🥣','Вівсянка',1],['soda','🫘','Сода',0]] },
+];
+const TRENDING = [
+  ['🍲','Червоний борщ','90 хв · Українська','4,9',['#c026d3','#f43f6a']],
+  ['🥔','Деруни зі сметаною','40 хв · Українська','4,8',['#f59e0b','#ff6b35']],
+  ['🍝','Справжня карбонара','25 хв · Італійська','4,7',['#fbbf24','#facc15']],
+  ['🍳','Шакшука','20 хв · Близькосхідна','4,6',['#dc2626','#f97316']],
+  ['🍚','Плов у казані','2 год · Узбецька','4,8',['#c2410c','#f59e0b']],
+];
+const FOR_YOU = [['🥘','Овочеве рагу з холодильника','Усе є в коморі'],['🍳','Омлет з сиром за 7 хвилин','Швидко, сир скоро зіпсується'],['🍄','Гречка з грибами і цибулею','Схоже на те, що ти лайкала']];
+const FEED = [
+  { id: 'f1', avatar: '👩‍🍳', author: 'Оля Кравець', handle: '@olya · 2 год тому', cuisine: 'Українська', emoji: '🥞', title: 'Сирники як у дитинстві', desc: 'Пухкі, з хрусткою скоринкою і мінімумом борошна.', time: '30 хв', rating: '4,9', likes: 1240, cooked: 'Приготували 318' },
+  { id: 'f2', avatar: '🔥', author: 'Тарас Не', handle: '@taras_ne · 5 год тому', cuisine: 'Тайська', emoji: '🍜', title: 'Том ям з креветками', desc: 'Кисло-гострий, на кокосовому молоці. Паста з магазину — і без сорому.', time: '35 хв', rating: '4,7', likes: 860, cooked: 'Приготували 142' },
+  { id: 'f3', avatar: '🥑', author: 'Марта Зелінська', handle: '@marta · учора', cuisine: 'Середземноморська', emoji: '🥗', title: 'Грецький салат', desc: 'Помідори, огірок, фета й олива. Головне — не різати дрібно.', time: '10 хв', rating: '4,6', likes: 540, cooked: 'Приготували 97' },
+];
+const S3 = (a, b, c) => [a, b, c];
+const RECIPES = [
+  { id: 'borsch', emoji: '🍲', title: 'Червоний борщ', time: 90, cuisine: 'Українська', rating: '4,9', g: ['#c026d3', '#f43f6a'], author: 'Оля Кравець', avatar: '👩‍🍳', kcal: 310, p: 14, f: 12, c: 36, serv: 4, likes: 2400,
+    ings: [['potato', 'Картопля', '3 шт'], ['beet', 'Буряк', '2 шт'], ['cabbage', 'Капуста', '300 г'], ['carrot', 'Морква', '1 шт'], ['onion', 'Цибуля', '1 шт'], ['tpaste', 'Томатна паста', '2 ст. л.'], ['garlic', 'Часник', '2 зубчики'], ['salt', 'Сіль', 'до смаку']],
+    steps: S3('Звари бульйон і закинь нарізану картоплю.', 'Обсмаж цибулю, моркву й буряк, додай томатну пасту, потім усе — в бульйон разом із капустою.', 'Наприкінці — часник і зелень. Дай настоятися 20 хвилин.') },
+  { id: 'deruny', emoji: '🥔', title: 'Деруни зі сметаною', time: 40, cuisine: 'Українська', rating: '4,8', g: ['#f59e0b', '#ff6b35'], author: 'Тарас Не', avatar: '🔥', kcal: 420, p: 10, f: 22, c: 46, serv: 3, likes: 1800,
+    ings: [['potato', 'Картопля', '6 шт'], ['eggs', 'Яйця', '1 шт'], ['flour', 'Борошно', '2 ст. л.'], ['onion', 'Цибуля', '1 шт'], ['oil', 'Олія', '50 мл'], ['salt', 'Сіль', 'щіпка'], ['sourcream', 'Сметана', '150 г']],
+    steps: S3('Натри картоплю й цибулю, відтисни сік.', 'Додай яйце, борошно, сіль і перемішай.', 'Смаж на розігрітій олії до золотистої скоринки, подавай зі сметаною.') },
+  { id: 'carbonara', emoji: '🍝', title: 'Справжня карбонара', time: 25, cuisine: 'Італійська', rating: '4,7', g: ['#fbbf24', '#facc15'], author: 'Марта Зелінська', avatar: '🥑', kcal: 610, p: 26, f: 28, c: 62, serv: 2, likes: 1500,
+    ings: [['pastab', 'Спагетті', '200 г'], ['eggs', 'Яйця', '3 шт'], ['cheese', 'Сир твердий', '60 г'], ['bacon', 'Гуанчале', '100 г'], ['pepper', 'Перець', 'до смаку']],
+    steps: S3('Відвари пасту в підсоленій воді.', 'Обсмаж гуанчале до хрусткості, змішай жовтки з тертим сиром і перцем.', 'Зʼєднай пасту з гуанчале, зніми з вогню й швидко вмішай яєчну суміш.') },
+  { id: 'shakshuka', emoji: '🍳', title: 'Шакшука', time: 20, cuisine: 'Близькосхідна', rating: '4,6', g: ['#dc2626', '#f97316'], author: 'Діма Гриль', avatar: '🥩', kcal: 290, p: 16, f: 18, c: 14, serv: 2, likes: 980,
+    ings: [['eggs', 'Яйця', '4 шт'], ['tomato', 'Помідори', '400 г'], ['onion', 'Цибуля', '1 шт'], ['pepper', 'Перець', 'щіпка'], ['oil', 'Олія', '1 ст. л.'], ['salt', 'Сіль', 'щіпка']],
+    steps: S3('Обсмаж цибулю, додай нарізані помідори.', 'Туши 8 хвилин, посоли й поперчи.', 'Зроби заглиблення, вбий яйця, накрий кришкою на 5 хвилин.') },
+  { id: 'plov', emoji: '🍚', title: 'Плов у казані', time: 120, cuisine: 'Узбецька', rating: '4,8', g: ['#c2410c', '#f59e0b'], author: 'Діма Гриль', avatar: '🥩', kcal: 520, p: 22, f: 20, c: 62, serv: 6, likes: 1300,
+    ings: [['riceb', 'Рис', '500 г'], ['chicken', 'Курка', '700 г'], ['carrot', 'Морква', '3 шт'], ['onion', 'Цибуля', '2 шт'], ['oil', 'Олія', '100 мл'], ['garlic', 'Часник', '1 головка'], ['salt', 'Сіль', 'до смаку']],
+    steps: S3('Розігрій олію в казані, обсмаж курку, потім цибулю й моркву соломкою.', 'Залий водою, додай спеції й часник, туши 30 хвилин.', 'Висип промитий рис, долий воду на палець вище і томи під кришкою 40 хвилин.') },
+  { id: 'omelet', emoji: '🍳', title: 'Омлет з сиром за 7 хвилин', time: 7, cuisine: 'Європейська', rating: '4,5', g: ['#facc15', '#fb923c'], author: 'Ірина Мельник', avatar: '🙂', kcal: 320, p: 20, f: 24, c: 4, serv: 1, likes: 420,
+    ings: [['eggs', 'Яйця', '3 шт'], ['milk', 'Молоко', '50 мл'], ['cheese', 'Сир твердий', '30 г'], ['salt', 'Сіль', 'щіпка'], ['oil', 'Олія', '1 ч. л.']],
+    steps: S3('Збий яйця з молоком і сіллю.', 'Вилий на розігріту пательню, вогонь середній.', 'Посип тертим сиром, склади навпіл і подавай.') },
+  { id: 'ragu', emoji: '🥘', title: 'Овочеве рагу з холодильника', time: 35, cuisine: 'Домашня', rating: '4,4', g: ['#16a34a', '#eab308'], author: 'Марта Зелінська', avatar: '🥑', kcal: 240, p: 6, f: 10, c: 30, serv: 3, likes: 610,
+    ings: [['potato', 'Картопля', '4 шт'], ['tomato', 'Помідори', '3 шт'], ['spinach', 'Шпинат', '100 г'], ['oil', 'Олія', '2 ст. л.'], ['salt', 'Сіль', 'щіпка']],
+    steps: S3('Наріж картоплю кубиками й обсмаж 10 хвилин.', 'Додай помідори, накрий і туши 15 хвилин.', 'Вмішай шпинат за хвилину до кінця, посоли.') },
+  { id: 'grechka', emoji: '🍄', title: 'Гречка з грибами і цибулею', time: 30, cuisine: 'Українська', rating: '4,6', g: ['#78716c', '#a8a29e'], author: 'Ірина Мельник', avatar: '🙂', kcal: 330, p: 12, f: 9, c: 52, serv: 3, likes: 540,
+    ings: [['buckwheat', 'Гречка', '300 г'], ['mushrooms', 'Печериці', '300 г'], ['onion', 'Цибуля', '1 шт'], ['oil', 'Олія', '2 ст. л.'], ['salt', 'Сіль', 'щіпка']],
+    steps: S3('Звари гречку: 1 частина крупи на 2 води.', 'Обсмаж цибулю, потім гриби до золотистого.', 'Змішай з гречкою, посоли й прогрій 2 хвилини.') },
+  { id: 'syrnyky', emoji: '🥞', title: 'Сирники як у дитинстві', time: 30, cuisine: 'Українська', rating: '4,9', g: ['#fbbf24', '#fb7185'], author: 'Оля Кравець', avatar: '👩‍🍳', kcal: 380, p: 22, f: 16, c: 36, serv: 2, likes: 1240,
+    ings: [['tvorog', 'Кисломолочний сир', '400 г'], ['eggs', 'Яйця', '1 шт'], ['flour', 'Борошно', '3 ст. л.'], ['sugar', 'Цукор', '2 ст. л.'], ['oil', 'Олія', '2 ст. л.']],
+    steps: S3('Розімни сир із яйцем і цукром.', 'Додай борошно, сформуй шайбочки.', 'Смаж по 3 хвилини з кожного боку на середньому вогні.') },
+  { id: 'tomyam', emoji: '🍜', title: 'Том ям з креветками', time: 35, cuisine: 'Тайська', rating: '4,7', g: ['#f43f6a', '#ff6b35'], author: 'Тарас Не', avatar: '🔥', kcal: 340, p: 24, f: 18, c: 16, serv: 2, likes: 860,
+    ings: [['shrimp', 'Креветки', '300 г'], ['coconut', 'Кокосове молоко', '400 мл'], ['tomyampaste', 'Паста том ям', '2 ст. л.'], ['tomato', 'Помідори', '2 шт'], ['mushrooms', 'Гриби', '150 г']],
+    steps: S3('Розведи пасту в 500 мл води, доведи до кипіння.', 'Додай гриби й помідори, вари 5 хвилин.', 'Влий кокосове молоко, закинь креветки на 3 хвилини.') },
+  { id: 'greek', emoji: '🥗', title: 'Грецький салат', time: 10, cuisine: 'Середземноморська', rating: '4,6', g: ['#22c55e', '#38bdf8'], author: 'Марта Зелінська', avatar: '🥑', kcal: 200, p: 6, f: 16, c: 8, serv: 2, likes: 540,
+    ings: [['tomato', 'Помідори', '3 шт'], ['cucumber', 'Огірок', '2 шт'], ['feta', 'Фета', '150 г'], ['olives', 'Оливки', '80 г'], ['oil', 'Олія', '3 ст. л.']],
+    steps: S3('Наріж помідори й огірки великими шматками.', 'Додай оливки й шматок фети зверху.', 'Полий олією, посип орегано.') },
+];
+const CHEFS = [['👩‍🍳', 'Оля Кравець', '23 рецепти · 1,2 тис', ['#ff6b35', '#ffb020']], ['🔥', 'Тарас Не', '17 рецептів · 860', ['#f43f6a', '#ff6b35']], ['🥑', 'Марта Зелінська', '31 рецепт · 2,4 тис', ['#34d399', '#38bdf8']], ['🥩', 'Діма Гриль', '12 рецептів · 540', ['#a78bfa', '#f43f6a']]];
+const METHODS = [['🎡', 'Рулетка', 'Крути колесо — доля обере', 'roulette', 'rgba(255,107,53,.16)'], ['🧊', 'Холодильник', 'Готуй з того, що вже є', 'fridge', 'rgba(56,189,248,.16)'], ['⚔️', 'Дуель', 'Переможець лишається, поки не програє', null, 'rgba(244,63,106,.16)'], ['👥', 'Разом', 'Оберіть компанією на одному телефоні', null, 'rgba(167,139,250,.16)'], ['🆘', 'Врятувати', 'Страви з того, що псується', null, 'rgba(52,211,153,.16)'], ['🕯️', 'Поки є світло', 'Встигнути між відключеннями', null, 'rgba(255,176,32,.16)'], ['📅', 'Тиждень', 'Меню на 7 днів без повторів і список покупок', null, 'rgba(56,189,248,.16)']];
+const SLOTS = [['breakfast', '🥣', 'Сніданок'], ['lunch', '🍲', 'Обід'], ['snack', '🍎', 'Перекус'], ['dinner', '🌙', 'Вечеря']];
+const DIARY0 = [
+  { id: 'd1', who: 'me', day: 0, slot: 'breakfast', emoji: '🥞', title: 'Сирники як у дитинстві', amount: '2 шт', kcal: 380, p: 22, f: 16, c: 36 },
+  { id: 'd2', who: 'me', day: 0, slot: 'breakfast', emoji: '☕', title: 'Кава з молоком', amount: '250 мл', kcal: 60, p: 3, f: 3, c: 5 },
+  { id: 'd3', who: 'me', day: 0, slot: 'lunch', emoji: '🍲', title: 'Червоний борщ', amount: '1 порція', kcal: 310, p: 14, f: 12, c: 36, by: 'Оля' },
+  { id: 'd4', who: 'me', day: 0, slot: 'lunch', emoji: '🍞', title: 'Хліб житній', amount: '50 г', kcal: 110, p: 3, f: 1, c: 22 },
+  { id: 'd5', who: 'me', day: 0, slot: 'snack', emoji: '🥣', title: 'Йогурт Галичина 2,5%', amount: '300 г', kcal: 180, p: 9, f: 8, c: 18 },
+  { id: 'd6', who: 'me', day: 0, slot: 'snack', emoji: '🍫', title: 'Батончик Corny', amount: '1 шт', kcal: null },
+  { id: 'd7', who: 'me', day: 1, slot: 'breakfast', emoji: '🍳', title: 'Омлет з сиром', amount: '1 порція', kcal: 320, p: 20, f: 24, c: 4 },
+  { id: 'd8', who: 'me', day: 1, slot: 'lunch', emoji: '🍚', title: 'Плов у казані', amount: '1 порція', kcal: 520, p: 22, f: 20, c: 62 },
+  { id: 'd9', who: 'me', day: 1, slot: 'snack', emoji: '🍌', title: 'Банан', amount: '1 шт', kcal: 105, p: 1, f: 0, c: 27 },
+  { id: 'd10', who: 'me', day: 1, slot: 'dinner', emoji: '🥔', title: 'Деруни зі сметаною', amount: '4 шт', kcal: 480, p: 10, f: 26, c: 52 },
+  { id: 'd11', who: 'olya', day: 0, slot: 'breakfast', emoji: '🥣', title: 'Вівсянка з ягодами', amount: '1 порція', kcal: 290, p: 9, f: 6, c: 48 },
+  { id: 'd12', who: 'olya', day: 0, slot: 'lunch', emoji: '🍲', title: 'Червоний борщ', amount: '1 порція', kcal: 310, p: 14, f: 12, c: 36, by: 'ти' },
+];
+const CHART_PAST = [1850, 2100, 1720, 1980, 2240, 1640, 1900, 2050, 1780, 1560, 1920, 2010];
+const FOODS = [['🍌', 'Банан', '1 шт', 105, 1, 0, 27], ['🥚', 'Яйце варене', '1 шт', 78, 6, 5, 1], ['🍎', 'Яблуко', '1 шт', 80, 0, 0, 21], ['🥛', 'Кефір 2,5%', '250 мл', 130, 7, 6, 10], ['🧀', 'Сир твердий', '30 г', 110, 7, 9, 0], ['🥪', 'Бутерброд з сиром', '1 шт', 260, 11, 12, 26]];
+const daysTo = (exp) => exp ? Math.round((new Date(exp + 'T00:00:00') - TODAY) / 864e5) : null;
+const num = (n) => String(+(+n).toFixed(2)).replace('.', ',');
+const qtyOf = (i) => i.amount != null ? `${num(i.amount)} ${i.unit}` : '';
+const shortDate = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}`; };
+const expText = (exp) => {
+  const d = daysTo(exp);
+  if (d === null) return '';
+  if (d < 0) return 'прострочено';
+  if (d === 0) return 'сьогодні';
+  if (d === 1) return 'завтра';
+  if (d <= 4) return `${d} дні`;
+  return shortDate(exp);
+};
+const BASE = { 'мл': ['v', 1], 'л': ['v', 1000], 'г': ['m', 1], 'кг': ['m', 1000], 'шт': ['p', 1] };
+const totalOf = (rows) => {
+  const sum = {};
+  rows.forEach(r => { if (r.amount == null) return; const [k, f] = BASE[r.unit]; sum[k] = (sum[k] || 0) + r.amount * f; });
+  return Object.entries(sum).map(([k, v]) => k === 'v' ? (v >= 1000 ? `${num(v / 1000)} л` : `${num(v)} мл`) : k === 'm' ? (v >= 1000 ? `${num(v / 1000)} кг` : `${num(v)} г`) : `${num(v)} шт`).join(' + ');
+};
+const plural = (n, a, b, c) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; };
+
+class Component extends DCLogic {
+  state = {
+    screen: 'home', likes: {}, saves: {}, prevScreen: 'home', hist: [],
+    xq: '', xTab: 'trending', following: { 'Оля Кравець': true }, instant: null, wheelRot: 0, spinIdx: null, spinning: false,
+    recipeId: null, rServ: null, saved: ['borsch', 'carbonara'], rLikes: {}, history: [['plov', '2 дні тому'], ['deruny', 'тиждень тому']], meTab: 'mine',
+    shop: [{ id: 's1', key: 'onion', emoji: '🧅', label: 'Цибуля', qty: '1 кг', aisle: 'veg' }, { id: 's2', key: 'milk2', emoji: '🥛', label: 'Молоко', qty: '1 л', aisle: 'dairy', done: true }, { id: 's3', key: 'bread', emoji: '🍞', label: 'Хліб житній', qty: '1 шт', aisle: 'bakery' }], shopQ: '',
+    set: { kcal: '2000', p: '110', f: '70', c: '250', appetite: 1, share: true, avoid: true, push: true, light: false },
+    keys: [{ id: 'k1', label: 'Claude', hint: 'a3f2', used: 'востаннє 2 год тому' }],
+    person: 'me', diaryDay: 0, diary: DIARY0, fresh: { emoji: '🥗', title: 'Грецький салат', kcal: 200, slot: 'dinner' },
+    voice: true, leftover: 2, split: { me: 1, olya: 1, taras: 0 }, foodSlot: 'dinner', fquery: '',
+    items: ITEMS, tab: 0, filter: 'all', bFilter: 'all', filterOpen: false,
+    collapsed: {}, swiped: null, drag: null,
+    sheet: null, sheetOpen: false, query: '',
+    have: Object.fromEntries(BASICS.flatMap(b => b.items.map(i => [i[0], !!i[3]]))),
+    toast: null, toastShow: false,
+  };
+  nid = 100;
+
+  componentDidMount() {
+    this.tick = setInterval(() => {
+      const t = this.state.timer;
+      if (!t || !t.running || t.left <= 0) return;
+      const left = t.left - 1;
+      this.setState({ timer: { ...t, left, running: left > 0 } });
+      if (left === 0) this.showToast(`Час вийшов · крок ${t.step + 1}`);
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.tick); }
+  go(screen, extra) { this.setState(x => ({ hist: [x.screen, ...x.hist].slice(0, 20), screen, filterOpen: false, swiped: null, ...(extra || {}) })); }
+  back() { this.setState(x => ({ screen: x.hist[0] || 'home', hist: x.hist.slice(1) })); }
+  tab(screen) { this.setState({ screen, hist: [], filterOpen: false, swiped: null }); }
+  showToast(text, action, fn) {
+    clearTimeout(this.tt);
+    this.toastFn = fn;
+    this.setState({ toast: { text, action: action || '' }, toastShow: true });
+    this.tt = setTimeout(() => this.setState({ toastShow: false }), 4500);
+  }
+  update(id, patch) { this.setState(s => ({ items: s.items.map(i => i.id === id ? { ...i, ...patch } : i) })); }
+  openSheet(sheet) { this.setState({ sheet, sheetOpen: true, swiped: null, filterOpen: false }); }
+  closeSheet() { this.setState({ sheetOpen: false }); }
+  remove(id) {
+    const s = this.state, idx = s.items.findIndex(i => i.id === id), item = s.items[idx];
+    if (!item) return;
+    const sheetOnIt = s.sheet && s.sheet.kind === 'item' && s.sheet.id === id;
+    this.setState({ items: s.items.filter(i => i.id !== id), swiped: null, sheetOpen: sheetOnIt ? false : s.sheetOpen });
+    this.showToast(`Прибрано «${item.short || item.name}»`, 'Повернути', () => {
+      this.setState(st => { const a = [...st.items]; a.splice(Math.min(idx, a.length), 0, item); return { items: a }; });
+    });
+  }
+  add(c, extra) {
+    const item = { id: String(++this.nid), exp: '', price: '', ...c, ...extra };
+    this.setState(s => ({ items: [...s.items, item], query: '' }));
+    return item;
+  }
+  down(id, e) {
+    this.dragInfo = { id, x: e.clientX, base: this.state.swiped === id ? -84 : 0, moved: false };
+    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  move(id, e) {
+    const d = this.dragInfo;
+    if (!d || d.id !== id) return;
+    const dx = e.clientX - d.x;
+    if (Math.abs(dx) > 6) d.moved = true;
+    if (!d.moved) return;
+    this.setState({ drag: { id, dx: Math.max(-110, Math.min(0, d.base + dx)) } });
+  }
+  up(id) {
+    const d = this.dragInfo; this.dragInfo = null;
+    if (!d || d.id !== id) return;
+    if (!d.moved) {
+      if (this.state.swiped) { this.setState({ swiped: null }); return; }
+      this.openSheet({ kind: 'item', id });
+      return;
+    }
+    const v = this.state.drag ? this.state.drag.dx : 0;
+    this.setState({ drag: null, swiped: v < -45 ? id : null });
+  }
+  mkRow(i) {
+    const s = this.state, d = daysTo(i.exp);
+    const dragging = s.drag && s.drag.id === i.id;
+    return {
+      id: i.id, emoji: i.emoji, name: i.name, short: i.short || i.name, qty: qtyOf(i), exp: expText(i.exp),
+      expColor: d !== null && d < 0 ? '#f43f6a' : '#f5f5f7', refine: !!i.refine,
+      tx: dragging ? `${s.drag.dx}px` : s.swiped === i.id ? '-84px' : '0px',
+      trans: dragging ? 'none' : 'transform .25s ease',
+      onDown: (e) => this.down(i.id, e), onMove: (e) => this.move(i.id, e), onUp: () => this.up(i.id),
+      onRemove: () => this.remove(i.id),
+    };
+  }
+  scan() {
+    this.closeSheet();
+    this.showToast('Сканую штрихкод…');
+    setTimeout(() => {
+      const item = this.add(CATALOG[0], { exp: addDays(14) });
+      this.showToast(`«${item.name}» у коморі`, 'Відкрити', () => this.openSheet({ kind: 'item', id: item.id }));
+    }, 900);
+  }
+  receipt(photo) {
+    this.closeSheet();
+    this.showToast(photo ? 'Розбираю фото чека…' : 'Питаю податкову про чек…');
+    setTimeout(() => {
+      [CATALOG[5], CATALOG[7], CATALOG[8]].forEach((c, k) => this.add(c, { exp: k < 2 ? addDays(6 + k) : addDays(200) }));
+      this.showToast('Додано 3 покупки з чека', 'Назвати', () => this.showToast('Назвати товари без картки…'));
+    }, 1100);
+  }
+
+  renderVals() {
+    const s = this.state, items = s.items;
+    const urgentAll = items.filter(i => { const d = daysTo(i.exp); return d !== null && d <= 3; }).sort((a, b) => daysTo(a.exp) - daysTo(b.exp));
+    const uIds = new Set(urgentAll.map(i => i.id));
+    const f = s.filter;
+    const urgent = f === 'all' || f === 'urgent' ? urgentAll : urgentAll.filter(i => i.cat === f);
+    const sections = f === 'urgent' ? [] : CATS.filter(([c]) => f === 'all' || f === c).map(([c, label]) => {
+      const rows = items.filter(i => i.cat === c && !uIds.has(i.id));
+      const order = [], byKey = {};
+      rows.forEach(r => { if (!byKey[r.key]) { byKey[r.key] = []; order.push(r.key); } byKey[r.key].push(r); });
+      const entries = order.map(k => {
+        const g = byKey[k];
+        if (g.length === 1) return { isGroup: false, isSingle: true, row: this.mkRow(g[0]) };
+        const open = !s.collapsed[k];
+        return {
+          isGroup: true, isSingle: false, emoji: g[0].emoji, type: g[0].type, count: g.length, total: totalOf(g),
+          open, rot: open ? '180deg' : '0deg', rows: g.map(r => this.mkRow(r)),
+          toggle: () => this.setState(st => ({ collapsed: { ...st.collapsed, [k]: !st.collapsed[k] } })),
+          openGroup: () => this.openSheet({ kind: 'group', key: k }),
+        };
+      });
+      return { label, count: rows.length, entries };
+    }).filter(x => x.entries.length);
+
+    const isStock = s.tab === 0;
+    const filterOptions = isStock
+      ? [['all', 'Усі категорії', items.length], ['urgent', 'Варто вжити', urgentAll.length], ...CATS.map(([c, l]) => [c, l, items.filter(i => i.cat === c).length]).filter(x => x[2])]
+      : [['all', 'Усі', null], ['missing', 'Чого бракує', Object.values(s.have).filter(v => !v).length], ['have', 'Що є', Object.values(s.have).filter(Boolean).length]];
+    const curF = isStock ? s.filter : s.bFilter;
+    const opts = filterOptions.map(([id, label, count]) => ({
+      label, count: count == null ? '' : count,
+      bg: id === curF ? 'rgba(255,107,53,.12)' : 'transparent', color: id === curF ? '#ff6b35' : '#f5f5f7', weight: id === curF ? 800 : 600,
+      pick: () => this.setState(isStock ? { filter: id, filterOpen: false } : { bFilter: id, filterOpen: false }),
+    }));
+
+    const haveCount = Object.values(s.have).filter(Boolean).length;
+    const basics = BASICS.map(b => {
+      const list = b.items.filter(([k]) => s.bFilter === 'all' || (s.bFilter === 'have') === !!s.have[k]);
+      return {
+        label: b.label, count: `${b.items.filter(([k]) => s.have[k]).length}/${b.items.length}`,
+        items: list.map(([k, emoji, label, , meta, several]) => {
+          const have = !!s.have[k];
+          return {
+            emoji, label, meta: meta || '', have, color: have ? '#f5f5f7' : '#66666e',
+            boxBg: have ? '#ff6b35' : 'transparent', boxBorder: have ? '#ff6b35' : '#2b2b31',
+            toggle: () => {
+              if (have && several) { this.showToast(`Під «${label}» ${several} товари`, 'Прибрати всі', () => this.setState(st => ({ have: { ...st.have, [k]: false } }))); return; }
+              this.setState(st => ({ have: { ...st.have, [k]: !st.have[k] } }));
+            },
+          };
+        }),
+      };
+    }).filter(b => b.items.length);
+
+    const sh = s.sheet || {};
+    const curItem = sh.kind === 'item' ? items.find(i => i.id === sh.id) : null;
+    const step = (u) => (u === 'мл' || u === 'г') ? 100 : u === 'шт' ? 1 : 0.5;
+    const cur = curItem ? {
+      emoji: curItem.emoji, name: curItem.name, path: `${CAT_LABEL[curItem.cat]} › ${curItem.type}`, qty: qtyOf(curItem) || '—',
+      price: curItem.price, exp: curItem.exp, refine: !!curItem.refine,
+      minus: () => this.update(curItem.id, { amount: Math.max(0, (curItem.amount || 0) - step(curItem.unit)) }),
+      plus: () => this.update(curItem.id, { amount: (curItem.amount || 0) + step(curItem.unit) }),
+      onPrice: (e) => this.update(curItem.id, { price: e.target.value.replace(/[^\d.,]/g, '') }),
+      onExp: (e) => this.update(curItem.id, { exp: e.target.value }),
+      onRefine: () => { this.update(curItem.id, { refine: false, name: 'Сир Комо Звенигора 50%' }); this.showToast('Товар привʼязано — наступні чеки впізнають його самі'); },
+      onCard: () => this.showToast('Картка товару: КБЖВ, упаковка'),
+      onWrong: () => this.openSheet({ kind: 'add', q: curItem.type }) || this.setState({ query: curItem.type }),
+      onMore: () => { this.setState({ query: curItem.type }); this.openSheet({ kind: 'add' }); },
+      onRemove: () => this.remove(curItem.id),
+    } : { emoji: '', name: '', path: '', qty: '', price: '', exp: '', refine: false };
+
+    const gRows = sh.kind === 'group' ? items.filter(i => i.key === sh.key) : [];
+    const grp = gRows.length ? {
+      emoji: gRows[0].emoji, type: gRows[0].type, total: totalOf(gRows),
+      countText: `${gRows.length} ${plural(gRows.length, 'товар', 'товари', 'товарів')}`,
+      rows: gRows.map((r, k) => ({ short: r.short || r.name, qty: qtyOf(r), exp: expText(r.exp), border: k ? '#202025' : 'transparent', open: () => this.openSheet({ kind: 'item', id: r.id }) })),
+      onEdit: () => this.showToast('Редагування типу з історією змін'),
+      onMerge: () => this.showToast('Обери тип, з яким обʼєднати'),
+      onMore: () => { this.setState({ query: gRows[0].type }); this.openSheet({ kind: 'add' }); },
+      onRecipes: () => { this.closeSheet(); this.showToast(`Шукаю рецепти з «${gRows[0].type}»…`); },
+    } : { emoji: '', type: '', total: '', countText: '', rows: [] };
+
+    const q = s.query.trim().toLowerCase();
+    const found = q ? CATALOG.filter(c => (c.name + ' ' + c.type).toLowerCase().includes(q)) : CATALOG.slice(0, 6);
+    const results = found.map((c, k) => ({
+      emoji: c.emoji, name: c.name, type: c.type, border: k ? '#202025' : 'transparent',
+      add: () => { const it = this.add(c); this.showToast(`«${it.name}» у коморі`); this.openSheet({ kind: 'item', id: it.id }); },
+    }));
+    const nav = (l) => () => this.showToast(`Перехід: ${l}`);
+    const isHome = s.screen === 'home';
+    const openRecipe = (t) => () => { const r = RECIPES.find(x => x.title === t || t.startsWith(x.title)) || RECIPES[0]; this.go('recipe', { recipeId: r.id, rServ: null }); };
+    const trending = TRENDING.map(([emoji, title, meta, rating, g], k) => ({ emoji, title, meta, rating, bg: `linear-gradient(140deg, ${g[0]}, ${g[1]})`, rank: k < 3 ? k + 1 : 0, open: openRecipe(title) }));
+    const forYou = FOR_YOU.map(([emoji, title, reason]) => ({ emoji, title, reason, open: openRecipe(title) }));
+    const feed = FEED.map((p) => {
+      const liked = !!s.likes[p.id], saved = !!s.saves[p.id];
+      const n = p.likes + (liked ? 1 : 0);
+      return {
+        ...p, likes: n >= 1000 ? `${num(Math.round(n / 100) / 10)} тис` : n,
+        likeColor: liked ? '#ff6b35' : '#9b9ba3', likeFill: liked ? '#ff6b35' : 'none',
+        saveColor: saved ? '#f5f5f7' : '#9b9ba3', saveFill: saved ? '#f5f5f7' : 'none',
+        open: openRecipe(p.title),
+        like: () => this.setState(st => ({ likes: { ...st.likes, [p.id]: !st.likes[p.id] } })),
+        save: () => { this.setState(st => ({ saves: { ...st.saves, [p.id]: !st.saves[p.id] } })); if (!saved) this.showToast('Збережено в галерею'); },
+      };
+    });
+
+    // ── Щоденник ──
+    const GOAL = 2000, who = s.person, own = who === 'me', dd = s.diaryDay;
+    const kOf = (e) => e.kcal == null ? null : Math.round(e.kcal * (e.mult || 1));
+    const freshOn = (w, d) => w === 'me' && d === 0 && s.fresh;
+    const totalsFor = (w, d) => {
+      const list = s.diary.filter(e => e.who === w && e.day === d);
+      const t = { kcal: 0, p: 0, f: 0, c: 0, n: list.length, unknown: 0 };
+      list.forEach(e => { const m = e.mult || 1; if (e.kcal == null) { t.unknown++; return; } t.kcal += e.kcal * m; t.p += (e.p || 0) * m; t.f += (e.f || 0) * m; t.c += (e.c || 0) * m; });
+      if (freshOn(w, d)) { t.kcal += s.fresh.kcal; t.p += 9; t.f += 14; t.c += 12; t.n++; }
+      t.kcal = Math.round(t.kcal);
+      return t;
+    };
+    const tot = totalsFor(who, dd);
+    const over = tot.kcal > GOAL;
+    const dayList = s.diary.filter(e => e.who === who && e.day === dd);
+    const slots = SLOTS.map(([id, emoji, label]) => {
+      const rows = dayList.filter(e => e.slot === id).map(e => {
+        const k = kOf(e);
+        return {
+          emoji: e.emoji, title: e.title, kcal: k == null ? '—' : k, kcalColor: k == null ? '#66666e' : '#f5f5f7',
+          sub: [e.amount + ((e.mult || 1) !== 1 ? ` ×${num(e.mult)}` : ''), e.by ? `записано: ${e.by}` : '', k == null ? 'без КБЖВ' : ''].filter(Boolean).join(' · '),
+          open: () => this.openSheet({ kind: 'entry', id: e.id }),
+        };
+      });
+      if (freshOn(who, dd) && s.fresh.slot === id) rows.push({ emoji: s.fresh.emoji, title: s.fresh.title, sub: 'приготовано · рахую 1 порцію, уточнити', kcal: `≈${s.fresh.kcal}`, kcalColor: '#9b9ba3', open: () => this.openSheet({ kind: 'split' }) });
+      const sum = rows.reduce((a, r) => a + (typeof r.kcal === 'number' ? r.kcal : r.kcal[0] === '≈' ? +r.kcal.slice(1) : 0), 0);
+      return { emoji, label, rows, kcal: sum ? `${sum} ккал` : '', canAdd: own, add: () => this.setState({ foodSlot: id, fquery: '' }, () => this.openSheet({ kind: 'food' })), show: own || rows.length };
+    }).filter(x => x.show);
+    const pastScale = own ? 1 : 0.85;
+    const chartRaw = Array.from({ length: 14 }, (_, i) => { const d = 13 - i; return { d, kcal: d <= 1 ? totalsFor(who, d).kcal : Math.round(CHART_PAST[i] * pastScale) }; });
+    const peak = Math.max(GOAL, ...chartRaw.map(x => x.kcal));
+    const chart = chartRaw.map(({ d, kcal }) => {
+      const date = new Date(TODAY); date.setDate(date.getDate() - d);
+      return {
+        n: date.getDate(), h: kcal ? `${Math.max(4, kcal / peak * 100)}px` : '2px',
+        color: !kcal ? '#202025' : kcal > GOAL ? '#f43f6a' : 'linear-gradient(180deg,#ffb020,#ff6b35)', op: d === dd ? 1 : 0.4,
+        labelColor: d === dd ? '#f5f5f7' : d === 0 ? '#ff6b35' : '#66666e', pick: () => this.setState({ diaryDay: d }),
+      };
+    });
+    const dLabelOf = (d) => { if (d === 0) return 'Сьогодні'; if (d === 1) return 'Вчора'; const x = new Date(TODAY); x.setDate(x.getDate() - d); return x.toLocaleDateString('uk-UA', { weekday: 'short', day: 'numeric', month: 'long' }); };
+    const MG = [['Білки', '#38bdf8', 'p', 110], ['Жири', '#ffb020', 'f', 70], ['Вуглеводи', '#34d399', 'c', 250]];
+    const macros = MG.map(([label, color, k, goal]) => ({ label, color, goal, val: Math.round(tot[k]), w: `${Math.min(100, tot[k] / goal * 100)}%` }));
+    const curEnt = sh.kind === 'entry' ? s.diary.find(e => e.id === sh.id) : null;
+    const updEnt = (patch) => this.setState(st => ({ diary: st.diary.map(e => e.id === curEnt.id ? { ...e, ...patch } : e) }));
+    const ent = curEnt ? {
+      emoji: curEnt.emoji, title: curEnt.title, kcal: kOf(curEnt) == null ? '—' : kOf(curEnt),
+      sub: [curEnt.amount, curEnt.by ? `записано: ${curEnt.by}` : ''].filter(Boolean).join(' · '), mult: num(curEnt.mult || 1),
+      macros: MG.map(([label, color, k]) => ({ label, color, val: curEnt.kcal == null ? '—' : Math.round((curEnt[k] || 0) * (curEnt.mult || 1)) })),
+      minus: () => updEnt({ mult: Math.max(0.25, (curEnt.mult || 1) - 0.25) }), plus: () => updEnt({ mult: (curEnt.mult || 1) + 0.25 }),
+      slots: SLOTS.map(([id, , label]) => ({ label, bg: curEnt.slot === id ? '#2b2b31' : 'transparent', color: curEnt.slot === id ? '#f5f5f7' : '#9b9ba3', pick: () => updEnt({ slot: id }) })),
+      remove: () => { const e = curEnt; this.setState(st => ({ diary: st.diary.filter(x => x.id !== e.id), sheetOpen: false })); this.showToast(`Видалено «${e.title}»`, 'Повернути', () => this.setState(st => ({ diary: [...st.diary, e] }))); },
+    } : { emoji: '', title: '', kcal: '', sub: '', mult: '', macros: [], slots: [] };
+    const SP = [['me', '🙂', 'Я'], ['olya', '👩‍🍳', 'Оля'], ['taras', '🔥', 'Тарас']];
+    const splitUsed = SP.reduce((a, [k]) => a + s.split[k], 0);
+    const splitRows = SP.map(([k, emoji, label], i) => ({
+      emoji, label, border: i ? '#202025' : 'transparent', val: s.split[k] ? `${num(s.split[k])} порц.` : '—',
+      minus: () => this.setState(st => ({ split: { ...st.split, [k]: Math.max(0, st.split[k] - 0.5) } })),
+      plus: () => this.setState(st => ({ split: { ...st.split, [k]: Math.min(4, st.split[k] + 0.5) } })),
+    }));
+    const fq = s.fquery.trim().toLowerCase();
+    const foundFoods = fq ? FOODS.filter(f => f[1].toLowerCase().includes(fq)) : FOODS;
+    const addFood = (f) => {
+      const [emoji, title, amount, kcal, p, fat, c] = f;
+      const e = { id: 'd' + (++this.nid), who: 'me', day: dd, slot: s.foodSlot, emoji, title, amount, kcal, p, f: fat, c };
+      this.setState(st => ({ diary: [...st.diary, e], sheetOpen: false, fquery: '' }));
+      this.showToast(`«${title}» · ${kcal} ккал`, 'Скасувати', () => this.setState(st => ({ diary: st.diary.filter(x => x.id !== e.id) })));
+    };
+    const slotLabel = (SLOTS.find(x => x[0] === s.foodSlot) || [])[2];
+
+    // ── Рецепти, пошук, вирішити, профіль, покупки ──
+    const haveKeys = new Set([...items.map(i => i.key), ...Object.keys(s.have).filter(k => s.have[k])]);
+    const grad = (r) => `linear-gradient(140deg, ${r.g[0]}, ${r.g[1]})`;
+    const fmtTime = (m) => m >= 60 ? `${num(m / 60)} год` : `${m} хв`;
+    const metaOf = (r) => `${fmtTime(r.time)} · ${r.cuisine}`;
+    const openR = (id) => () => this.go('recipe', { recipeId: id, rServ: null });
+    const matchOf = (r) => { const h = r.ings.filter(i => haveKeys.has(i[0])).length; return { h, t: r.ings.length, miss: r.ings.filter(i => !haveKeys.has(i[0])) }; };
+    const XT = [['trending', 'У тренді'], ['popular', 'Топ'], ['new', 'Нове'], ['rating', 'Оцінки']];
+    const xi = XT.findIndex(x => x[0] === s.xTab);
+    const xqq = s.xq.trim().toLowerCase();
+    let xList = RECIPES.filter(r => !xqq || (xqq.includes('швидк') ? r.time <= 30 : (r.title + ' ' + r.cuisine).toLowerCase().includes(xqq)));
+    if (s.xTab === 'popular') xList = [...xList].sort((a, b) => b.likes - a.likes);
+    if (s.xTab === 'new') xList = [...xList].reverse();
+    if (s.xTab === 'rating') xList = [...xList].sort((a, b) => parseFloat(b.rating.replace(',', '.')) - parseFloat(a.rating.replace(',', '.')));
+    const inst = s.instant ? RECIPES.find(r => r.id === s.instant) : null;
+    const wheelR = RECIPES.slice(0, 8);
+    const spinR = s.spinIdx != null && !s.spinning ? wheelR[s.spinIdx] : null;
+    const rcR = s.screen === 'recipe' ? RECIPES.find(r => r.id === s.recipeId) : null;
+    const rServ = rcR ? (s.rServ || rcR.serv) : 1;
+    const rcM = rcR ? matchOf(rcR) : null;
+    const scaleQty = (q) => { if (!rcR || rServ === rcR.serv) return q; const m = q.match(/^([\d,]+)\s*(.*)$/); if (!m) return q; return `${num(parseFloat(m[1].replace(',', '.')) * rServ / rcR.serv)} ${m[2]}`; };
+    const rc = rcR ? {
+      emoji: rcR.emoji, title: rcR.title, bg: grad(rcR), author: rcR.author, avatar: rcR.avatar, cuisine: rcR.cuisine,
+      stats: [[fmtTime(rcR.time), 'час'], [rcR.kcal, 'ккал'], [`★ ${rcR.rating}`, 'оцінка'], [rcR.ings.length, 'продуктів']].map(([val, label], i) => ({ val, label, border: i ? '#202025' : 'transparent' })),
+      servings: `${rServ} ${plural(rServ, 'порція', 'порції', 'порцій')}`,
+      minus: () => this.setState({ rServ: Math.max(1, rServ - 1) }), plus: () => this.setState({ rServ: Math.min(12, rServ + 1) }),
+      haveCount: `${rcM.h} з ${rcM.t}`, hasMissing: rcM.miss.length > 0, missCount: rcM.miss.length,
+      ings: rcR.ings.map(([k, label, q]) => { const h = haveKeys.has(k); return { label, qty: scaleQty(q), have: h, color: h ? '#f5f5f7' : '#9b9ba3', boxBg: h ? '#ff6b35' : 'transparent', boxBorder: h ? '#ff6b35' : '#2b2b31' }; }),
+      toShop: () => { const add = rcM.miss.filter(([k]) => !s.shop.some(x => x.key === k)).map(([k, label, q]) => ({ id: 's' + (++this.nid), key: k, emoji: '🛒', label, qty: q, aisle: 'other', forR: rcR.title })); this.setState(x => ({ shop: [...x.shop, ...add] })); this.showToast(`У списку покупок +${add.length}`, 'Відкрити', () => this.go('shopping')); },
+      steps: rcR.steps.map((text, i) => ({ n: i + 1, text })),
+      kcal: rcR.kcal, macros: [['Білки', '#38bdf8', rcR.p], ['Жири', '#ffb020', rcR.f], ['Вуглеводи', '#34d399', rcR.c]].map(([label, color, val]) => ({ label, color, val })),
+      saveFill: s.saved.includes(rcR.id) ? '#fff' : 'none',
+      save: () => { const on = s.saved.includes(rcR.id); this.setState(x => ({ saved: on ? x.saved.filter(i => i !== rcR.id) : [...x.saved, rcR.id] })); if (!on) this.showToast('Збережено'); },
+      likeColor: s.rLikes[rcR.id] ? '#ff6b35' : '#f5f5f7', likeFill: s.rLikes[rcR.id] ? '#ff6b35' : 'none',
+      like: () => this.setState(x => ({ rLikes: { ...x.rLikes, [rcR.id]: !x.rLikes[rcR.id] } })),
+      cook: () => this.go('cook', { cookId: rcR.id, cookStep: -1, cookChecked: {}, cookW: {}, timer: null, cookRating: 0 }),
+    } : { stats: [], ings: [], steps: [], macros: [] };
+    const MT = [['mine', 'Мої'], ['saved', 'Збережені'], ['wish', 'Хочу'], ['history', 'Історія']];
+    const mi = MT.findIndex(x => x[0] === s.meTab);
+    const meIds = s.meTab === 'mine' ? ['omelet', 'grechka'] : s.meTab === 'saved' ? s.saved : s.meTab === 'wish' ? ['tomyam'] : s.history.map(h => h[0]);
+    const meList = meIds.map((id, i) => { const r = RECIPES.find(x => x.id === id); return { emoji: r.emoji, title: r.title, bg: grad(r), border: i ? '#202025' : 'transparent', meta: s.meTab === 'history' ? `Приготовано ${s.history[i][1]}` : metaOf(r), open: openR(id) }; });
+    const AISLE = [['veg', 'Овочі й фрукти'], ['dairy', 'Молочне'], ['bakery', 'Хліб'], ['other', 'Інше']];
+    const aisles = AISLE.map(([id, label]) => {
+      const its = s.shop.filter(x => x.aisle === id);
+      return { label, count: `${its.filter(x => x.done).length}/${its.length}`, items: its.map(x => ({
+        emoji: x.emoji, label: x.label, qty: x.qty, forR: x.forR || '', done: !!x.done, deco: x.done ? 'line-through' : 'none', color: x.done ? '#66666e' : '#f5f5f7',
+        boxBg: x.done ? '#ff6b35' : 'transparent', boxBorder: x.done ? '#ff6b35' : '#2b2b31',
+        toggle: () => this.setState(st => ({ shop: st.shop.map(y => y.id === x.id ? { ...y, done: !y.done } : y) })),
+        remove: (e) => { e.stopPropagation(); this.setState(st => ({ shop: st.shop.filter(y => y.id !== x.id) })); },
+      })) };
+    }).filter(a => a.items.length);
+    const missCount = {};
+    RECIPES.forEach(r => r.ings.forEach(([k, label]) => { if (!haveKeys.has(k)) missCount[k] = { label, n: (missCount[k] ? missCount[k].n : 0) + 1 }; }));
+    const SUGG_EMOJI = { onion: '🧅', carrot: '🥕', garlic: '🧄', mushrooms: '🍄', beet: '🫜', sourcream: '🥛', cabbage: '🥬', cucumber: '🥒' };
+    const shopSugg = Object.entries(missCount).filter(([k]) => !s.shop.some(x => x.key === k)).sort((a, b) => b[1].n - a[1].n).slice(0, 6).map(([k, v]) => ({
+      emoji: SUGG_EMOJI[k] || '🛒', label: v.label, unlocks: `+${v.n} ${plural(v.n, 'страва', 'страви', 'страв')}`,
+      add: () => this.setState(st => ({ shop: [...st.shop, { id: 's' + (++this.nid), key: k, emoji: SUGG_EMOJI[k] || '🛒', label: v.label, qty: '', aisle: k === 'sourcream' ? 'dairy' : 'veg' }] })),
+    }));
+    const shopAdd = () => { const t = s.shopQ.trim(); if (!t) return; this.setState(st => ({ shop: [...st.shop, { id: 's' + (++this.nid), emoji: '🛒', label: t, qty: '', aisle: 'other' }], shopQ: '' })); };
+    const doneN = s.shop.filter(x => x.done).length;
+    const navC = (on) => ({ bg: on ? 'rgba(253,246,242,.08)' : 'transparent', c: on ? '#f5f5f7' : '#9b9ba3' });
+    const tabOf = { home: 'home', diary: 'home', settings: 'me', explore: 'explore', recipe: s.hist.length ? (s.hist[0] || 'home') : 'home', decide: 'decide', roulette: 'decide', fridge: 'decide', me: 'me', pantry: 'pantry', shopping: 'pantry' };
+    const curTab = tabOf[s.screen] || 'home';
+    const extra = {
+      navC: (t) => navC(curTab === t),
+      navSearchBg: navC(curTab === 'explore').bg, navSearchColor: navC(curTab === 'explore').c,
+      navMeBg: navC(curTab === 'me').bg, navMeColor: navC(curTab === 'me').c,
+      isExplore: s.screen === 'explore', xq: s.xq, onXq: (e) => this.setState({ xq: e.target.value }),
+      xThumb: `${xi * 100}%`, xTabs: XT.map(([id, label]) => ({ label, color: id === s.xTab ? '#f5f5f7' : '#9b9ba3', pick: () => this.setState({ xTab: id }) })),
+      xRes: xList.map(r => ({ emoji: r.emoji, title: r.title, rating: r.rating, meta: metaOf(r), bg: grad(r), open: openR(r.id) })), xEmpty: !xList.length,
+      chefs: CHEFS.map(([emoji, name, meta, g]) => { const on = !!s.following[name]; return { emoji, name, meta, bg: `linear-gradient(135deg,${g[0]},${g[1]})`, btn: on ? 'Читаю' : 'Стежити', btnBg: on ? '#1c1c21' : 'rgba(255,107,53,.14)', btnColor: on ? '#9b9ba3' : '#ff6b35', follow: () => this.setState(st => ({ following: { ...st.following, [name]: !st.following[name] } })) }; }),
+      isDecide: s.screen === 'decide', hasInstant: !!inst,
+      inst: inst ? { emoji: inst.emoji, title: inst.title, meta: metaOf(inst), bg: grad(inst), open: openR(inst.id) } : {},
+      instantBtn: inst ? 'Ще варіант' : 'Обери за мене',
+      onInstant: () => { const pool = RECIPES.filter(r => r.id !== s.instant).sort((a, b) => matchOf(b).h / matchOf(b).t - matchOf(a).h / matchOf(a).t).slice(0, 5); this.setState({ instant: pool[Math.floor(Math.random() * pool.length)].id }); },
+      methods: METHODS.map(([emoji, title, note, to, tint], i) => ({ emoji, title, note, tint, span: i === METHODS.length - 1 ? 'span 2' : 'auto', open: () => to ? this.go(to) : this.showToast(`«${title}» — скоро в прототипі`) })),
+      isRoulette: s.screen === 'roulette', wheelRot: `${s.wheelRot}deg`,
+      wheel: wheelR.map((r, i) => ({ emoji: r.emoji, tf: `rotate(${i * 45 + 22.5}deg) translateY(-108px) rotate(${-(i * 45 + 22.5)}deg)` })),
+      spinLabel: s.spinning ? 'Крутиться…' : spinR ? 'Ще раз' : 'Крутити', spinOp: s.spinning ? 0.6 : 1,
+      onSpin: () => {
+        if (s.spinning) return;
+        const idx = Math.floor(Math.random() * 8), a = idx * 45 + 22.5, cur = s.wheelRot;
+        const delta = (((-a - cur) % 360) + 360) % 360;
+        this.setState({ spinning: true, wheelRot: cur + 1800 + delta, spinIdx: idx });
+        setTimeout(() => this.setState({ spinning: false }), 3300);
+      },
+      hasSpinRes: !!spinR, spinRes: spinR ? { emoji: spinR.emoji, title: spinR.title, meta: metaOf(spinR), bg: grad(spinR), open: openR(spinR.id) } : {},
+      isFridge: s.screen === 'fridge', fridgeCount: `${haveKeys.size} продуктів`,
+      fridge: [...RECIPES].map(r => ({ r, m: matchOf(r) })).sort((a, b) => b.m.h / b.m.t - a.m.h / a.m.t).map(({ r, m }) => {
+        const pct = Math.round(m.h / m.t * 100), full = pct === 100;
+        return { emoji: r.emoji, title: r.title, meta: metaOf(r), bg: grad(r), pct: `${pct}%`, pctColor: full ? '#ff6b35' : '#f5f5f7', barBg: full ? 'linear-gradient(90deg,#ff6b35,#ffb020)' : '#9b9ba3',
+          miss: full ? 'Усе є вдома' : `Бракує: ${m.miss.map(x => x[1].toLowerCase()).join(', ')}`, missColor: full ? '#ff6b35' : '#66666e', open: openR(r.id) };
+      }),
+      isRecipe: !!rcR, rc,
+      isMe: s.screen === 'me', meThumb: `${mi * 100}%`,
+      meTabs: MT.map(([id, label]) => ({ label, color: id === s.meTab ? '#f5f5f7' : '#9b9ba3', pick: () => this.setState({ meTab: id }) })),
+      meStats: [[2, 'рецепти'], [s.saved.length, 'збережено'], [34, 'приготовано'], ['🔥5', 'днів поспіль']].map(([val, label], i) => ({ val, label, border: i ? '#202025' : 'transparent', color: i === 3 ? '#ff6b35' : '#f5f5f7' })),
+      meList, meEmpty: !meList.length, meEmptyText: s.meTab === 'saved' ? 'Збережи рецепт — і він буде тут' : 'Поки порожньо',
+      onEditProfile: () => this.showToast('Редагування профілю'),
+      isShopping: s.screen === 'shopping', shopCount: `${s.shop.length - doneN} купити`,
+      shopQ: s.shopQ, onShopQ: (e) => this.setState({ shopQ: e.target.value }), onShopKey: (e) => { if (e.key === 'Enter') shopAdd(); }, onShopAdd: shopAdd,
+      aisles, hasDone: doneN > 0, doneCount: doneN, shopSugg,
+      onToPantry: () => { const done = s.shop.filter(x => x.done); this.setState(st => ({ shop: st.shop.filter(x => !x.done), items: [...st.items, ...done.map(x => ({ id: 'p' + (++this.nid), key: x.key || ('own_' + x.label), emoji: x.emoji, type: x.label, name: x.label, cat: x.aisle === 'dairy' ? 'dairy' : 'veg', amount: null, unit: 'шт', exp: '', price: '' }))] })); this.showToast(`У комору +${done.length}`); },
+    };
+    const ckR = s.screen === 'cook' ? RECIPES.find(r => r.id === s.cookId) : null;
+    let ck = {};
+    if (ckR) {
+      const n = ckR.steps.length, st = s.cookStep, tm = s.timer;
+      const clock = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+      const chk = ckR.ings.filter(i => s.cookChecked[i[0]]).length;
+      const stepText = st >= 0 && st < n ? ckR.steps[st] : '';
+      const found = stepText.match(/(\d+)\s*хвилин/);
+      const sugg = found ? +found[1] : null;
+      const presets = [...new Set([sugg, 1, 5, 10, 15].filter(Boolean))].slice(0, 4);
+      const onThis = tm && tm.step === st;
+      ck = {
+        title: ckR.title, emoji: ckR.emoji, bg: grad(ckR),
+        head: st === -1 ? 'Підготовка' : st >= n ? 'Готово' : `Крок ${st + 1} з ${n}`,
+        progress: st === -1 ? '0%' : `${Math.min(100, (st + 1) / n * 100)}%`,
+        isPrep: st === -1, isStep: st >= 0 && st < n, isDone: st >= n,
+        checkedText: `${chk} з ${ckR.ings.length}`,
+        ings: ckR.ings.map(([k, label, q]) => { const on = !!s.cookChecked[k], w = s.cookW[k]; return {
+          label, on, qty: w ? `${w} г` : q, wColor: w ? '#ff6b35' : '#9b9ba3', deco: on ? 'line-through' : 'none', color: on ? '#66666e' : '#f5f5f7',
+          boxBg: on ? '#ff6b35' : 'transparent', boxBorder: on ? '#ff6b35' : '#2b2b31',
+          toggle: () => this.setState(x => ({ cookChecked: { ...x.cookChecked, [k]: !x.cookChecked[k] } })),
+          weigh: () => { const v = 50 + Math.round(Math.random() * 30) * 10; this.setState(x => ({ cookW: { ...x.cookW, [k]: v }, cookChecked: { ...x.cookChecked, [k]: true } })); this.showToast(`${label}: записано ${v} г`); },
+        }; }),
+        num: String(st + 1).padStart(2, '0'), text: stepText, tip: st === 0 ? 'Підготуй усе нарізане заздалегідь — далі піде швидко.' : '',
+        noTimer: !onThis, hasTimer: !!onThis,
+        presets: presets.map(m => ({ label: `${m} хв`, bg: m === sugg ? 'rgba(255,107,53,.16)' : '#1c1c21', color: m === sugg ? '#ff6b35' : '#f5f5f7', set: () => this.setState({ timer: { step: st, left: m * 60, total: m * 60, running: true } }) })),
+        clock: onThis ? clock(tm.left) : '', clockColor: onThis && tm.left === 0 ? '#f43f6a' : '#f5f5f7',
+        running: !!(onThis && tm.running), paused: !(onThis && tm.running),
+        playPause: () => this.setState(x => ({ timer: { ...x.timer, running: !x.timer.running } })),
+        reset: () => this.setState({ timer: null }),
+        timerChip: tm && !onThis ? `${clock(tm.left)} · крок ${tm.step + 1}` : '',
+        toTimerStep: () => this.setState({ cookStep: s.timer.step }),
+        canPrev: st > -1 && st < n, prev: () => this.setState({ cookStep: st - 1 }),
+        nextLabel: st === -1 ? (chk === ckR.ings.length ? 'Все на місці — почали ›' : 'Почати готувати ›') : st === n - 1 ? '✓ Готово!' : st >= n ? 'Обрати наступну страву' : 'Далі ›',
+        next: () => {
+          if (st >= n) { this.setState({ timer: null }); this.tab('decide'); return; }
+          if (st === n - 1) { this.setState(x => ({ cookStep: n, history: [[ckR.id, 'щойно'], ...x.history] })); return; }
+          this.setState({ cookStep: st + 1 });
+        },
+        exit: () => { if (s.timer) this.showToast('Таймер іде — повернешся з рецепта'); this.back(); },
+        spent: ckR.ings.filter(([k]) => haveKeys.has(k) && !['salt', 'pepper', 'oil', 'sugar', 'flour'].includes(k)).map(([, label, q]) => ({ label, qty: q })),
+        undoSpent: () => this.showToast('Продукти повернуто в комору'),
+        splitText: 'Хто скільки зʼїв?',
+        split: () => { this.setState({ fresh: { emoji: ckR.emoji, title: ckR.title, kcal: ckR.kcal, slot: 'dinner' } }); this.tab('diary'); this.openSheet({ kind: 'split' }); },
+        stars: [1, 2, 3, 4, 5].map(v => ({ color: v <= s.cookRating ? '#ffb020' : '#2b2b31', pick: () => { this.setState({ cookRating: v }); this.showToast('Оцінку збережено'); } })),
+      };
+    }
+    extra.isCook = !!ckR; extra.ck = ck; extra.navY = ckR ? '120px' : '0px';
+    const sw = (on) => ({ bg: on ? '#ff6b35' : '#2b2b31', x: on ? '18px' : '0px' });
+    const st2 = s.set, toggle = (k, msg) => () => { this.setState(x => ({ set: { ...x.set, [k]: !x.set[k] } })); if (msg) this.showToast(msg(!st2[k])); };
+    const goSettings = () => this.go('settings');
+    const MGS = [['Б', '#38bdf8', 'p'], ['Ж', '#ffb020', 'f'], ['В', '#34d399', 'c']];
+
+    return {
+      ...extra,
+      isSettings: s.screen === 'settings', onBack: () => this.back(),
+      kcalGoal: st2.kcal, onKcalGoal: (e) => this.setState(x => ({ set: { ...x.set, kcal: e.target.value.replace(/\D/g, '') } })),
+      macroGoals: MGS.map(([label, color, k]) => ({ label, color, val: st2[k], onChange: (e) => this.setState(x => ({ set: { ...x.set, [k]: e.target.value.replace(/\D/g, '') } })) })),
+      appetite: `${num(st2.appetite)} порц.`,
+      appetiteMinus: () => this.setState(x => ({ set: { ...x.set, appetite: Math.max(0.5, x.set.appetite - 0.25) } })),
+      appetitePlus: () => this.setState(x => ({ set: { ...x.set, appetite: Math.min(2, x.set.appetite + 0.25) } })),
+      tShare: toggle('share'), shareBg: sw(st2.share).bg, shareX: sw(st2.share).x,
+      tAvoid: toggle('avoid'), avoidBg: sw(st2.avoid).bg, avoidX: sw(st2.avoid).x,
+      tPush: toggle('push', (on) => on ? 'Сповіщення увімкнено' : 'Сповіщення вимкнено'), pushBg: sw(st2.push).bg, pushX: sw(st2.push).x, pushOn: st2.push,
+      onPushTest: () => this.showToast('Надіслано — зараз прилетить'),
+      keys: s.keys.map(k => ({ ...k, revoke: () => { this.setState(x => ({ keys: x.keys.filter(y => y.id !== k.id) })); this.showToast('Ключ відкликано'); } })),
+      onNewKey: () => { const id = 'k' + (++this.nid); this.setState(x => ({ keys: [...x.keys, { id, label: 'iPhone', hint: Math.random().toString(16).slice(2, 6), used: 'ще не користувались' }] })); this.showToast('Ключ створено — скопіюй у Claude'); },
+      tTheme: () => { this.setState(x => ({ set: { ...x.set, light: !x.set.light } })); }, themeX: st2.light ? '100%' : '0%',
+      theme0: st2.light ? '#9b9ba3' : '#f5f5f7', theme1: st2.light ? '#f5f5f7' : '#9b9ba3',
+      onFamily: () => this.showToast('Сімʼя: Оля, Тарас, ти'), onInstall: () => this.showToast('Додай Ням на Початковий екран'),
+      onPrivacy: () => this.showToast('Конфіденційність'), onTerms: () => this.showToast('Умови використання'),
+      onLogout: () => this.showToast('Вийти? Локальні дані буде очищено', 'Вийти', () => this.showToast('Ви вийшли')),
+      isHome, isPantry: s.screen === 'pantry', isDiary: s.screen === 'diary', trending, forYou, feed,
+      people: [['me', '🙂', 'Мій'], ['olya', '👩‍🍳', 'Оля']].map(([id, emoji, label]) => ({ emoji, label, color: who === id ? '#f5f5f7' : '#9b9ba3' })),
+      personThumb: own ? '0%' : '100%', onTogglePerson: () => this.setState(st => ({ person: st.person === 'me' ? 'olya' : 'me' })),
+      dLabel: dLabelOf(dd), dPrev: () => this.setState(st => ({ diaryDay: Math.min(13, st.diaryDay + 1) })), dNext: () => this.setState(st => ({ diaryDay: Math.max(0, st.diaryDay - 1) })),
+      dPrevOp: dd >= 13 ? 0.3 : 1, dNextOp: dd <= 0 ? 0.3 : 1,
+      dKcal: tot.kcal.toLocaleString('uk-UA'), ringOff: 295.3 * (1 - Math.min(1, tot.kcal / GOAL)), ringStroke: over ? '#f43f6a' : 'url(#ringg)',
+      leftLabel: over ? 'Понад ціль' : 'Лишилось', leftVal: over ? `+${tot.kcal - GOAL}` : GOAL - tot.kcal, leftColor: over ? '#f43f6a' : '#f5f5f7',
+      dMeta: `${tot.n} ${plural(tot.n, 'запис', 'записи', 'записів')}${tot.unknown ? ` · ${tot.unknown} без КБЖВ` : ''}`,
+      macros, slots, chart, goalLine: `${22 + GOAL / peak * 100}px`,
+      showFresh: !!freshOn(who, dd), showVoice: own && dd === 0 && s.voice, showLeft: own && dd === 0 && s.leftover > 0,
+      leftPortions: `${num(s.leftover)} ${plural(Math.ceil(s.leftover), 'порція', 'порції', 'порцій')}`,
+      onSplit: () => this.openSheet({ kind: 'split' }),
+      onVoice: () => { this.setState({ voice: false }); this.showToast('Списали з комори: макарони, помідори'); },
+      onLeftover: () => {
+        const e = { id: 'd' + (++this.nid), who: 'me', day: 0, slot: 'dinner', emoji: '🍲', title: 'Червоний борщ', amount: '1 порція', kcal: 310, p: 14, f: 12, c: 36 };
+        this.setState(st => ({ diary: [...st.diary, e], leftover: Math.max(0, st.leftover - 1) }));
+        this.showToast('Борщ записано у вечерю');
+      },
+      diaryOwn: own && s.screen === 'diary', onAddFood: () => this.setState({ foodSlot: 'dinner', fquery: '' }, () => this.openSheet({ kind: 'food' })),
+      onDiarySettings: goSettings,
+      isEntrySheet: sh.kind === 'entry' && !!curEnt, ent,
+      isSplitSheet: sh.kind === 'split', splitRows, splitLeft: splitUsed > 4 ? 'Більше, ніж приготовано' : `Лишиться ${num(4 - splitUsed)} порц. — потраплять у «Залишки»`,
+      onSplitSave: () => {
+        const me = s.split.me, f = s.fresh;
+        this.setState(st => ({
+          diary: me ? [...st.diary, { id: 'd' + (++this.nid), who: 'me', day: 0, slot: f.slot, emoji: f.emoji, title: f.title, amount: `${num(me)} порц.`, kcal: f.kcal * me, p: 9 * me, f: 14 * me, c: 12 * me }] : st.diary,
+          fresh: null, sheetOpen: false,
+        }));
+        this.showToast(`Записано: ти ${num(me)}, Оля ${num(s.split.olya)}, Тарас ${num(s.split.taras)}`);
+      },
+      isFoodSheet: sh.kind === 'food', fquery: s.fquery, onFQuery: (e) => this.setState({ fquery: e.target.value }),
+      foodSlotLabel: slotLabel ? `→ ${slotLabel}` : '', foodTitle: fq ? 'Знайдено' : 'Часто їси',
+      foods: foundFoods.map((f, i) => ({ emoji: f[0], title: f[1], amount: f[2], kcal: f[3], border: i || (fq && !foundFoods.length) ? '#202025' : 'transparent', add: () => addFood(f) })),
+      foodDescribe: !!fq && !foundFoods.length,
+      onDescribe: () => addFood(['✨', s.fquery, '1 порція', 350, 14, 16, 36]),
+      onFoodScan: () => { this.closeSheet(); this.showToast('Сканую…'); setTimeout(() => addFood(['🍫', 'Батончик Corny з горіхами', '50 г', 210, 3, 9, 29]), 900); },
+      onFoodPhoto: () => { this.closeSheet(); this.showToast('Розпізнаю страву на фото…'); setTimeout(() => addFood(['🍝', 'Паста болоньєзе', '≈350 г', 520, 24, 18, 64]), 1200); },
+      onFoodPantry: () => this.showToast('Обери продукт з комори'),
+      homeNavBg: extra.navC('home').bg, homeNavColor: extra.navC('home').c,
+      pantryNavBg: extra.navC('pantry').bg, pantryNavColor: extra.navC('pantry').c,
+      navPantry: () => this.tab('pantry'),
+      onSettings: goSettings, onDiary: () => this.setState({ screen: 'diary', diaryDay: 0 }),
+      onRoulette: () => this.showToast('Крутимо рулетку…'), onFridge: () => this.showToast('Рахую збіг з коморою…'),
+      onNewRecipe: () => this.showToast('Новий рецепт'),
+      isStock, isBasics: !isStock,
+      thumbX: isStock ? '0%' : '100%', tab0Color: isStock ? '#f5f5f7' : '#9b9ba3', tab1Color: isStock ? '#9b9ba3' : '#f5f5f7',
+      stockCount: items.length, basicsLabel: `${haveCount}/${Object.keys(s.have).length}`,
+      onToggleTab: () => this.setState(st => ({ tab: 1 - st.tab, swiped: null, filterOpen: false })),
+      filterOpen: s.filterOpen, filterOptions: opts,
+      filterBorder: s.filterOpen || curF !== 'all' ? '#ff6b35' : '#202025', filterStroke: s.filterOpen || curF !== 'all' ? '#ff6b35' : '#f5f5f7',
+      onToggleFilter: () => this.setState(st => ({ filterOpen: !st.filterOpen })), onCloseFilter: () => this.setState({ filterOpen: false }),
+      filterChipShow: isStock && f !== 'all', filterLabel: (filterOptions.find(o => o[0] === f) || [])[1] || '',
+      onClearFilter: () => this.setState({ filter: 'all' }),
+      showUrgent: isStock && urgent.length > 0 && (f === 'all' || f === 'urgent' || true),
+      urgentRows: urgent.map(i => this.mkRow(i)), sections,
+      isEmpty: isStock && !urgent.length && !sections.length,
+      onRescue: () => this.showToast('Відкриваю «Врятувати продукт»…'),
+      basics,
+      onShopping: () => this.go('shopping'), onLibrary: () => this.showToast('Бібліотека товарів'),
+      onScan: () => this.scan(), onReceiptQr: () => this.receipt(false), onReceiptPhoto: () => this.receipt(true),
+      onOpenAdd: () => this.openSheet({ kind: 'add' }),
+      toastText: s.toast ? s.toast.text : '', toastAction: s.toast ? s.toast.action : '',
+      toastY: s.toastShow ? '0px' : '20px', toastOp: s.toastShow ? 1 : 0, toastPE: s.toastShow ? 'auto' : 'none',
+      onToastAction: () => { const fn = this.toastFn; this.setState({ toastShow: false }); if (fn) fn(); },
+      navFeed: () => this.tab('home'), navSearch: () => this.tab('explore'), navDecide: () => this.tab('decide'), navMe: () => this.tab('me'),
+      backOp: s.sheetOpen ? (s.sheetDy ? Math.max(0.2, 1 - s.sheetDy / 400) : 1) : 0, backPE: s.sheetOpen ? 'auto' : 'none',
+      sheetY: s.sheetOpen ? (s.sheetDy ? `${s.sheetDy}px` : '0%') : '105%',
+      sheetTrans: s.sheetDy ? 'none' : 'transform .32s cubic-bezier(.2,.9,.3,1)',
+      onSheetDown: (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        this.sd = { y: e.clientY, el: e.currentTarget, id: e.pointerId, on: false };
+      },
+      onSheetMove: (e) => {
+        const d = this.sd; if (!d) return;
+        const dy = e.clientY - d.y;
+        if (!d.on) {
+          if (dy > 8 && d.el.scrollTop <= 0) { d.on = true; if (d.el.setPointerCapture) d.el.setPointerCapture(d.id); }
+          else if (Math.abs(dy) > 8) { this.sd = null; return; }
+          else return;
+        }
+        this.setState({ sheetDy: Math.max(0, dy) });
+      },
+      onSheetUp: () => {
+        const d = this.sd; this.sd = null;
+        if (!d || !d.on) return;
+        const close = (this.state.sheetDy || 0) > 110;
+        this.setState({ sheetDy: 0, sheetOpen: close ? false : this.state.sheetOpen });
+      },
+      onCloseSheet: () => this.closeSheet(),
+      isItemSheet: sh.kind === 'item' && !!curItem, isGroupSheet: sh.kind === 'group' && gRows.length > 0, isAddSheet: sh.kind === 'add',
+      cur, grp, query: s.query, onQuery: (e) => this.setState({ query: e.target.value }),
+      results, resultsTitle: q ? 'Знайдено' : 'Часто додають', noResults: !!q && !found.length,
+      onCreateType: () => { const it = this.add({ key: 'own_' + q, emoji: '📦', type: s.query, name: s.query, cat: 'grain', amount: null, unit: 'шт' }); this.showToast(`Новий тип «${it.name}»`); this.openSheet({ kind: 'item', id: it.id }); },
+    };
+  }
+}
+</script>
+</body>
+</html>

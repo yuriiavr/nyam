@@ -35,15 +35,15 @@ export function AuthScreen() {
   if (!isSupabaseConfigured) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center px-8 text-center">
-        <div className="grid h-16 w-16 place-items-center rounded-[22px] bg-surface-2 text-3xl">
+        <div className="grid h-16 w-16 place-items-center rounded-[14px] bg-surface-2 text-3xl">
           🔌
         </div>
-        <h1 className="mt-4 font-display text-xl font-extrabold">Бекенд не налаштовано</h1>
-        <p className="mt-2 max-w-[330px] text-[13.5px] leading-relaxed text-muted">
+        <h1 className="mt-4 font-display text-[20px] font-bold">Бекенд не налаштовано</h1>
+        <p className="mt-2 max-w-[330px] text-[13.5px] font-semibold leading-relaxed text-muted">
           Вхід працює через Supabase. Додай у{" "}
-          <code className="rounded bg-surface-2 px-1">.env.local</code> ключі{" "}
-          <code className="rounded bg-surface-2 px-1">NEXT_PUBLIC_SUPABASE_URL</code> і{" "}
-          <code className="rounded bg-surface-2 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> —
+          <code className="rounded-[5px] bg-surface-2 px-1">.env.local</code> ключі{" "}
+          <code className="rounded-[5px] bg-surface-2 px-1">NEXT_PUBLIC_SUPABASE_URL</code> і{" "}
+          <code className="rounded-[5px] bg-surface-2 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> —
           і перезапусти застосунок.
         </p>
       </div>
@@ -57,13 +57,13 @@ export function AuthScreen() {
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="mx-auto grid h-20 w-20 place-items-center rounded-[28px] brand-gradient text-4xl shadow-[var(--shadow-pop)]"
+          className="mx-auto grid h-[72px] w-[72px] place-items-center rounded-[16px] brand-gradient text-4xl"
         >
           🍲
         </motion.div>
 
-        <h1 className="mt-5 font-display text-[26px] font-extrabold leading-tight">Ням</h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-muted">
+        <h1 className="mt-5 font-display text-[26px] font-bold leading-tight">Ням</h1>
+        <p className="mt-2 text-[14px] font-semibold leading-relaxed text-muted">
           Рулетка страв, підбір за вмістом холодильника і рецепти інших кухарів.
           Увійди, щоб почати.
         </p>
@@ -76,13 +76,13 @@ export function AuthScreen() {
           <motion.p
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-3 rounded-2xl border border-berry/30 bg-berry/10 px-3.5 py-2.5 text-[13px] font-semibold text-berry"
+            className="mt-3 rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-2.5 text-[13px] font-semibold text-berry"
           >
             {error}
           </motion.p>
         )}
 
-        <p className="mt-6 text-[11.5px] leading-relaxed text-faint">
+        <p className="mt-6 text-[11.5px] font-semibold leading-relaxed text-faint">
           Продовжуючи, ти погоджуєшся з{" "}
           <a href="/terms" className="font-semibold underline">
             умовами
@@ -128,7 +128,7 @@ function GoogleButton({ loading, onClick }: { loading: boolean; onClick: () => v
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
       disabled={loading}
-      className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-line bg-surface text-[15px] font-bold disabled:opacity-50"
+      className="flex h-[52px] w-full items-center justify-center gap-3 rounded-[12px] border border-line bg-surface text-[15px] font-bold active:bg-surface-2 disabled:opacity-50"
     >
       {loading ? (
         <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-brand" />

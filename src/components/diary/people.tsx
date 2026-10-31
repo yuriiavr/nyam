@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { useMemo } from "react";
 import { Avatar } from "@/components/ui";
 import { settingsOf } from "@/lib/diary";
@@ -71,7 +72,12 @@ export function PeopleSwitch({
 }) {
   if (people.length < 2) return null;
   return (
-    <div className={cn("no-scrollbar flex gap-2 overflow-x-auto", className)}>
+    <div
+      className={cn(
+        "no-scrollbar flex h-11 overflow-x-auto rounded-[10px] border border-line bg-surface p-[3px]",
+        className,
+      )}
+    >
       {people.map((p) => {
         const active = p.userId === value;
         return (
@@ -79,13 +85,24 @@ export function PeopleSwitch({
             key={p.userId}
             onClick={() => onChange(p.userId)}
             aria-pressed={active}
-            className={cn(
-              "flex shrink-0 items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[13px] font-semibold transition-colors",
-              active ? "border-brand bg-brand/10 text-ink" : "border-line bg-surface text-muted",
-            )}
+            className="relative flex min-w-[96px] flex-1 items-center justify-center rounded-[7px] px-3"
           >
-            <PersonAvatar person={p} size={26} />
-            {personName(p)}
+            {active && (
+              <motion.span
+                layoutId="people-switch"
+                transition={{ type: "spring", stiffness: 480, damping: 38 }}
+                className="absolute inset-0 rounded-[7px] bg-line shadow-[0_4px_14px_-4px_rgb(0_0_0_/_0.7)] light:shadow-none"
+              />
+            )}
+            <span
+              className={cn(
+                "relative z-10 flex min-w-0 items-center gap-2 text-[13.5px] font-extrabold transition-colors",
+                active ? "text-ink" : "text-muted",
+              )}
+            >
+              <PersonAvatar person={p} size={26} />
+              <span className="truncate">{personName(p)}</span>
+            </span>
           </button>
         );
       })}

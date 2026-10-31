@@ -1,16 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Mic, Plus, Settings2, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Mic, Plus, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { NAV_HEIGHT } from "@/components/BottomNav";
 import { PeopleSwitch, personName, usePeople } from "@/components/diary/people";
 import { EntrySheet } from "@/components/diary/EntrySheet";
 import { PantryTakeSheet } from "@/components/diary/PantryTakeSheet";
 import { useFoodFlows } from "@/components/diary/useFoodFlows";
+import { restaurantEntryLabel, restaurantIdsOf, useRestaurantMenus } from "@/components/diary/useRestaurantMenus";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, EmptyState, MacroBar, Skeleton } from "@/components/ui";
+import { MacroGrid, Panel, Skeleton, TILE_BUTTON, TILE_BUTTON_BRAND, formatKcal } from "@/components/ui";
 import {
   SLOT_META,
   SLOT_ORDER,
@@ -136,6 +136,8 @@ export default function DiaryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [day, foodLog, userId, cooks, lookup],
   );
+  /** Меню закладів, страви з яких є серед записів дня: для підпису «McDonald's · 2 порції». */
+  const menus = useRestaurantMenus(restaurantIdsOf(current.entriesList));
 
   const chart = useMemo(() => {
     const now = new Date();
@@ -174,358 +176,311 @@ export default function DiaryPage() {
     return (
       <div className="pb-8">
         <TopBar title="Щоденник" />
-        <div className="flex flex-col gap-4 p-4">
-          <Skeleton className="h-44 w-full rounded-xl3" />
-          <Skeleton className="h-28 w-full rounded-xl3" />
-          <Skeleton className="h-60 w-full rounded-xl3" />
+        <div className="flex flex-col gap-2.5 px-4 pt-1">
+          <Skeleton className="h-11 w-full rounded-[10px]" />
+          <Skeleton className="h-56 w-full rounded-[10px]" />
+          <Skeleton className="h-28 w-full rounded-[10px]" />
+          <Skeleton className="h-60 w-full rounded-[10px]" />
         </div>
       </div>
     );
   }
 
-  const empty = current.entries === 0;
   const peak = Math.max(...chart.map((d) => d.kcal), goal ?? 0, 1);
+  const over = goal != null && current.kcal > goal;
 
   return (
-    <div className="pb-28">
+    <div className="pb-6">
       <TopBar
         title="Щоденник"
-        subtitle={own ? "Що зʼїв і скільки це калорій" : `Щоденник: ${who ? personName(who) : ""}`}
+        railTab
         right={
-          <Link
-            href="/settings#diary"
-            aria-label="Налаштування щоденника"
-            className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2/80 active:bg-line"
-          >
-            <Settings2 size={19} />
-          </Link>
+          <>
+            <Link href="/settings#diary" aria-label="Налаштування щоденника" className={TILE_BUTTON}>
+              <Settings2 size={18} />
+            </Link>
+            {own && (
+              <button aria-label="Додати їжу" onClick={() => flows.add()} className={TILE_BUTTON_BRAND}>
+                <Plus size={19} strokeWidth={2.4} />
+              </button>
+            )}
+          </>
         }
       />
 
-      {visible.length > 1 && (
-        <PeopleSwitch
-          people={visible}
-          value={userId}
-          onChange={(id) => {
-            haptic(8);
-            setViewed(id);
-          }}
-          className="px-4 pt-3"
-        />
-      )}
+      {/*
+        Телефон — одна колонка. Планшет (lg): прийоми їжі сіткою у дві колонки,
+        а день, підсумок і графік — у бічній колонці. Обгортки з display:
+        contents на телефоні зникають, і порядок задають order-*.
+      */}
+      <div className="flex flex-col gap-2.5 px-4 md:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-4">
+        <aside className="contents lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1 lg:flex lg:flex-col lg:gap-3">
+        {visible.length > 1 && (
+          <PeopleSwitch
+            people={visible}
+            value={userId}
+            onChange={(id) => {
+              haptic(8);
+              setViewed(id);
+            }}
+            className="mb-0.5 mt-0.5"
+          />
+        )}
 
-      {/* День і підсумок */}
-      <section className="px-4 pt-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
+        {/* День і підсумок */}
+        <Panel>
+          <div className="flex h-[46px] items-center justify-between px-2">
             <button
               aria-label="Попередній день"
               onClick={() => shiftDay(-1)}
-              className="grid h-9 w-9 place-items-center rounded-xl bg-surface-2 active:bg-line"
+              className="grid h-8 w-8 place-items-center rounded-[8px] bg-surface-2 active:bg-line"
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={17} strokeWidth={2.2} />
             </button>
-            <p className="font-display text-[15px] font-bold">{dayLabel(day, today)}</p>
+            <p className="font-display text-[14px] font-bold">{dayLabel(day, today)}</p>
             <button
               aria-label="Наступний день"
               onClick={() => shiftDay(1)}
               disabled={day >= today}
-              className="grid h-9 w-9 place-items-center rounded-xl bg-surface-2 active:bg-line disabled:opacity-30"
+              className="grid h-8 w-8 place-items-center rounded-[8px] bg-surface-2 active:bg-line disabled:opacity-30"
             >
-              <ChevronRight size={18} />
+              <ChevronRight size={17} strokeWidth={2.2} />
             </button>
           </div>
 
-          <div className="mt-3 flex items-center gap-4">
+          <div className="flex items-center gap-[18px] border-t border-line px-3.5 py-4">
             <GoalRing kcal={current.kcal} goal={goal} />
-            <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
               {goal ? (
-                current.kcal <= goal ? (
-                  <>
-                    <p className="text-[12px] text-muted">Лишилось</p>
-                    <p className="font-display text-[22px] font-extrabold leading-tight">
-                      {goal - current.kcal} <span className="text-[13px] font-bold text-muted">ккал</span>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[12px] text-muted">Понад ціль</p>
-                    <p className="font-display text-[22px] font-extrabold leading-tight text-berry">
-                      +{current.kcal - goal} <span className="text-[13px] font-bold text-muted">ккал</span>
-                    </p>
-                  </>
-                )
+                <>
+                  <span className="text-[12px] font-semibold text-muted">{over ? "Понад ціль" : "Лишилось"}</span>
+                  <span className={cn("font-display text-[22px] font-bold leading-tight", over && "text-berry")}>
+                    {over ? `+${formatKcal(current.kcal - goal)}` : formatKcal(goal - current.kcal)}{" "}
+                    <span className="font-sans text-[13px] font-bold text-muted">ккал</span>
+                  </span>
+                </>
               ) : (
                 <>
-                  <p className="text-[12px] text-muted">Ціль не задана</p>
+                  <span className="text-[12px] font-semibold text-muted">Ціль не задана</span>
                   {own && (
-                    <Link href="/settings#diary" className="text-[13px] font-bold text-brand">
+                    <Link href="/settings#diary" className="text-[13.5px] font-bold text-brand">
                       Задати денну ціль
                     </Link>
                   )}
                 </>
               )}
-              <p className="mt-1 text-[11.5px] text-faint">
+              <span className="mt-0.5 text-[11.5px] font-semibold text-faint">
                 {current.entries} {plural(current.entries, "запис", "записи", "записів")}
                 {current.unknown > 0 && ` · ${current.unknown} без КБЖВ`}
-              </p>
+              </span>
             </div>
           </div>
 
-          {current.kcal > 0 && (
-            <MacroBar
-              nutrition={current}
-              goals={{ protein: goals.proteinGoal, fat: goals.fatGoal, carbs: goals.carbsGoal }}
-              className="mt-4"
+          <MacroGrid
+            nutrition={current}
+            goals={{ protein: goals.proteinGoal, fat: goals.fatGoal, carbs: goals.carbsGoal }}
+            className="border-t border-line px-3.5 pb-3.5 pt-3"
+          />
+        </Panel>
+
+        {/* Два тижні */}
+        <TwoWeeks chart={chart} peak={peak} goal={goal} day={day} today={today} onPick={setDay} />
+        </aside>
+
+        <div className="contents lg:col-start-1 lg:row-start-1 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3">
+
+        {/* «Хто їв?» — свіжі готування без поділу */}
+        {fresh.map((row) => (
+          <motion.div
+            key={`${row.event.recipeId}-${row.event.at}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lg:col-span-2"
+          >
+            <PromptRow
+              emoji={row.recipe.emoji}
+              title={row.recipe.title}
+              note="Приготовано — хто скільки зʼїв?"
+              action="Розділити"
+              accent
+              onClick={() => askWhoAte(row)}
             />
-          )}
-        </Card>
-      </section>
+          </motion.div>
+        ))}
 
-      {/* «Хто їв?» — свіжі готування без поділу */}
-      {fresh.length > 0 && (
-        <section className="flex flex-col gap-2 px-4 pt-4">
-          {fresh.map((row) => (
-            <motion.div key={`${row.event.recipeId}-${row.event.at}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-              <Card className="flex items-center gap-3 p-3">
-                <span className="text-2xl">{row.recipe.emoji}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-bold">{row.recipe.title}</p>
-                  <p className="text-[12px] text-muted">Приготовано — хто скільки зʼїв?</p>
-                </div>
-                <Button size="sm" onClick={() => askWhoAte(row)}>
-                  <Users size={15} />
-                  Розділити
-                </Button>
-              </Card>
-            </motion.div>
-          ))}
-        </section>
-      )}
-
-      {/* Записане голосом — що взяли з комори? */}
-      {toConfirm.length > 0 && (
-        <section className="flex flex-col gap-2 px-4 pt-4">
-          {toConfirm.map((meal) => (
-            <Card key={meal.id} className="flex items-center gap-3 p-3">
-              <span className="text-2xl">{meal.emoji}</span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-bold">{meal.title}</p>
-                <p className="flex items-center gap-1 text-[12px] text-muted">
-                  <Mic size={12} />
-                  Записано голосом — що взяли з комори?
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  haptic(10);
-                  setTakeMeal(meal.id);
-                }}
-              >
-                Перевірити
-              </Button>
-            </Card>
-          ))}
-        </section>
-      )}
-
-      {/* Залишки */}
-      {rest.length > 0 && day === today && (
-        <section className="px-4 pt-4">
-          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-            {rest.map((meal) => (
-              <button
-                key={meal.id}
-                onClick={() => {
-                  haptic(10);
-                  flows.split({ meal, isNew: false, source: "leftover", slot: slotAt(), day });
-                }}
-                className="flex shrink-0 items-center gap-2.5 rounded-2xl border border-line bg-surface py-2 pl-2.5 pr-3.5 text-left"
-              >
-                <span className="text-xl">{meal.emoji}</span>
-                <span>
-                  <span className="block max-w-[150px] truncate text-[13px] font-bold">{meal.title}</span>
-                  <span className="block text-[11.5px] text-muted">
-                    лишилось {portionLabel(leftoverServings(meal, foodLog))} · <span className="font-bold text-brand">доїсти</span>
-                  </span>
-                </span>
-              </button>
-            ))}
+        {/* Записане голосом — що взяли з комори? */}
+        {toConfirm.map((meal) => (
+          <div key={meal.id} className="lg:col-span-2">
+          <PromptRow
+            emoji={meal.emoji}
+            title={meal.title}
+            note={
+              <span className="flex items-center gap-1">
+                <Mic size={12} strokeWidth={2.2} />
+                Голосом — що взяли з комори?
+              </span>
+            }
+            action="Перевірити"
+            muted
+            onClick={() => {
+              haptic(10);
+              setTakeMeal(meal.id);
+            }}
+          />
           </div>
-        </section>
-      )}
+        ))}
 
-      {/* Прийоми їжі */}
-      <section className="flex flex-col gap-3 px-4 pt-4">
-        {empty && own && day === today ? (
-          <Card className="p-2">
-            <EmptyState
-              emoji="🥣"
-              title="Сьогодні ще нічого"
-              note="Відскануй батончик, знайди йогурт або просто напиши «запечена картопля з сосисками» — калорії порахуються самі."
-              action={
-                <Button onClick={() => flows.add()}>
-                  <Plus size={17} />
-                  Додати їжу
-                </Button>
-              }
+        {/* Залишки */}
+        {day === today &&
+          rest.map((meal) => (
+            <div key={meal.id} className="lg:col-span-2">
+            <PromptRow
+              emoji={meal.emoji}
+              title={meal.title}
+              note={`Лишилось ${portionLabel(leftoverServings(meal, foodLog))}`}
+              action="Доїсти"
+              onClick={() => {
+                haptic(10);
+                flows.split({ meal, isNew: false, source: "leftover", slot: slotAt(), day });
+              }}
             />
-          </Card>
-        ) : (
-          SLOT_ORDER.map((slot) => {
-            const list = current.entriesList.filter((e) => e.slot === slot);
-            const cookRows = current.cookRows.filter((c) => c.slot === slot);
-            if (!own && list.length === 0) return null;
-            const kcal =
-              list.reduce((sum, e) => sum + (entryNutrition(e, lookup.meal, lookup.recipe)?.kcal ?? 0), 0) +
-              cookRows.reduce((sum, c) => sum + (c.nutrition?.kcal ?? 0), 0);
-            return (
-              <Card key={slot} className="p-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{SLOT_META[slot].emoji}</span>
-                  <h2 className="flex-1 font-display text-[15px] font-bold">{SLOT_META[slot].label}</h2>
-                  {kcal > 0 && <span className="text-[13px] font-bold text-muted">{Math.round(kcal)} ккал</span>}
-                  {own && (
-                    <button
-                      aria-label={`Додати: ${SLOT_META[slot].label}`}
-                      onClick={() => flows.add(slot)}
-                      className="grid h-8 w-8 place-items-center rounded-xl bg-surface-2 text-brand active:bg-line"
-                    >
-                      <Plus size={17} />
-                    </button>
-                  )}
-                </div>
+            </div>
+          ))}
 
-                {(list.length > 0 || cookRows.length > 0) && (
-                  <div className="mt-2 flex flex-col">
-                    {list.map((e) => {
-                      const n = entryNutrition(e, lookup.meal, lookup.recipe);
-                      const meal = e.mealId ? lookup.meal(e.mealId) : undefined;
-                      const amount =
-                        meal && e.share
-                          ? portionLabel(Math.round(e.share * meal.servings * 4) / 4)
-                          : e.grams != null
-                            ? `${formatNumber(e.grams, 0)} г`
-                            : "";
-                      const byOther = e.loggedBy && e.loggedBy !== e.userId;
-                      const author = byOther ? people.find((p) => p.userId === e.loggedBy) : undefined;
-                      return (
-                        <button
-                          key={e.id}
-                          onClick={() => {
-                            haptic(8);
-                            setEntry(e);
-                          }}
-                          className="flex items-center gap-3 border-t border-line py-2.5 text-left first:border-0"
-                        >
-                          <span className="text-xl">{e.emoji}</span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[14px] font-semibold">{e.title}</span>
-                            <span className="block truncate text-[11.5px] text-muted">
-                              {[amount, author ? (author.me ? "записано тобою" : `записано: ${personName(author)}`) : ""]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-[13px] font-bold">{n ? `${n.kcal}` : "—"}</span>
-                        </button>
-                      );
-                    })}
-                    {cookRows.map((c) => (
-                      <button
-                        key={`${c.event.recipeId}-${c.event.at}`}
-                        onClick={() => askWhoAte(c)}
-                        className="flex items-center gap-3 border-t border-line py-2.5 text-left first:border-0"
-                      >
-                        <span className="text-xl">{c.recipe.emoji}</span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[14px] font-semibold">{c.recipe.title}</span>
-                          <span className="block text-[11.5px] text-muted">приготовано · рахую 1 порцію, уточнити</span>
-                        </span>
-                        <span className="shrink-0 text-[13px] font-bold text-muted">
-                          {c.nutrition ? `≈${c.nutrition.kcal}` : "—"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            );
-          })
-        )}
-      </section>
-
-      {/* Два тижні */}
-      <section className="px-4 pt-4">
-        <Card className="p-4">
-          <h2 className="mb-3 text-[12px] font-bold uppercase tracking-wide text-muted">Два тижні</h2>
-          <div className="relative flex h-[120px] items-end gap-[3px]">
-            {goal && (
-              <span
-                aria-hidden
-                // Над підписами днів (≈18 px) — там, де починаються стовпчики.
-                style={{ bottom: `calc(18px + (100% - 18px) * ${goal / peak})` }}
-                className="pointer-events-none absolute inset-x-0 border-t border-dashed border-faint/60"
-              />
-            )}
-            {chart.map((d) => {
-              const active = d.key === day;
-              const height = d.kcal > 0 ? Math.max((d.kcal / peak) * 100, 4) : 0;
-              return (
-                <button
-                  key={d.key}
-                  onClick={() => {
-                    haptic(8);
-                    setDay(d.key);
-                  }}
-                  aria-label={`${d.date.toLocaleDateString("uk-UA", { day: "numeric", month: "long" })}: ${d.kcal} ккал`}
-                  aria-pressed={active}
-                  className="flex h-full flex-1 flex-col justify-end gap-1.5"
-                >
-                  <span className="relative flex h-full items-end">
-                    <span
-                      style={{
-                        height: `${height}%`,
-                        background: goal && d.kcal > goal ? "var(--berry)" : "var(--chart-bar)",
-                        opacity: active ? 1 : 0.45,
-                      }}
-                      className="w-full rounded-t-[4px]"
-                    />
-                    {d.kcal === 0 && <span className="absolute inset-x-0 bottom-0 h-[2px] rounded-full bg-line" />}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-[9.5px] font-bold",
-                      active ? "text-ink" : d.key === today ? "text-brand" : "text-faint",
-                    )}
+        {/* Прийоми їжі */}
+        {SLOT_ORDER.map((slot) => {
+          const list = current.entriesList.filter((e) => e.slot === slot);
+          const cookRows = current.cookRows.filter((c) => c.slot === slot);
+          if (!own && list.length === 0) return null;
+          const kcal =
+            list.reduce((sum, e) => sum + (entryNutrition(e, lookup.meal, lookup.recipe)?.kcal ?? 0), 0) +
+            cookRows.reduce((sum, c) => sum + (c.nutrition?.kcal ?? 0), 0);
+          return (
+            <Panel key={slot} className="lg:min-h-[150px]">
+              <div className="flex h-[46px] items-center gap-2.5 pl-3.5 pr-2">
+                <span className="text-[17px]">{SLOT_META[slot].emoji}</span>
+                <h2 className="flex-1 text-[14.5px] font-extrabold">{SLOT_META[slot].label}</h2>
+                {kcal > 0 && <span className="text-[12.5px] font-bold text-muted">{formatKcal(kcal)} ккал</span>}
+                {own && (
+                  <button
+                    aria-label={`Додати: ${SLOT_META[slot].label}`}
+                    onClick={() => flows.add(slot)}
+                    className="grid h-[30px] w-[30px] place-items-center rounded-[8px] bg-surface-2 text-brand active:bg-line"
                   >
-                    {d.date.getDate()}
+                    <Plus size={16} strokeWidth={2.4} />
+                  </button>
+                )}
+              </div>
+
+              {list.map((e) => {
+                const n = entryNutrition(e, lookup.meal, lookup.recipe);
+                const meal = e.mealId ? lookup.meal(e.mealId) : undefined;
+                const amount =
+                  restaurantEntryLabel(e, menus) ??
+                  (meal && e.share
+                    ? portionLabel(Math.round(e.share * meal.servings * 4) / 4)
+                    : e.grams != null
+                      ? `${formatNumber(e.grams, 0)} г`
+                      : "");
+                const byOther = e.loggedBy && e.loggedBy !== e.userId;
+                const author = byOther ? people.find((p) => p.userId === e.loggedBy) : undefined;
+                return (
+                  <button
+                    key={e.id}
+                    onClick={() => {
+                      haptic(8);
+                      setEntry(e);
+                    }}
+                    className="flex h-[54px] w-full items-center gap-3 border-t border-line px-3.5 text-left active:bg-surface-2"
+                  >
+                    <span className="w-6 shrink-0 text-center text-[20px]">{e.emoji}</span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-[14px] font-semibold">{e.title}</span>
+                      <span className="truncate text-[11.5px] font-semibold text-faint">
+                        {[amount, author ? (author.me ? "записано тобою" : `записано: ${personName(author)}`) : ""]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                    <span className={cn("shrink-0 text-[13.5px] font-extrabold", !n && "text-faint")}>
+                      {n ? formatKcal(n.kcal) : "—"}
+                    </span>
+                  </button>
+                );
+              })}
+              {cookRows.map((c) => (
+                <button
+                  key={`${c.event.recipeId}-${c.event.at}`}
+                  onClick={() => askWhoAte(c)}
+                  className="flex h-[54px] w-full items-center gap-3 border-t border-line px-3.5 text-left active:bg-surface-2"
+                >
+                  <span className="w-6 shrink-0 text-center text-[20px]">{c.recipe.emoji}</span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate text-[14px] font-semibold">{c.recipe.title}</span>
+                    <span className="truncate text-[11.5px] font-semibold text-faint">приготовано · рахую 1 порцію, уточнити</span>
+                  </span>
+                  <span className="shrink-0 text-[13.5px] font-extrabold text-muted">
+                    {c.nutrition ? `≈${formatKcal(c.nutrition.kcal)}` : "—"}
                   </span>
                 </button>
-              );
-            })}
-          </div>
-        </Card>
-      </section>
+              ))}
+            </Panel>
+          );
+        })}
 
-      {own && (
-        <div
-          style={{ bottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + var(--cook-dock, 0px) + 14px)` }}
-          className="pointer-events-none fixed inset-x-0 z-[35] mx-auto flex max-w-[560px] justify-end px-4"
-        >
-          <Button className="pointer-events-auto rounded-full shadow-[var(--shadow-pop)]" onClick={() => flows.add()}>
-            <Plus size={18} />
-            Додати їжу
-          </Button>
         </div>
-      )}
+      </div>
 
       <EntrySheet entry={entry} onClose={() => setEntry(null)} />
       <PantryTakeSheet mealId={takeMeal} onClose={() => setTakeMeal(null)} />
       {flows.ui}
     </div>
+  );
+}
+
+/** Рядок-підказка над прийомами їжі: «Грецький салат · Розділити ›». */
+function PromptRow({
+  emoji,
+  title,
+  note,
+  action,
+  accent,
+  muted,
+  onClick,
+}: {
+  emoji: string;
+  title: string;
+  note: React.ReactNode;
+  action: string;
+  /** Обвідка фірмовим — те, що чекає саме зараз. */
+  accent?: boolean;
+  /** Дія сірим — перевірка, а не головна справа. */
+  muted?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex min-h-[60px] w-full items-center gap-3 rounded-[10px] border bg-surface px-3.5 py-2 text-left active:bg-surface-2",
+        accent ? "border-brand/35" : "border-line",
+      )}
+    >
+      <span className="text-[24px]">{emoji}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-bold">{title}</span>
+        <span className="block text-[12px] font-semibold text-muted">{note}</span>
+      </span>
+      <span
+        className={cn(
+          "flex shrink-0 items-center gap-0.5 text-[13px]",
+          muted ? "font-bold text-muted" : "font-extrabold text-brand",
+        )}
+      >
+        {action}
+        <ChevronRight size={14} strokeWidth={2.6} />
+      </span>
+    </button>
   );
 }
 
@@ -541,23 +496,29 @@ function dayLabel(day: string, today: string): string {
 
 /** Кільце «зʼїдено з цілі». Без цілі — просто число в колі. */
 function GoalRing({ kcal, goal }: { kcal: number; goal?: number }) {
-  const size = 112;
-  const stroke = 11;
-  const r = (size - stroke) / 2;
+  const size = 104;
+  const stroke = 10;
+  const r = (size - stroke) / 2 - 0.5;
   const length = 2 * Math.PI * r;
   const share = goal ? Math.min(kcal / goal, 1) : 0;
   const over = goal != null && kcal > goal;
   return (
     <div className="relative grid shrink-0 place-items-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90" aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
+        <defs>
+          <linearGradient id="diary-ring" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="var(--brand)" />
+            <stop offset="1" stopColor="var(--brand-2)" />
+          </linearGradient>
+        </defs>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
         {goal && (
           <motion.circle
             cx={size / 2}
             cy={size / 2}
             r={r}
             fill="none"
-            stroke={over ? "var(--berry)" : "var(--brand)"}
+            stroke={over ? "var(--berry)" : "url(#diary-ring)"}
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={length}
@@ -567,10 +528,89 @@ function GoalRing({ kcal, goal }: { kcal: number; goal?: number }) {
           />
         )}
       </svg>
-      <div className="absolute text-center">
-        <p className="font-display text-[24px] font-extrabold leading-none">{kcal}</p>
-        <p className="mt-0.5 text-[11px] text-muted">{goal ? `з ${goal}` : "ккал"}</p>
+      <div className="absolute flex flex-col items-center">
+        <span className="font-display text-[21px] font-bold leading-none">{formatKcal(kcal)}</span>
+        <span className="mt-[3px] text-[11px] font-semibold text-muted">{goal ? `з ${formatKcal(goal)}` : "ккал"}</span>
       </div>
     </div>
+  );
+}
+
+/** Два тижні стовпчиками: дотик — перейти на той день. */
+function TwoWeeks({
+  chart,
+  peak,
+  goal,
+  day,
+  today,
+  onPick,
+}: {
+  chart: Array<{ key: string; date: Date; kcal: number }>;
+  peak: number;
+  goal?: number;
+  day: string;
+  today: string;
+  onPick: (key: string) => void;
+}) {
+  return (
+    <Panel className="order-last lg:order-none">
+    <div className="flex h-10 items-center justify-between px-3.5">
+      <span className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">Два тижні</span>
+      {goal ? (
+        <span className="flex items-center gap-[5px] text-[11.5px] font-semibold text-faint">
+          <span className="w-3 border-t-[1.5px] border-dashed border-faint" />
+          ціль
+        </span>
+      ) : null}
+    </div>
+    <div className="border-t border-line px-3 pb-2.5 pt-3.5">
+      <div className="relative flex h-[126px] items-end gap-1">
+        {goal && (
+          <span
+            aria-hidden
+            // Над підписами днів (≈18 px) — там, де починаються стовпчики.
+            style={{ bottom: `calc(18px + (100% - 18px) * ${goal / peak})` }}
+            className="pointer-events-none absolute inset-x-0 border-t-[1.5px] border-dashed border-line-strong"
+          />
+        )}
+        {chart.map((d) => {
+          const active = d.key === day;
+          const height = d.kcal > 0 ? Math.max((d.kcal / peak) * 100, 4) : 0;
+          return (
+            <button
+              key={d.key}
+              onClick={() => {
+                haptic(8);
+                onPick(d.key);
+              }}
+              aria-label={`${d.date.toLocaleDateString("uk-UA", { day: "numeric", month: "long" })}: ${d.kcal} ккал`}
+              aria-pressed={active}
+              className="flex h-full flex-1 flex-col justify-end gap-1.5"
+            >
+              <span className="relative flex h-full items-end">
+                <span
+                  style={{
+                    height: `${height}%`,
+                    background: goal && d.kcal > goal ? "var(--berry)" : "var(--chart-bar)",
+                    opacity: active ? 1 : 0.4,
+                  }}
+                  className="w-full rounded-b-[2px] rounded-t-[4px] transition-[height,opacity] duration-300"
+                />
+                {d.kcal === 0 && <span className="absolute inset-x-0 bottom-0 h-[2px] rounded-full bg-line" />}
+              </span>
+              <span
+                className={cn(
+                  "text-center text-[10px] font-extrabold",
+                  active ? "text-ink" : d.key === today ? "text-brand" : "text-faint",
+                )}
+              >
+                {d.date.getDate()}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+        </Panel>
   );
 }

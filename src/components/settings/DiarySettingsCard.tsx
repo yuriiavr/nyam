@@ -1,14 +1,12 @@
 "use client";
 
-import { Check, Minus, NotebookPen, Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Card, Chip } from "@/components/ui";
+import { Panel, PanelHeader, Toggle } from "@/components/ui";
 import { portionLabel, settingsOf } from "@/lib/diary";
 import { diaryUserId, useApp } from "@/lib/store";
 import type { DiarySettings } from "@/lib/types";
 import { haptic } from "@/lib/utils";
-
-const GOALS = [1600, 1800, 2000, 2200, 2500];
 
 const MACROS = [
   { field: "proteinGoal", label: "Б", name: "білків", color: "var(--macro-protein)", kcalPerGram: 4 },
@@ -64,10 +62,9 @@ function MacroGoal({
   };
 
   return (
-    <label className="flex h-11 items-center gap-1.5 rounded-2xl border border-line bg-surface px-3">
-      <span className="text-[13px] font-extrabold" style={{ color }}>
-        {label}
-      </span>
+    <label className="flex h-9 min-w-0 items-center gap-1.5 rounded-[8px] bg-surface-2 px-2.5">
+      <span className="h-[7px] w-[7px] shrink-0 rounded-[2px]" style={{ background: color }} />
+      <span className="text-[12.5px] font-extrabold text-muted">{label}</span>
       <input
         value={raw}
         onChange={(e) => setRaw(e.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -76,9 +73,9 @@ function MacroGoal({
         inputMode="numeric"
         placeholder="—"
         aria-label={`Ціль ${name} на день, г`}
-        className="min-w-0 flex-1 bg-transparent text-center font-display text-[17px] font-bold outline-none"
+        className="w-0 min-w-0 flex-1 bg-transparent text-right text-[14px] font-bold outline-none"
       />
-      <span className="text-[12px] text-muted">г</span>
+      <span className="text-[12px] text-faint">г</span>
     </label>
   );
 }
@@ -121,44 +118,27 @@ export function DiarySettingsCard() {
   };
 
   return (
-    <section id="diary" className="scroll-mt-20 px-4 pt-4">
-      <Card className="p-4">
-        <div className="flex items-center gap-2">
-          <NotebookPen size={17} className="text-brand" />
-          <h2 className="font-display text-[16px] font-bold">Щоденник</h2>
-        </div>
+    <Panel id="diary" className="scroll-mt-20">
+      <PanelHeader label="Щоденник" />
 
-        <p className="mt-3 text-[13.5px] font-bold">Денна ціль, ккал</p>
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            value={goal}
-            onChange={(e) => setGoal(e.target.value.replace(/\D/g, "").slice(0, 5))}
-            onBlur={() => saveGoal(goal)}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            inputMode="numeric"
-            placeholder="без цілі"
-            aria-label="Денна ціль у кілокалоріях"
-            className="h-11 w-28 rounded-2xl border border-line bg-surface px-3 text-center font-display text-[17px] font-bold"
-          />
-          <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
-            {GOALS.map((g) => (
-              <Chip
-                key={g}
-                size="sm"
-                active={mine.kcalGoal === g}
-                onClick={() => {
-                  setGoal(String(g));
-                  setMyDiarySettings({ kcalGoal: g });
-                }}
-              >
-                {g}
-              </Chip>
-            ))}
-          </div>
-        </div>
+      <label className="flex h-[52px] items-center gap-2 border-t border-line px-3.5">
+        <span className="flex-1 text-[14px] font-semibold">Денна ціль</span>
+        <input
+          value={goal}
+          onChange={(e) => setGoal(e.target.value.replace(/\D/g, "").slice(0, 5))}
+          onBlur={() => saveGoal(goal)}
+          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+          inputMode="numeric"
+          placeholder="без цілі"
+          aria-label="Денна ціль у кілокалоріях"
+          className="h-8 w-[84px] rounded-[8px] bg-surface-2 px-2.5 text-right text-[14px] font-bold"
+        />
+        <span className="w-[30px] text-[13px] font-bold text-muted">ккал</span>
+      </label>
 
-        <p className="mt-4 text-[13.5px] font-bold">Білки · жири · вуглеводи, г на день</p>
-        <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="flex flex-col gap-2 border-t border-line px-3.5 pb-3 pt-2.5">
+        <span className="text-[14px] font-semibold">Білки · жири · вуглеводи</span>
+        <div className="grid grid-cols-3 gap-1.5">
           {MACROS.map((m) => (
             <MacroGoal
               key={m.field}
@@ -170,62 +150,42 @@ export function DiarySettingsCard() {
             />
           ))}
         </div>
-        <p className="mt-1.5 text-[12px] leading-snug text-muted">{macroHint(mine)}</p>
+        <p className="text-[11.5px] font-semibold leading-snug text-faint">{macroHint(mine)}</p>
+      </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[13.5px] font-bold">Мій апетит</p>
-            <p className="mt-0.5 text-[12px] leading-snug text-muted">
-              Скільки порцій рецепта ти зазвичай зʼїдаєш. Їси більше за рідних — постав 1,5, і страва ділитиметься
-              відповідно.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              aria-label="Менший апетит"
-              onClick={() => appetite(-0.25)}
-              disabled={mine.appetite <= 0.5}
-              className="grid h-9 w-9 place-items-center rounded-xl bg-surface-2 active:bg-line disabled:opacity-35"
-            >
-              <Minus size={16} />
-            </button>
-            <span className="w-[78px] text-center text-[13px] font-bold">{portionLabel(mine.appetite)}</span>
-            <button
-              aria-label="Більший апетит"
-              onClick={() => appetite(0.25)}
-              disabled={mine.appetite >= 3}
-              className="grid h-9 w-9 place-items-center rounded-xl bg-surface-2 active:bg-line disabled:opacity-35"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
+      <div className="flex min-h-[52px] items-center gap-2 border-t border-line py-2 pl-3.5 pr-2">
+        <span className="min-w-0 flex-1 text-[14px] font-semibold" title="Скільки порцій рецепта зазвичай зʼїдаєш">
+          Мій апетит
+        </span>
+        <button
+          aria-label="Менший апетит"
+          onClick={() => appetite(-0.25)}
+          disabled={mine.appetite <= 0.5}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-surface-2 active:bg-line disabled:opacity-35"
+        >
+          <Minus size={16} />
+        </button>
+        <span className="w-[76px] shrink-0 text-center text-[13.5px] font-extrabold">{portionLabel(mine.appetite)}</span>
+        <button
+          aria-label="Більший апетит"
+          onClick={() => appetite(0.25)}
+          disabled={mine.appetite >= 3}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-surface-2 active:bg-line disabled:opacity-35"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
+
+      {family && (
+        <div className="flex min-h-[52px] items-center gap-2 border-t border-line px-3.5 py-2">
+          <span className="min-w-0 flex-1 text-[14px] font-semibold">Сімʼя бачить мій щоденник</span>
+          <Toggle
+            checked={mine.shareDiary}
+            label="Сімʼя бачить мій щоденник"
+            onChange={(next) => setMyDiarySettings({ shareDiary: next })}
+          />
         </div>
-
-        {family && (
-          <button
-            onClick={() => {
-              haptic(10);
-              setMyDiarySettings({ shareDiary: !mine.shareDiary });
-            }}
-            aria-pressed={mine.shareDiary}
-            className="mt-4 flex w-full items-start gap-3 text-left"
-          >
-            <span
-              className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 ${
-                mine.shareDiary ? "border-brand bg-brand text-brand-ink" : "border-line"
-              }`}
-            >
-              {mine.shareDiary && <Check size={12} strokeWidth={3.5} />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13.5px] font-bold">Сімʼя бачить мій щоденник</span>
-              <span className="mt-0.5 block text-[12px] leading-snug text-muted">
-                Вимкнено — рідні бачать лише те, що самі тобі записали (скажімо, твою порцію спільної вечері).
-              </span>
-            </span>
-          </button>
-        )}
-      </Card>
-    </section>
+      )}
+    </Panel>
   );
 }

@@ -2,9 +2,9 @@
 
 import { Minus, Plus, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Segmented, Sheet } from "@/components/ui";
+import { Button, Panel, PanelHeader, Sheet } from "@/components/ui";
 import { ing } from "@/data/ingredients";
-import { SLOT_META, SLOT_ORDER, eatenAtFor, itemsNutrition, mealItem } from "@/lib/diary";
+import { eatenAtFor, itemsNutrition, mealItem } from "@/lib/diary";
 import type { DishParse } from "@/lib/food-ai";
 import { FOOD_AI_MESSAGE, parseEatenDish } from "@/lib/food-client";
 import { pantryDisplayName } from "@/lib/pantry";
@@ -13,6 +13,7 @@ import { diaryUserId, useApp } from "@/lib/store";
 import type { MealItem, MealSlot, Nutrition, PantryItem } from "@/lib/types";
 import { formatNumber, formatQuantity } from "@/lib/units";
 import { cn, dateKey, haptic, newId } from "@/lib/utils";
+import { CheckRow, SlotRow, StepButton } from "./SheetParts";
 import type { SplitRequest } from "./SplitSheet";
 
 interface Part {
@@ -200,11 +201,11 @@ export function DishSheet({
       title={dish ? "Що було в страві" : "Що зʼїв?"}
       footer={
         dish ? (
-          <Button full size="lg" disabled={items.length === 0} onClick={next}>
+          <Button full disabled={items.length === 0} onClick={next}>
             Далі — хто їв · {total.kcal} ккал
           </Button>
         ) : (
-          <Button full size="lg" loading={busy} disabled={text.trim().length < 2} onClick={() => void ask()}>
+          <Button full loading={busy} disabled={text.trim().length < 2} onClick={() => void ask()}>
             <Sparkles size={17} />
             Порахувати
           </Button>
@@ -212,131 +213,117 @@ export function DishSheet({
       }
     >
       {!dish ? (
-        <div className="flex flex-col gap-4 pb-2">
+        <div className="flex flex-col gap-3 pb-3">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value.slice(0, 600))}
             rows={3}
             placeholder="Запечена картопля з двома сосисками й салатом із помідорів"
-            className="w-full resize-none rounded-2xl border border-line bg-surface px-3.5 py-3 text-[15px] leading-snug"
+            className="w-full resize-none rounded-[10px] border border-line bg-surface px-3.5 py-3 text-[15px] font-semibold leading-snug placeholder:text-faint"
           />
-          <p className="-mt-2 text-[12px] leading-snug text-muted">
+          <p className="-mt-0.5 px-1 text-[12px] font-semibold leading-snug text-faint">
             Пиши як другу: що і скільки, можна «на двох». ШІ розкладе на продукти й запропонує, що з комори пішло в
             страву — калорії рахуватимуться з етикеток саме твоїх товарів.
           </p>
-          <Segmented
-            value={slot}
-            onChange={setSlot}
-            options={SLOT_ORDER.map((s) => ({ value: s, label: SLOT_META[s].label }))}
-          />
-          {problem && <p className="text-[13px] font-semibold text-berry">{problem}</p>}
+          <Panel>
+            <SlotRow value={slot} onChange={setSlot} />
+          </Panel>
+          {problem && <p className="px-1 text-[13px] font-semibold text-berry">{problem}</p>}
         </div>
       ) : (
-        <div className="flex flex-col gap-3 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{dish.emoji}</span>
+        <div className="flex flex-col gap-3 pb-3">
+          <div className="flex h-[50px] items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5">
+            <span className="text-[24px] leading-none">{dish.emoji}</span>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value.slice(0, 120))}
               aria-label="Назва страви"
-              className="h-11 min-w-0 flex-1 rounded-2xl border border-line bg-surface px-3 font-display text-[16px] font-bold"
+              className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-bold"
             />
           </div>
 
-          {parts.map((part, index) => {
-            const item = partItems[index];
-            return (
-              <div key={part.key} className="rounded-2xl border border-line p-3">
-                <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{part.name}</span>
-                  <input
-                    value={part.grams}
-                    onChange={(e) => patch(part.key, { grams: e.target.value.replace(/[^\d.,]/g, "") })}
-                    inputMode="decimal"
-                    aria-label={`${part.name}, грамів`}
-                    className="h-9 w-16 rounded-xl bg-surface-2 px-2 text-center text-[14px]"
-                  />
-                  <span className="text-[12px] text-muted">г</span>
-                  <button
-                    aria-label={`Прибрати ${part.name}`}
-                    onClick={() => setParts((list) => list.filter((p) => p.key !== part.key))}
-                    className="grid h-8 w-8 place-items-center rounded-xl text-muted active:bg-surface-2"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                {part.options.length > 0 && (
-                  <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto">
-                    {part.options.map((id) => {
-                      const row = rows.get(id) as PantryItem;
-                      const active = part.chosen === id;
-                      return (
-                        <button
-                          key={id}
-                          onClick={() => patch(part.key, { chosen: active ? null : id })}
-                          aria-pressed={active}
-                          className={cn(
-                            "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-semibold",
-                            active ? "border-brand bg-brand/10 text-ink" : "border-line text-muted",
-                          )}
-                        >
-                          <span>{ing(row.key).emoji}</span>
-                          <span className="max-w-[160px] truncate">{rowName(row)}</span>
-                          {row.amount != null && row.unit && (
-                            <span className="text-faint">· {formatQuantity(row.amount, row.unit)}</span>
-                          )}
-                        </button>
-                      );
-                    })}
+          {parts.length > 0 && (
+            <Panel>
+              <PanelHeader label="Склад" aside={`${total.kcal} ккал`} />
+              {parts.map((part, index) => {
+                const item = partItems[index];
+                return (
+                  <div key={part.key} className="flex flex-col gap-2 border-t border-line py-2.5 pl-3.5 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{part.name}</span>
+                      <input
+                        value={part.grams}
+                        onChange={(e) => patch(part.key, { grams: e.target.value.replace(/[^\d.,]/g, "") })}
+                        inputMode="decimal"
+                        aria-label={`${part.name}, грамів`}
+                        className="h-8 w-[64px] rounded-[8px] bg-surface-2 px-2.5 text-right text-[14px] font-bold"
+                      />
+                      <span className="text-[14px] font-bold text-muted">г</span>
+                      <button
+                        aria-label={`Прибрати ${part.name}`}
+                        onClick={() => setParts((list) => list.filter((p) => p.key !== part.key))}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-faint active:bg-surface-2"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                    {part.options.length > 0 && (
+                      <div className="no-scrollbar -mr-2 flex gap-1.5 overflow-x-auto pr-2">
+                        {part.options.map((id) => {
+                          const row = rows.get(id) as PantryItem;
+                          const active = part.chosen === id;
+                          return (
+                            <button
+                              key={id}
+                              onClick={() => patch(part.key, { chosen: active ? null : id })}
+                              aria-pressed={active}
+                              className={cn(
+                                "flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+                                active ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface-2 text-muted",
+                              )}
+                            >
+                              <span>{ing(row.key).emoji}</span>
+                              <span className="max-w-[160px] truncate">{rowName(row)}</span>
+                              {row.amount != null && row.unit && (
+                                <span className="font-semibold text-faint">· {formatQuantity(row.amount, row.unit)}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {item && (
+                      <p className="text-[11.5px] font-semibold text-faint">
+                        {item.kcal} ккал · <span className={item.from === "ai" ? "text-brand" : ""}>{FROM_LABEL[item.from]}</span>
+                        {part.options.length > 0 && !part.chosen && " · не з комори"}
+                      </p>
+                    )}
                   </div>
-                )}
-                {item && (
-                  <p className="mt-1.5 text-[11.5px] text-muted">
-                    {item.kcal} ккал · <span className={item.from === "ai" ? "text-brand" : ""}>{FROM_LABEL[item.from]}</span>
-                    {part.options.length > 0 && !part.chosen && " · не з комори"}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-
-          <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 px-3.5 py-2.5">
-            <div>
-              <p className="text-[12px] text-muted">Порцій у страві</p>
-              <p className="font-display text-[18px] font-extrabold">{servings}</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                aria-label="Менше порцій"
-                onClick={() => setServings((s) => Math.max(1, s - 1))}
-                className="grid h-9 w-9 place-items-center rounded-xl bg-bg-elev active:bg-line"
-              >
-                <Minus size={16} />
-              </button>
-              <button
-                aria-label="Більше порцій"
-                onClick={() => setServings((s) => Math.min(20, s + 1))}
-                className="grid h-9 w-9 place-items-center rounded-xl bg-bg-elev active:bg-line"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          </div>
-
-          {chosenRows > 0 && (
-            <label className="flex items-center gap-2.5 px-1 text-[13px]">
-              <input
-                type="checkbox"
-                checked={consume}
-                onChange={(e) => setConsume(e.target.checked)}
-                className="h-5 w-5 accent-[var(--brand)]"
-              />
-              Списати обране з комори
-            </label>
+                );
+              })}
+            </Panel>
           )}
 
-          {dish.note && <p className="text-[11.5px] leading-snug text-faint">≈ {dish.note}</p>}
-          <button onClick={() => setDish(null)} className="self-start text-[13px] font-bold text-brand">
+          <Panel>
+            <div className="flex h-[50px] items-center gap-2 pl-3.5 pr-2">
+              <span className="flex-1 text-[14px] font-semibold text-muted">Порцій у страві</span>
+              <StepButton label="Менше порцій" onClick={() => setServings((s) => Math.max(1, s - 1))}>
+                <Minus size={16} strokeWidth={2.4} />
+              </StepButton>
+              <span className="w-12 text-center text-[15px] font-extrabold tabular-nums">{servings}</span>
+              <StepButton label="Більше порцій" onClick={() => setServings((s) => Math.min(20, s + 1))}>
+                <Plus size={16} strokeWidth={2.4} />
+              </StepButton>
+            </div>
+            {chosenRows > 0 && (
+              <CheckRow checked={consume} onChange={setConsume} divided>
+                Списати обране з комори
+              </CheckRow>
+            )}
+          </Panel>
+
+          {dish.note && <p className="px-1 text-[11.5px] font-semibold leading-snug text-faint">≈ {dish.note}</p>}
+          <button onClick={() => setDish(null)} className="self-start px-1 text-[13px] font-bold text-brand">
             Переписати опис
           </button>
         </div>

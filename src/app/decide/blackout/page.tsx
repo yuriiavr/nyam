@@ -6,11 +6,11 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Card, EmptyState, Segmented } from "@/components/ui";
+import { EmptyState, Panel, PanelHeader, Segmented } from "@/components/ui";
 import { suggestable } from "@/lib/matching";
 import { powerMatches, type PowerMatch, type PowerMode } from "@/lib/power";
 import { useApp } from "@/lib/store";
-import { formatMinutes, haptic, plural } from "@/lib/utils";
+import { cn, formatMinutes, haptic, plural } from "@/lib/utils";
 
 /**
  * Що приготувати, поки є світло — або поки його немає.
@@ -51,10 +51,14 @@ export default function BlackoutPage() {
     <div className="pb-8">
       <TopBar
         title="Поки є світло"
-        subtitle={`${matches.length} ${plural(matches.length, "страва", "страви", "страв")} підходить`}
+        right={
+          <span className="shrink-0 text-[12px] font-bold text-faint">
+            {matches.length} {plural(matches.length, "страва", "страви", "страв")}
+          </span>
+        }
       />
 
-      <div className="px-4 pt-4">
+      <div className="flex flex-col gap-2.5 px-4">
         <Segmented
           value={mode}
           onChange={(next) => {
@@ -67,44 +71,39 @@ export default function BlackoutPage() {
             { value: "cold", label: "Без вогню" },
           ]}
         />
-        <p className="mt-2.5 text-[12px] leading-snug text-muted">{MODE_NOTE[mode]}</p>
-      </div>
 
-      {mode !== "cold" && (
-        <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pt-3">
-          {WINDOWS.map((w) => (
-            <button
-              key={w}
-              onClick={() => {
-                haptic(8);
-                setMinutes(w);
-              }}
-              className={`shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-bold ${
-                minutes === w
-                  ? "border-brand bg-brand text-brand-ink"
-                  : "border-line bg-surface text-muted"
-              }`}
-            >
-              {w} хв
-            </button>
-          ))}
-          <button
-            onClick={() => {
-              haptic(8);
-              setMinutes(null);
-            }}
-            className={`shrink-0 rounded-full border px-3.5 py-2 text-[13px] font-bold ${
-              minutes === null
-                ? "border-brand bg-brand text-brand-ink"
-                : "border-line bg-surface text-muted"
-            }`}
-          >
-            Не обмежувати
-          </button>
-        </div>
-      )}
+        <Panel>
+          <p className="px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-muted">{MODE_NOTE[mode]}</p>
+          {mode !== "cold" && (
+            <>
+              <PanelHeader label="Скільки часу є" className="border-t border-line" />
+              <div className="no-scrollbar flex gap-1.5 overflow-x-auto px-3.5 pb-3">
+                {WINDOWS.map((w) => (
+                  <WindowChip
+                    key={w}
+                    active={minutes === w}
+                    onClick={() => {
+                      haptic(8);
+                      setMinutes(w);
+                    }}
+                  >
+                    {w} хв
+                  </WindowChip>
+                ))}
+                <WindowChip
+                  active={minutes === null}
+                  onClick={() => {
+                    haptic(8);
+                    setMinutes(null);
+                  }}
+                >
+                  Не обмежувати
+                </WindowChip>
+              </div>
+            </>
+          )}
+        </Panel>
 
-      <div className="flex flex-col gap-3 px-4 pt-4">
         {matches.length === 0 ? (
           <EmptyState
             emoji="🕯️"
@@ -116,12 +115,38 @@ export default function BlackoutPage() {
             }
           />
         ) : (
-          matches
-            .slice(0, 40)
-            .map((match, i) => <PowerCard key={match.recipe.id} match={match} index={i} />)
+          <Panel>
+            <PanelHeader label="Встигнеш приготувати" />
+            {matches.slice(0, 40).map((match, i) => (
+              <PowerCard key={match.recipe.id} match={match} index={i} />
+            ))}
+          </Panel>
         )}
       </div>
     </div>
+  );
+}
+
+function WindowChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "h-8 shrink-0 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+        active ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -134,37 +159,31 @@ function PowerCard({ match, index }: { match: PowerMatch; index: number }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.04, 0.3) }}
     >
-      <Card className="overflow-hidden p-0">
-        <Link href={`/recipe/${recipe.id}`} className="flex gap-3 p-3">
-          <RecipeMedia
-            recipe={recipe}
-            className="h-[64px] w-[64px] shrink-0"
-            rounded="rounded-2xl"
-            emojiSize="text-2xl"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <h3 className="min-w-0 flex-1 font-display text-[15px] font-bold leading-tight">
-                {recipe.title}
-              </h3>
-              <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-bold">
-                {formatMinutes(recipe.timeMin)}
-              </span>
-            </div>
-
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {needs.oven && <NeedChip icon={<Plug size={11} />} label="духовка" tone="berry" />}
-              {needs.appliance && <NeedChip icon={<Plug size={11} />} label="розетка" tone="berry" />}
-              {needs.stove && !needs.oven && (
-                <NeedChip icon={<Flame size={11} />} label="плита" tone="brand" />
-              )}
-              {!needs.oven && !needs.stove && !needs.appliance && (
-                <NeedChip icon={<Snowflake size={11} />} label="без вогню" tone="mint" />
-              )}
-            </div>
+      <Link
+        href={`/recipe/${recipe.id}`}
+        className="flex items-center gap-3 border-t border-line px-3.5 py-3 active:bg-surface-2"
+      >
+        <RecipeMedia
+          recipe={recipe}
+          className="h-[52px] w-[52px] shrink-0"
+          rounded="rounded-[8px]"
+          emojiSize="text-[26px]"
+        />
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-[14.5px] font-extrabold leading-tight">{recipe.title}</h3>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {needs.oven && <NeedChip icon={<Plug size={11} />} label="духовка" tone="berry" />}
+            {needs.appliance && <NeedChip icon={<Plug size={11} />} label="розетка" tone="berry" />}
+            {needs.stove && !needs.oven && (
+              <NeedChip icon={<Flame size={11} />} label="плита" tone="brand" />
+            )}
+            {!needs.oven && !needs.stove && !needs.appliance && (
+              <NeedChip icon={<Snowflake size={11} />} label="без вогню" tone="mint" />
+            )}
           </div>
-        </Link>
-      </Card>
+        </div>
+        <span className="shrink-0 text-[12.5px] font-bold text-muted">{formatMinutes(recipe.timeMin)}</span>
+      </Link>
     </motion.div>
   );
 }
@@ -186,7 +205,7 @@ function NeedChip({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${styles}`}
+      className={`inline-flex h-[22px] items-center gap-1 rounded-[6px] px-[7px] text-[11px] font-bold ${styles}`}
     >
       {icon}
       {label}

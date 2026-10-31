@@ -12,6 +12,7 @@ import { allRecipes, useApp } from "@/lib/store";
 import type { Recipe } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { RecipeRow } from "./RecipeCard";
+import { Panel, PanelHeader } from "./ui";
 
 /**
  * Що подати разом і що до цього випити.
@@ -57,23 +58,22 @@ export function PairingSuggestions({
   if (!heading || pairs.length === 0) return null;
 
   return (
-    <section className={cn("pt-7", className)}>
-      <h2 className="mb-3 font-display text-[17px] font-bold">{heading}</h2>
-      <div className="flex flex-col gap-2">
-        {pairs.map(({ recipe: pair, reason }) => (
-          <RecipeRow
-            key={pair.id}
-            recipe={pair}
-            href={`/recipe/${pair.id}`}
-            subtitle={
-              <span className="text-[11.5px] text-brand">
-                {COURSE_LABEL[courseOf(pair)].toLowerCase()} · {reason}
-              </span>
-            }
-          />
-        ))}
-      </div>
-    </section>
+    <Panel className={className}>
+      <PanelHeader label={heading} />
+      {pairs.map(({ recipe: pair, reason }) => (
+        <RecipeRow
+          key={pair.id}
+          flat
+          recipe={pair}
+          href={`/recipe/${pair.id}`}
+          subtitle={
+            <span className="text-brand">
+              {COURSE_LABEL[courseOf(pair)].toLowerCase()} · {reason}
+            </span>
+          }
+        />
+      ))}
+    </Panel>
   );
 }
 
@@ -106,34 +106,25 @@ export function DrinkPicks({
   if (picks.length === 0) return null;
 
   return (
-    <section className={cn("pt-7", className)}>
-      <h2 className="mb-1 font-display text-[17px] font-bold">
-        Що до цього випити
-      </h2>
-      <p className="mb-3 text-[11.5px] leading-snug text-faint">
-        Це не рецепти: таке купують або роблять за хвилину.
-      </p>
-      <div className="flex gap-2">
+    <Panel className={className}>
+      <PanelHeader label="Що до цього випити" />
+      <div className={cn("grid gap-px border-t border-line bg-line", picks.length === 1 ? "grid-cols-1" : picks.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
         {picks.map(({ drink, reason, home }) => (
-          <div
-            key={drink.key}
-            className="flex flex-1 flex-col items-center rounded-2xl border border-line bg-surface px-2 py-3 text-center"
-          >
-            <span className="text-2xl">{drink.emoji}</span>
-            <p className="mt-1.5 text-[12.5px] font-bold leading-tight">
-              {drink.label}
-            </p>
-            <p className="mt-1 text-[10.5px] leading-snug text-muted">
-              {reason}
-            </p>
+          <div key={drink.key} className="flex flex-col items-center bg-surface px-2 py-3 text-center">
+            <span className="text-[24px]">{drink.emoji}</span>
+            <p className="mt-1.5 text-[12.5px] font-extrabold leading-tight">{drink.label}</p>
+            <p className="mt-1 text-[10.5px] font-semibold leading-snug text-faint">{reason}</p>
             {home && (
-              <span className="mt-1.5 rounded-full bg-mint/15 px-2 py-0.5 text-[9.5px] font-bold text-mint">
+              <span className="mt-1.5 rounded-[5px] bg-brand/15 px-1.5 py-0.5 text-[9.5px] font-extrabold text-brand">
                 є вдома
               </span>
             )}
           </div>
         ))}
       </div>
-    </section>
+      <p className="border-t border-line px-3.5 py-2 text-[11px] font-semibold leading-snug text-faint">
+        Це не рецепти: таке купують або роблять за хвилину.
+      </p>
+    </Panel>
   );
 }

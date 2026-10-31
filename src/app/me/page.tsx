@@ -1,15 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Bell, Flame, Pencil, Plus, Settings2 } from "lucide-react";
+import { Bell, ChevronRight, Pencil, Plus, Settings2, Users } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
-import { RecipeRow, RecipeTile } from "@/components/RecipeCard";
+import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Avatar, Button, EmptyState, Segmented, Sheet, useToast } from "@/components/ui";
+import { Avatar, Button, Panel, Segmented, Sheet, TILE_BUTTON, useToast } from "@/components/ui";
 import { allRecipes, cookStreak, useApp } from "@/lib/store";
-import { haptic, plural, timeAgo } from "@/lib/utils";
+import type { Recipe } from "@/lib/types";
+import { cn, formatMinutes, haptic, plural, timeAgo } from "@/lib/utils";
 
 type Tab = "mine" | "saved" | "wish" | "history";
 
@@ -82,184 +83,202 @@ function MeContent() {
 
   const unread = notifications.filter((n) => !n.readAt).length;
 
+  const rows: Array<{ key: string; recipe: Recipe; meta: string }> =
+    tab === "history"
+      ? lists.history.map((h, i) => ({
+          key: `${h.recipe!.id}-${i}`,
+          recipe: h.recipe!,
+          meta: `Приготовано ${timeAgo(h.at)}`,
+        }))
+      : current.map((r) => ({
+          key: r!.id,
+          recipe: r!,
+          meta: `${formatMinutes(r!.timeMin)}${r!.cuisine ? ` · ${r!.cuisine}` : ""}`,
+        }));
+
+  const emptyText =
+    tab === "mine"
+      ? "Ще немає своїх рецептів"
+      : tab === "saved"
+        ? "Зберігай рецепти закладкою — вони будуть тут"
+        : tab === "wish"
+          ? "Погортай свайп чи рулетку — сподобане буде тут"
+          : "Приготуй щось у покроковому режимі — і страва зʼявиться тут";
+
   return (
     <div className="pb-8">
       <TopBar
         back={false}
-        title="Мій профіль"
+        title="Профіль"
         right={
-          <div className="flex items-center gap-2">
-            {/* Створення рецепта — головна дія профілю, тож вона вгорі й
-                помітна, а не кнопкою під списком, до якої треба догортати. */}
-            <Link
-              href="/new"
-              onClick={() => haptic(12)}
-              aria-label="Додати рецепт"
-              className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-brand-ink"
-            >
-              <Plus size={19} />
-            </Link>
+          <>
             <Link
               href="/notifications"
               aria-label={unread ? `Сповіщення, непрочитаних: ${unread}` : "Сповіщення"}
-              className="relative grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
+              className={cn(TILE_BUTTON, "relative")}
             >
               <Bell size={18} />
               {unread > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-bg bg-brand px-1 text-[10px] font-extrabold leading-none text-brand-ink">
+                <span className="absolute -right-1 -top-1 grid h-[17px] min-w-[17px] place-items-center rounded-[5px] bg-brand px-1 text-[10px] font-extrabold leading-none text-brand-ink">
                   {unread > 99 ? "99+" : unread}
                 </span>
               )}
             </Link>
-            <Link
-              href="/settings"
-              aria-label="Налаштування"
-              className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2"
-            >
+            <Link href="/settings" aria-label="Налаштування" className={TILE_BUTTON}>
               <Settings2 size={18} />
             </Link>
-          </div>
+          </>
         }
       />
 
-      {/* Профіль */}
-      <section className="px-4 pt-4">
-        <div className="flex items-center gap-4">
-          <Avatar
-            emoji={profile.emoji}
-            gradient={profile.gradient}
-            src={profile.avatar}
-            size={72}
-          />
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate font-display text-[19px] font-extrabold leading-tight">
-              {profile.name}
-            </h2>
-            <p className="truncate text-[12.5px] text-muted">@{profile.handle}</p>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="mt-2"
-              onClick={() => {
-                setName(profile.name);
-                setHandle(profile.handle);
-                setBio(profile.bio);
-                setEmoji(profile.emoji);
-                setEditOpen(true);
-              }}
-            >
-              <Pencil size={14} />
-              Редагувати
-            </Button>
+      {/*
+        Планшет (lg): картка профілю — бічна колонка на 280 px, вкладки й рецепти
+        сіткою в чотири колонки — праворуч.
+      */}
+      <div className="flex flex-col gap-2.5 px-4 md:px-6 lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-4">
+        <aside className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:gap-3">
+        {/* Профіль */}
+        <Panel>
+          <div className="flex items-center gap-3.5 p-3.5 lg:flex-col lg:gap-3 lg:px-4 lg:pb-4 lg:pt-5 lg:text-center">
+            <Avatar emoji={profile.emoji} gradient={profile.gradient} src={profile.avatar} size={64} />
+            <div className="min-w-0 flex-1 lg:w-full">
+              <h2 className="truncate font-display text-[17px] font-bold leading-tight">{profile.name}</h2>
+              <p className="truncate text-[12.5px] font-semibold text-faint">@{profile.handle}</p>
+              {profile.bio && <p className="mt-1 line-clamp-2 text-[12.5px] leading-[1.4] text-muted">{profile.bio}</p>}
+            </div>
           </div>
-        </div>
-
-        {profile.bio && (
-          <p className="mt-3 text-[13.5px] leading-relaxed text-muted">{profile.bio}</p>
-        )}
-
-        {/* Статистика */}
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          <Stat value={lists.mine.length} label="рецептів" />
-          <Stat value={lists.saved.length} label="збережено" />
-          <Stat value={cooked.length} label="приготовано" />
-          <Stat value={streak} label="днів поспіль" accent={streak > 0} />
-        </div>
-
-        {streak > 0 && (
-          <div className="mt-3 flex items-center gap-2 rounded-2xl border border-brand/25 bg-brand/8 px-3.5 py-2.5">
-            <Flame size={16} className="text-brand" />
-            <p className="text-[12.5px] font-semibold">
-              Серія {streak} {plural(streak, "день", "дні", "днів")} — не зупиняйся!
-            </p>
+          {/* У вузькій бічній колонці планшета — два на два */}
+          <div className="grid grid-cols-4 border-t border-line lg:grid-cols-2">
+            <Stat value={lists.mine.length} label="рецептів" first />
+            <Stat value={lists.saved.length} label="збережено" />
+            <Stat value={cooked.length} label="приготовано" className="lg:border-l-0 lg:border-t" />
+            <Stat
+              value={streak}
+              label={plural(streak, "день поспіль", "дні поспіль", "днів поспіль")}
+              accent={streak > 0}
+              className="lg:border-t"
+            />
           </div>
-        )}
-      </section>
+          <button
+            onClick={() => {
+              haptic(8);
+              setName(profile.name);
+              setHandle(profile.handle);
+              setBio(profile.bio);
+              setEmoji(profile.emoji);
+              setEditOpen(true);
+            }}
+            className="flex h-[46px] w-full items-center justify-center gap-1.5 border-t border-line text-[13.5px] font-bold active:bg-surface-2"
+          >
+            <Pencil size={14} strokeWidth={2.2} />
+            Редагувати профіль
+          </button>
+        </Panel>
 
-      {/* Вкладки */}
-      <div className="px-4 pt-5">
+        {/* Сімʼя й налаштування — на планшеті під карткою, на телефоні вони в шапці й у налаштуваннях */}
+        <Panel className="hidden lg:block">
+          <Link href="/family" className="flex h-12 items-center gap-3 px-3.5 active:bg-surface-2">
+            <Users size={17} className="shrink-0 text-muted" />
+            <span className="flex-1 text-[14px] font-semibold">Сімʼя</span>
+            <ChevronRight size={15} strokeWidth={2.2} className="text-faint" />
+          </Link>
+          <Link href="/settings" className="flex h-12 items-center gap-3 border-t border-line px-3.5 active:bg-surface-2">
+            <Settings2 size={17} className="shrink-0 text-muted" />
+            <span className="flex-1 text-[14px] font-semibold">Налаштування</span>
+            <ChevronRight size={15} strokeWidth={2.2} className="text-faint" />
+          </Link>
+        </Panel>
+        </aside>
+
+        <section className="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-3">
+
+        {/* Вкладки */}
         <Segmented
           value={tab}
           onChange={setTab}
           options={[
-            { value: "mine", label: `Мої ${lists.mine.length}` },
-            { value: "saved", label: `Збережені ${lists.saved.length}` },
-            { value: "wish", label: `Хочу ${lists.wish.length}` },
+            { value: "mine", label: "Мої" },
+            { value: "saved", label: "Збережені" },
+            { value: "wish", label: "Хочу" },
             { value: "history", label: "Історія" },
           ]}
+          className="lg:w-[440px]"
         />
-      </div>
 
-      {/* Вміст */}
-      <section className="px-4 pt-4">
-        {!hydrated ? null : tab === "history" ? (
-          lists.history.length === 0 ? (
-            <EmptyState
-              emoji="📖"
-              title="Історія порожня"
-              note="Приготуй щось у покроковому режимі — і страва зʼявиться тут."
-            />
-          ) : (
-            <div className="flex flex-col gap-2.5">
-              {lists.history.map((h, i) => (
-                <RecipeRow
-                  key={`${h.recipe!.id}-${i}`}
-                  recipe={h.recipe!}
-                  href={`/recipe/${h.recipe!.id}`}
-                  subtitle={`Приготовано ${timeAgo(h.at)}`}
-                />
-              ))}
-            </div>
-          )
-        ) : current.length === 0 ? (
-          <EmptyState
-            emoji={tab === "mine" ? "📗" : tab === "saved" ? "🔖" : "📌"}
-            title={
-              tab === "mine"
-                ? "Ще немає своїх рецептів"
-                : tab === "saved"
-                  ? "Порожня галерея"
-                  : "Список бажань порожній"
-            }
-            note={
-              tab === "mine"
-                ? "Додай перший рецепт — його побачить уся спільнота."
-                : tab === "saved"
-                  ? "Зберігай чужі рецепти кнопкою «закладка» — вони будуть тут."
-                  : "Погортай свайп або покрути рулетку — сподобані страви потраплять сюди."
-            }
-            action={
-              tab === "mine" ? (
-                <Link href="/new">
-                  <Button>
-                    <Plus size={17} />
-                    Створити рецепт
-                  </Button>
-                </Link>
-              ) : (
-                <Link href={tab === "saved" ? "/explore" : "/decide/swipe"}>
-                  <Button variant="secondary">
-                    {tab === "saved" ? "До каталогу" : "До свайпу"}
-                  </Button>
-                </Link>
-              )
-            }
-          />
-        ) : (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-5">
-            {current.map((r, i) => (
+        {/* Вміст */}
+        {hydrated && (
+          <Panel className="lg:hidden">
+            {rows.map(({ key, recipe, meta }, i) => (
               <motion.div
-                key={r!.id}
-                initial={{ opacity: 0, y: 12 }}
+                key={key}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(i * 0.03, 0.3) }}
               >
-                <RecipeTile recipe={r!} />
+                <Link
+                  href={`/recipe/${recipe.id}`}
+                  className={cn(
+                    "flex h-16 items-center gap-3 px-3.5 active:bg-surface-2",
+                    i > 0 && "border-t border-line",
+                  )}
+                >
+                  <RecipeMedia recipe={recipe} className="h-11 w-11 shrink-0" rounded="rounded-[8px]" emojiSize="text-[22px]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-bold">{recipe.title}</span>
+                    <span className="block truncate text-[12px] font-semibold text-faint">{meta}</span>
+                  </span>
+                  <ChevronRight size={15} strokeWidth={2.2} className="shrink-0 text-faint" />
+                </Link>
               </motion.div>
             ))}
+            {rows.length === 0 && (
+              <p className="px-3.5 py-9 text-center text-[13.5px] font-bold text-faint">{emptyText}</p>
+            )}
+            {tab === "mine" && (
+              <Link
+                href="/new"
+                onClick={() => haptic(12)}
+                className={cn(
+                  "flex h-12 items-center gap-2.5 px-3.5 active:bg-surface-2",
+                  "border-t border-line",
+                )}
+              >
+                <Plus size={16} strokeWidth={2.4} className="text-brand" />
+                <span className="flex-1 text-[14px] font-semibold text-brand">Додати свій рецепт</span>
+              </Link>
+            )}
+          </Panel>
+        )}
+
+        {/* Планшет: ті самі рецепти плитками */}
+        {hydrated && (
+          <div className="hidden lg:grid lg:grid-cols-4 lg:gap-x-3.5 lg:gap-y-4">
+            {rows.map(({ key, recipe, meta }) => (
+              <Link key={key} href={`/recipe/${recipe.id}`} className="min-w-0">
+                <RecipeMedia recipe={recipe} className="aspect-square w-full" rounded="rounded-[10px]" emojiSize="text-[52px]" />
+                <span className="mt-2 line-clamp-2 text-[13.5px] font-bold leading-tight">{recipe.title}</span>
+                <span className="mt-0.5 block truncate text-[12px] font-semibold text-faint">{meta}</span>
+              </Link>
+            ))}
+            {tab === "mine" && (
+              <Link
+                href="/new"
+                onClick={() => haptic(12)}
+                className="flex aspect-square flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-line-strong text-brand active:bg-surface"
+              >
+                <Plus size={26} strokeWidth={2.4} />
+                <span className="text-[13.5px] font-bold">Додати рецепт</span>
+              </Link>
+            )}
+            {rows.length === 0 && tab !== "mine" && (
+              <p className="col-span-4 rounded-[10px] border border-line bg-surface px-3.5 py-9 text-center text-[13.5px] font-bold text-faint">
+                {emptyText}
+              </p>
+            )}
           </div>
         )}
-      </section>
+        </section>
+      </div>
 
       {/* Редагування профілю */}
       <Sheet
@@ -285,7 +304,7 @@ function MeContent() {
                   onClick={() => setAvatar(googlePhoto)}
                   aria-label="Фото з Google"
                   aria-pressed={avatar !== null}
-                  className={`h-12 w-12 overflow-hidden rounded-2xl ${
+                  className={`h-12 w-12 overflow-hidden rounded-[10px] ${
                     avatar ? "ring-2 ring-brand" : ""
                   }`}
                 >
@@ -303,7 +322,7 @@ function MeContent() {
                     setAvatar(null);
                   }}
                   aria-pressed={avatar === null && emoji === e}
-                  className={`grid h-12 w-12 place-items-center rounded-2xl text-2xl ${
+                  className={`grid h-12 w-12 place-items-center rounded-[10px] text-2xl ${
                     avatar === null && emoji === e ? "bg-brand/20 ring-2 ring-brand" : "bg-surface-2"
                   }`}
                 >
@@ -321,7 +340,7 @@ function MeContent() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={40}
-              className="h-12 w-full rounded-2xl border border-line bg-surface px-4 text-[15px]"
+              className="h-12 w-full rounded-[10px] border border-line bg-surface px-4 text-[15px]"
             />
           </div>
 
@@ -333,7 +352,7 @@ function MeContent() {
               value={handle}
               onChange={(e) => setHandle(e.target.value)}
               maxLength={24}
-              className="h-12 w-full rounded-2xl border border-line bg-surface px-4 text-[15px]"
+              className="h-12 w-full rounded-[10px] border border-line bg-surface px-4 text-[15px]"
             />
           </div>
 
@@ -346,7 +365,7 @@ function MeContent() {
               onChange={(e) => setBio(e.target.value)}
               rows={3}
               maxLength={160}
-              className="w-full resize-none rounded-2xl border border-line bg-surface p-4 text-[15px] leading-relaxed"
+              className="w-full resize-none rounded-[10px] border border-line bg-surface p-4 text-[15px] leading-relaxed"
             />
           </div>
         </div>
@@ -359,23 +378,25 @@ function Stat({
   value,
   label,
   accent,
+  first,
+  className,
 }: {
   value: number;
   label: string;
   accent?: boolean;
+  first?: boolean;
+  className?: string;
 }) {
   return (
     <div
-      className={`rounded-2xl border px-2 py-2.5 text-center ${
-        accent ? "border-brand/30 bg-brand/8" : "border-line bg-surface"
-      }`}
+      className={cn(
+        "flex min-w-0 flex-col items-center gap-0.5 border-line py-2.5",
+        !first && "border-l",
+        className,
+      )}
     >
-      <p
-        className={`font-display text-[18px] font-extrabold leading-none ${accent ? "text-brand" : ""}`}
-      >
-        {value}
-      </p>
-      <p className="mt-1 truncate text-[10px] text-muted">{label}</p>
+      <span className={cn("font-display text-[16px] font-bold leading-tight", accent && "text-brand")}>{value}</span>
+      <span className="max-w-full truncate px-1 text-[11px] font-semibold text-faint">{label}</span>
     </div>
   );
 }

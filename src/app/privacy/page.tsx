@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { TopBar } from "@/components/TopBar";
-import { LegalSection, LegalPage, SUPPORT_EMAIL } from "@/components/legal";
+import { LegalIntro, LegalSection, LegalPage, SUPPORT_EMAIL } from "@/components/legal";
 
 export const metadata: Metadata = {
   title: "Політика конфіденційності — Ням",
@@ -12,16 +12,16 @@ export default function PrivacyPage() {
     <div className="pb-8">
       <TopBar title="Політика конфіденційності" />
       <LegalPage updated="13 вересня 2026">
-        <p>
+        <LegalIntro>
           «Ням» — застосунок для рецептів, комори і плану харчування. Ця сторінка описує, які дані
           він збирає насправді. Коротко: рівно стільки, скільки треба, щоб твої рецепти були з тобою
           на будь-якому пристрої.
-        </p>
+        </LegalIntro>
 
         <LegalSection title="Без акаунта">
           Застосунком можна користуватися взагалі без реєстрації. Тоді рецепти, комора, план і
           налаштування лежать лише у памʼяті браузера на твоєму пристрої (ключ{" "}
-          <code className="rounded bg-surface-2 px-1 py-0.5 text-[13px]">nyam-v1</code>) і нікуди не
+          <code className="rounded-[5px] bg-surface-2 px-1 py-0.5 text-[12.5px] font-semibold text-ink">nyam-v1</code>) і нікуди не
           передаються. Ми їх не бачимо.
         </LegalSection>
 

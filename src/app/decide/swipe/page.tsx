@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FilterButton, FilterSheet } from "@/components/FilterSheet";
 import { RecipeMedia, RecipeRow } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Button, EmptyState, useToast } from "@/components/ui";
+import { Button, EmptyState, Panel, PanelHeader, useToast } from "@/components/ui";
 import {
   activeFilterCount,
   applyFilters,
@@ -23,7 +23,7 @@ import {
 } from "@/lib/matching";
 import { useApp } from "@/lib/store";
 import type { Recipe } from "@/lib/types";
-import { formatMinutes, haptic, shuffle } from "@/lib/utils";
+import { cn, formatMinutes, haptic, shuffle } from "@/lib/utils";
 
 export default function SwipePage() {
   const myRecipes = useApp((s) => s.myRecipes);
@@ -107,9 +107,13 @@ export default function SwipePage() {
     <div className="flex min-h-dvh flex-col">
       <TopBar
         title="Свайп страв"
-        subtitle={current ? `${deck.length - index} попереду` : "Готово"}
         right={
-          <FilterButton count={activeFilterCount(filters)} onClick={() => setFiltersOpen(true)} />
+          <>
+            <span className="shrink-0 text-[12px] font-bold text-faint">
+              {current ? `${deck.length - index} попереду` : "Готово"}
+            </span>
+            <FilterButton count={activeFilterCount(filters)} onClick={() => setFiltersOpen(true)} />
+          </>
         }
       />
 
@@ -119,7 +123,7 @@ export default function SwipePage() {
         <FinishScreen liked={liked} onRestart={restart} />
       ) : (
         <>
-          <div className="relative mx-auto mt-4 h-[62vh] w-full max-w-[420px] px-5">
+          <div className="relative mx-auto mt-1 h-[62vh] w-full max-w-[420px] px-4">
             {third && <StackCard recipe={third} depth={2} key={`d2-${third.id}`} />}
             {next && <StackCard recipe={next} depth={1} key={`d1-${next.id}`} />}
             <SwipeCard
@@ -134,36 +138,37 @@ export default function SwipePage() {
             />
           </div>
 
-          <div className="mt-5 flex items-center justify-center gap-4 px-4">
-            <CircleBtn onClick={() => decide("left")} className="border-line text-muted">
-              <X size={26} />
-            </CircleBtn>
-            <CircleBtn
+          <div className="mx-auto mt-5 flex w-full max-w-[420px] items-center gap-2 px-4">
+            <ActionBtn onClick={() => decide("left")} className="flex-1 bg-surface-2 text-muted">
+              <X size={20} strokeWidth={2.4} />
+              Не зараз
+            </ActionBtn>
+            <ActionBtn
               onClick={undo}
               disabled={index === 0}
-              className="h-12 w-12 border-line text-muted"
+              label="Повернути попередню"
+              className="w-[52px] shrink-0 bg-surface-2 text-muted"
             >
               <RotateCcw size={18} />
-            </CircleBtn>
-            <CircleBtn
+            </ActionBtn>
+            <ActionBtn
               onClick={() => {
                 toggleSave(current.id);
                 haptic(12);
                 toast("Збережено в галерею", "🔖");
               }}
-              className="h-12 w-12 border-brand/40 text-brand"
+              label="Зберегти"
+              className="w-[52px] shrink-0 bg-surface-2 text-brand"
             >
               <Bookmark size={18} />
-            </CircleBtn>
-            <CircleBtn
-              onClick={() => decide("right")}
-              className="border-transparent brand-gradient text-brand-ink"
-            >
-              <Heart size={26} className="fill-current" />
-            </CircleBtn>
+            </ActionBtn>
+            <ActionBtn onClick={() => decide("right")} className="flex-1 brand-gradient text-brand-ink">
+              <Heart size={19} className="fill-current" />
+              Хочу
+            </ActionBtn>
           </div>
 
-          <p className="mt-3 px-8 pb-4 text-center text-[12px] leading-snug text-muted">
+          <p className="mt-3 px-8 pb-4 text-center text-[11.5px] font-semibold leading-snug text-faint">
             Гортай вправо, якщо хочеш це приготувати. Уподобані страви потраплять у список
             «хочу приготувати».
           </p>
@@ -219,37 +224,35 @@ function SwipeCard({
           ? { x: flyOut === "right" ? 520 : -520, opacity: 0, transition: { duration: 0.22 } }
           : {}
       }
-      className="absolute inset-0 cursor-grab touch-pan-y overflow-hidden rounded-xl4 border border-line bg-surface shadow-[var(--shadow-card)] active:cursor-grabbing"
+      className="absolute inset-0 cursor-grab touch-pan-y overflow-hidden rounded-[12px] border border-line bg-surface active:cursor-grabbing"
     >
       <RecipeMedia recipe={recipe} className="h-[62%] w-full" rounded="rounded-none" emojiSize="text-8xl" />
 
       <motion.div
         style={{ opacity: likeOpacity }}
-        className="pointer-events-none absolute left-5 top-5 rotate-[-12deg] rounded-2xl border-4 border-mint px-4 py-1.5"
+        className="pointer-events-none absolute left-4 top-4 rotate-[-12deg] rounded-[10px] border-[3px] border-brand bg-[rgb(8_8_10_/_0.55)] px-3.5 py-1"
       >
-        <span className="font-display text-2xl font-extrabold text-mint">ХОЧУ</span>
+        <span className="font-display text-[22px] font-bold text-brand">ХОЧУ</span>
       </motion.div>
       <motion.div
         style={{ opacity: nopeOpacity }}
-        className="pointer-events-none absolute right-5 top-5 rotate-[12deg] rounded-2xl border-4 border-berry px-4 py-1.5"
+        className="pointer-events-none absolute right-4 top-4 rotate-[12deg] rounded-[10px] border-[3px] border-berry bg-[rgb(8_8_10_/_0.55)] px-3.5 py-1"
       >
-        <span className="font-display text-2xl font-extrabold text-berry">НЕ ЗАРАЗ</span>
+        <span className="font-display text-[22px] font-bold text-berry">НЕ ЗАРАЗ</span>
       </motion.div>
 
-      <div className="flex h-[38%] flex-col p-4">
+      <div className="flex h-[38%] flex-col border-t border-line px-3.5 pb-3.5 pt-3">
         <div className="flex items-start gap-2">
-          <h2 className="flex-1 font-display text-[19px] font-extrabold leading-tight">
-            {recipe.title}
-          </h2>
+          <h2 className="flex-1 text-[18px] font-extrabold leading-tight">{recipe.title}</h2>
           <button
             onClick={onSave}
             aria-label="Зберегти"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-surface-2"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-surface-2 active:bg-line"
           >
             <Bookmark size={16} />
           </button>
         </div>
-        <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-muted">
+        <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-muted">
           {recipe.description}
         </p>
         <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
@@ -273,11 +276,11 @@ function StackCard({ recipe, depth }: { recipe: Recipe; depth: number }) {
       initial={false}
       animate={{ scale: 1 - depth * 0.05, y: depth * 14, opacity: 1 - depth * 0.25 }}
       transition={{ type: "spring", stiffness: 320, damping: 30 }}
-      className="absolute inset-0 overflow-hidden rounded-xl4 border border-line bg-surface"
+      className="absolute inset-0 overflow-hidden rounded-[12px] border border-line bg-surface"
     >
       <RecipeMedia recipe={recipe} className="h-[62%] w-full" rounded="rounded-none" emojiSize="text-8xl" />
-      <div className="p-4">
-        <h2 className="font-display text-[19px] font-extrabold leading-tight">{recipe.title}</h2>
+      <div className="border-t border-line px-3.5 pt-3">
+        <h2 className="text-[18px] font-extrabold leading-tight">{recipe.title}</h2>
       </div>
     </motion.div>
   );
@@ -285,29 +288,36 @@ function StackCard({ recipe, depth }: { recipe: Recipe; depth: number }) {
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-muted">
+    <span className="inline-flex h-6 items-center gap-1 rounded-[6px] bg-surface-2 px-2 text-[11.5px] font-bold text-muted">
       {children}
     </span>
   );
 }
 
-function CircleBtn({
+/** Кнопка під колодою: широка з підписом або квадратна 52×52 з іконкою. */
+function ActionBtn({
   children,
   onClick,
   className,
   disabled,
+  label,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   className?: string;
   disabled?: boolean;
+  label?: string;
 }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.88 }}
+      whileTap={{ scale: 0.94 }}
       onClick={onClick}
       disabled={disabled}
-      className={`grid h-16 w-16 place-items-center rounded-full border-2 bg-surface disabled:opacity-35 ${className ?? ""}`}
+      aria-label={label}
+      className={cn(
+        "flex h-[52px] items-center justify-center gap-2 rounded-[12px] text-[15px] font-extrabold disabled:opacity-35",
+        className,
+      )}
     >
       {children}
     </motion.button>
@@ -327,28 +337,44 @@ function FinishScreen({ liked, onRestart }: { liked: Recipe[]; onRestart: () => 
   }
 
   return (
-    <div className="px-4 pt-6">
-      <div className="text-center">
-        <div className="pop-in text-5xl">✨</div>
-        <h2 className="mt-3 font-display text-xl font-extrabold">
-          Ти обрав {liked.length}{" "}
-          {liked.length === 1 ? "страву" : liked.length < 5 ? "страви" : "страв"}
-        </h2>
-        <p className="mt-1 text-[13px] text-muted">Усе це вже в списку «хочу приготувати».</p>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5 px-4 pb-6">
+      <Panel>
+        <PanelHeader label="Твій вибір" tone="brand" />
+        <div className="flex items-center gap-3 border-t border-line px-3.5 py-3">
+          <span className="pop-in grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-brand/15 text-[21px]">
+            ✨
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-extrabold leading-tight">
+              Ти обрав {liked.length}{" "}
+              {liked.length === 1 ? "страву" : liked.length < 5 ? "страви" : "страв"}
+            </span>
+            <span className="mt-0.5 block text-[12px] font-semibold text-muted">
+              Усе це вже в списку «хочу приготувати».
+            </span>
+          </span>
+        </div>
         {liked.map((r) => (
-          <RecipeRow key={r.id} recipe={r} href={`/recipe/${r.id}`} />
+          <RecipeRow key={r.id} recipe={r} href={`/recipe/${r.id}`} flat />
         ))}
-      </div>
+      </Panel>
 
-      <div className="mt-5 flex gap-2 pb-6">
-        <Button variant="secondary" className="flex-1" onClick={onRestart}>
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            haptic(10);
+            onRestart();
+          }}
+          className="h-[50px] flex-1 rounded-[10px] bg-surface-2 text-[14.5px] font-bold active:bg-line"
+        >
           Ще раз
-        </Button>
-        <Link href="/me?tab=wish" className="flex-1">
-          <Button full>До списку</Button>
+        </button>
+        <Link
+          href="/me?tab=wish"
+          onClick={() => haptic(10)}
+          className="grid h-[50px] flex-1 place-items-center rounded-[10px] brand-gradient text-[15px] font-extrabold text-brand-ink"
+        >
+          До списку
         </Link>
       </div>
     </div>

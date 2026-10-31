@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IngredientPicker } from "@/components/IngredientPicker";
 import { EditTypeButton } from "@/components/EditTypeButton";
 import { NewIngredientSheet } from "@/components/NewIngredientSheet";
-import { Button, Sheet } from "@/components/ui";
+import { Button, PanelHeader, Sheet } from "@/components/ui";
 import { ancestors, descendants, ing, knownIngredient, lineage } from "@/data/ingredients";
 import { FOOD_AI_MESSAGE, estimateProductNutrition, readNutritionLabel } from "@/lib/food-client";
 import {
@@ -144,14 +144,14 @@ export function ConfirmSheet({
         </div>
       }
     >
-      {body && <div className="pb-3 text-[14px] leading-relaxed text-muted">{body}</div>}
+      {body && <div className="px-1 pb-3 text-[14px] font-semibold leading-relaxed text-muted">{body}</div>}
     </Sheet>
   );
 }
 
 export function Field({ children, note }: { children: ReactNode; note?: ReactNode }) {
   return (
-    <p className="mb-2 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wide text-muted">
+    <p className="mb-2 flex items-center gap-2 px-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">
       {children}
       {note}
     </p>
@@ -161,7 +161,7 @@ export function Field({ children, note }: { children: ReactNode; note?: ReactNod
 /** Позначка «здогадка» біля назви поля. */
 function Guess() {
   return (
-    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10.5px] font-semibold normal-case tracking-normal text-brand">
+    <span className="rounded-[5px] bg-brand/10 px-1.5 py-0.5 text-[10.5px] font-bold normal-case tracking-normal text-brand">
       здогадка
     </span>
   );
@@ -677,7 +677,7 @@ export function ProductEditorSheet({
     tried || (key !== "name" && key !== "type") ? check.errors[key] : undefined;
   const guessCls = (g: Guessed) =>
     guessed.has(g) ? "border-dashed border-brand/60 underline decoration-dotted underline-offset-4" : "border-line";
-  const inputCls = "h-11 w-full rounded-2xl border bg-surface px-3.5 text-[15px]";
+  const inputCls = "h-11 w-full rounded-[10px] border bg-surface px-3.5 text-[15px] font-semibold placeholder:text-faint";
   const provenance = base ? null : provenanceText(draft?.provenance);
   const typeLabel = form.typeKey && knownIngredient(form.typeKey) ? ing(form.typeKey).label : "";
 
@@ -700,15 +700,15 @@ export function ProductEditorSheet({
           </div>
         }
       >
-        <div className="flex flex-col gap-4 pb-2">
+        <div className="flex flex-col gap-4 pb-3">
           {provenance && (
-            <p className="rounded-2xl bg-surface-2 px-3.5 py-3 text-[12.5px] leading-snug text-muted">
+            <p className="rounded-[10px] border border-line bg-surface px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-muted">
               {provenance}
             </p>
           )}
 
           {showNotice && (
-            <p className="rounded-2xl border border-brand/30 bg-brand/5 px-3.5 py-3 text-[12.5px] leading-snug">
+            <p className="rounded-[10px] border border-brand/30 bg-brand/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug">
               Картки товарів спільні: правку побачать усі. Кожна зміна пишеться в історію, і її можна повернути.
             </p>
           )}
@@ -736,33 +736,31 @@ export function ProductEditorSheet({
               className={cn(inputCls, guessCls("name"))}
             />
             {err("name") ? (
-              <p className="mt-1.5 text-[11.5px] leading-snug text-berry">{err("name")}</p>
+              <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-berry">{err("name")}</p>
             ) : (
-              <p className="mt-1.5 text-[11px] leading-snug text-faint">
+              <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-faint">
                 Так, як сказала б людина, а не каса: без скорочень.
               </p>
             )}
           </div>
 
           {similar.length > 0 && !problem && (
-            <div className="rounded-2xl border border-line bg-surface px-3.5 py-3">
-              <p className="mb-2 text-[12px] font-bold text-muted">Можливо, це вже є:</p>
-              <div className="flex flex-col gap-2">
-                {similar.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2.5">
-                    <span className="text-lg">{ing(p.typeKey).emoji}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13.5px] font-bold">{p.name}</span>
-                      {productMeta(p) && (
-                        <span className="block truncate text-[11.5px] text-muted">{productMeta(p)}</span>
-                      )}
-                    </span>
-                    <Button size="sm" variant="secondary" onClick={() => pick(p)}>
-                      Це він
-                    </Button>
-                  </div>
-                ))}
-              </div>
+            <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+              <PanelHeader label="Можливо, це вже є" />
+              {similar.map((p) => (
+                <div key={p.id} className="flex min-h-[54px] items-center gap-3 border-t border-line px-3.5 py-2">
+                  <span className="w-[22px] shrink-0 text-lg leading-none">{ing(p.typeKey).emoji}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold">{p.name}</span>
+                    {productMeta(p) && (
+                      <span className="block truncate text-[11.5px] font-semibold text-faint">{productMeta(p)}</span>
+                    )}
+                  </span>
+                  <Button size="sm" variant="secondary" onClick={() => pick(p)}>
+                    Це він
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -775,7 +773,7 @@ export function ProductEditorSheet({
               maxLength={80}
               className={cn(inputCls, guessCls("brand"))}
             />
-            {err("brand") && <p className="mt-1.5 text-[11.5px] leading-snug text-berry">{err("brand")}</p>}
+            {err("brand") && <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-berry">{err("brand")}</p>}
           </div>
 
           <div>
@@ -784,37 +782,37 @@ export function ProductEditorSheet({
               <button
                 onClick={() => setPicking(true)}
                 className={cn(
-                  "flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-2xl border bg-surface px-3.5 py-2 text-left text-[14px]",
+                  "flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[10px] border bg-surface px-3.5 py-2 text-left text-[14px] active:bg-surface-2",
                   guessCls("type"),
                 )}
               >
                 {typeLabel ? (
                   <>
-                    <span className="text-lg">{ing(form.typeKey).emoji}</span>
-                    <span className="min-w-0 flex-1 truncate font-bold">{typeTrail(form.typeKey)}</span>
-                    <span className="shrink-0 text-[12px] font-bold text-brand">змінити</span>
+                    <span className="text-lg leading-none">{ing(form.typeKey).emoji}</span>
+                    <span className="min-w-0 flex-1 truncate font-semibold">{typeTrail(form.typeKey)}</span>
+                    <span className="shrink-0 text-[12.5px] font-bold text-brand">змінити</span>
                   </>
                 ) : (
-                  <span className="text-faint">Обрати тип</span>
+                  <span className="font-semibold text-faint">Обрати тип</span>
                 )}
               </button>
               <button
                 onClick={() => setCreatingType(form.name.trim())}
                 aria-label="Новий тип"
-                className="flex h-11 shrink-0 items-center gap-1 rounded-2xl bg-surface-2 px-3 text-[12.5px] font-bold text-brand"
+                className="flex h-11 shrink-0 items-center gap-1 rounded-[10px] bg-surface-2 px-3 text-[12.5px] font-bold text-brand active:bg-line"
               >
-                <Plus size={14} /> Новий тип
+                <Plus size={14} strokeWidth={2.4} /> Новий тип
               </button>
             </div>
             {err("type") ? (
-              <p className="mt-1.5 text-[11.5px] leading-snug text-berry">{err("type")}</p>
+              <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-berry">{err("type")}</p>
             ) : (
-              <p className="mt-1.5 text-[11px] leading-snug text-faint">
+              <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-faint">
                 Рецепти рахують товар за типом: рецепту з «Молоко» підійде й «Молоко безлактозне». Навпаки — ні.
               </p>
             )}
             {/* Дописаний тип із хибним батьком виправляють тут же, а не лише з комори. */}
-            <EditTypeButton typeKey={form.typeKey} className="mt-1" />
+            <EditTypeButton typeKey={form.typeKey} className="mt-1 px-1" />
           </div>
 
           <div className="grid grid-cols-[1fr_auto] gap-3">
@@ -827,13 +825,16 @@ export function ProductEditorSheet({
                   inputMode="decimal"
                   placeholder="900"
                   aria-label="Скільки в упаковці"
-                  className={cn("h-11 w-full min-w-0 rounded-2xl border bg-surface px-3 text-center text-[15px]", guessCls("pack"))}
+                  className={cn(
+                    "h-11 w-full min-w-0 rounded-[10px] border bg-surface px-3 text-center text-[15px] font-semibold placeholder:text-faint",
+                    guessCls("pack"),
+                  )}
                 />
                 <select
                   value={form.packUnit}
                   onChange={(e) => set("packUnit", e.target.value as PackUnit, "pack")}
                   aria-label="Одиниця упаковки"
-                  className="h-11 w-[72px] shrink-0 rounded-2xl bg-surface-2 px-1.5 text-center text-[13px] font-semibold"
+                  className="h-11 w-[72px] shrink-0 rounded-[10px] bg-surface-2 px-1.5 text-center text-[13px] font-semibold"
                 >
                   {PACK_UNITS.map((u) => (
                     <option key={u} value={u}>
@@ -856,7 +857,7 @@ export function ProductEditorSheet({
             </div>
           </div>
           {(err("pack") || err("fat")) && (
-            <p className="-mt-2 text-[11.5px] leading-snug text-berry">{err("pack") ?? err("fat")}</p>
+            <p className="-mt-2 px-1 text-[11.5px] font-semibold leading-snug text-berry">{err("pack") ?? err("fat")}</p>
           )}
 
           {form.packUnit === "pcs" && (
@@ -869,7 +870,7 @@ export function ProductEditorSheet({
                 placeholder="60"
                 className={cn(inputCls, "border-line")}
               />
-              <p className={cn("mt-1.5 text-[11px] leading-snug", err("perPiece") ? "text-berry" : "text-faint")}>
+              <p className={cn("mt-1.5 px-1 text-[11.5px] font-semibold leading-snug", err("perPiece") ? "text-berry" : "text-faint")}>
                 {err("perPiece") ?? "Щоб «6 шт» стали грамами для калорій і рецептів."}
               </p>
             </div>
@@ -886,14 +887,14 @@ export function ProductEditorSheet({
                 <NumField value={form.fatG} onChange={(v) => setNutritionField("fatG", v)} label="жири" />
                 <NumField value={form.carbs} onChange={(v) => setNutritionField("carbs", v)} label="вугл." />
               </div>
-              <p className={cn("mt-1.5 text-[11px] leading-snug", err("nutrition") ? "text-berry" : "text-faint")}>
+              <p className={cn("mt-1.5 px-1 text-[11.5px] font-semibold leading-snug", err("nutrition") ? "text-berry" : "text-faint")}>
                 {err("nutrition") ??
                   aiNote ??
                   "З етикетки, збоку. Немає пачки під рукою — хай оцінить ШІ, картка це запамʼятає."}
               </p>
             </div>
           ) : (
-            <button onClick={() => setShowNutrition(true)} className="self-start text-[13px] font-bold text-brand">
+            <button onClick={() => setShowNutrition(true)} className="h-8 self-start px-1 text-[13.5px] font-bold text-brand">
               ＋ КБЖВ з етикетки
             </button>
           )}
@@ -919,7 +920,9 @@ export function ProductEditorSheet({
                   if (file) void readPhoto(file);
                 }}
               />
-              {!showNutrition && aiNote && <p className="w-full text-[11.5px] leading-snug text-berry">{aiNote}</p>}
+              {!showNutrition && aiNote && (
+                <p className="w-full px-1 text-[11.5px] font-semibold leading-snug text-berry">{aiNote}</p>
+              )}
             </div>
           )}
         </div>
@@ -970,12 +973,12 @@ function ProblemBlock({
   onAddAsType?: () => void;
   onDuplicate?: (existing: Product) => void;
 }) {
-  const box = "rounded-2xl border px-3.5 py-3 text-[12.5px] leading-snug";
+  const box = "rounded-[10px] border px-3.5 py-3 text-[12.5px] font-semibold leading-snug";
   if (problem.kind === "duplicate") {
     const p = problem.existing;
     const pack = packLabel(p);
     return (
-      <div className={cn(box, "border-brand/40 bg-brand/5")}>
+      <div className={cn(box, "border-brand/40 bg-brand/10")}>
         <p>
           Такий товар уже є: «{p.name}»{pack ? ` · ${pack}` : ""}.{" "}
           {editing ? "Змінити назву чи обʼєднати картки?" : "Це він?"}
@@ -1001,7 +1004,7 @@ function ProblemBlock({
   }
   if (problem.kind === "offline") {
     return (
-      <div className={cn(box, "border-line bg-surface-2")}>
+      <div className={cn(box, "border-line bg-surface")}>
         <p>
           Картку товару можна зберегти, коли є звʼязок.
           {onAddAsType && typeLabel ? ` Додати поки як «${typeLabel}»?` : ""}
@@ -1033,9 +1036,9 @@ function NumField({ value, onChange, label }: { value: string; onChange: (v: str
         inputMode="decimal"
         placeholder="0"
         aria-label={label}
-        className="h-11 w-full rounded-2xl border border-line bg-surface px-2 text-center text-[15px]"
+        className="h-11 w-full rounded-[10px] border border-line bg-surface px-2 text-center text-[15px] font-semibold placeholder:text-faint"
       />
-      <span className="text-center text-[10.5px] text-muted">{label}</span>
+      <span className="text-center text-[11px] font-semibold text-muted">{label}</span>
     </label>
   );
 }

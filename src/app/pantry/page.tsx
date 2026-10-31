@@ -24,6 +24,7 @@ import {
 import { ConflictSheet } from "@/components/pantry/ConflictSheet";
 import { ItemSheet, inDays } from "@/components/pantry/ItemSheet";
 import { NamingSequence, namingDraft, namingOfferText, needsNaming } from "@/components/pantry/NamingSequence";
+import { PantryAside } from "@/components/pantry/PantryAside";
 import { ActionToast, ListHeader, PantryGroupSheet, PantryGroups, type PantryGrouping } from "@/components/pantry/PantryGroups";
 import {
   MAX_OFF_LOOKUPS,
@@ -998,9 +999,9 @@ export default function PantryPage() {
         Шапка й вкладки стоять на місці, прокручується лише список: фільтр і
         «+» потрібні саме тоді, коли долистав до середини комори.
       */}
-      <header className="pad-safe-t sticky top-0 z-30 bg-bg">
-        <div className="flex h-[52px] items-center gap-2 pl-5 pr-4">
-          <h1 className="min-w-0 flex-1 truncate font-display text-[22px] font-bold">Комора</h1>
+      <header className="pad-safe-t sticky top-0 z-30 bg-bg md:bg-bg/90 md:backdrop-blur">
+        <div className="flex h-[52px] items-center gap-2 pl-5 pr-4 md:h-[76px] md:gap-2.5 md:px-6">
+          <h1 className="min-w-0 flex-1 truncate font-display text-[22px] font-bold md:text-[24px] md:font-extrabold">Комора</h1>
           {/* Список покупок — зворотний бік комори: те, чого в ній немає. */}
           <Link
             href="/shopping"
@@ -1048,7 +1049,7 @@ export default function PantryPage() {
         </div>
 
         {/* Вкладки: що приніс і що є з базового; поруч — фільтр поточної вкладки */}
-        <div className="relative flex gap-2 px-4 pb-3.5 pt-0.5">
+        <div className="relative flex gap-2 px-4 pb-3.5 pt-0.5 md:px-6 lg:max-w-[calc(100%-306px)]">
           <Segmented
             className="flex-1"
             value={tab}
@@ -1112,7 +1113,9 @@ export default function PantryPage() {
         </div>
       </header>
 
-      <section className="flex flex-col gap-2.5 px-4">
+      {/* Планшет (lg): комора ліворуч, «що докупити» й «що приготувати» — бічна колонка на 290 px. */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_290px] lg:items-start lg:gap-4 lg:px-6">
+      <section className="flex flex-col gap-2.5 px-4 md:px-6 lg:px-0">
         {filterLabel && (
           <div className="flex items-center gap-2 text-[12.5px] font-bold text-muted">
             Фільтр: <span className="min-w-0 truncate text-ink">{filterLabel}</span>
@@ -1236,6 +1239,8 @@ export default function PantryPage() {
           <p className="py-14 text-center text-[14px] font-bold text-muted">За цим фільтром нічого немає</p>
         )}
       </section>
+      <PantryAside />
+      </div>
 
       {/* Фото чека: камера на телефоні, галерея на столі */}
       <input

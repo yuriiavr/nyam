@@ -2,21 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
-import {
-  Bell,
-  CalendarDays,
-  Compass,
-  House,
-  NotebookPen,
-  Plus,
-  Refrigerator,
-  Settings2,
-  Sparkles,
-  Store,
-  User,
-  Users,
-} from "lucide-react";
+import { Bell, CalendarDays, Compass, House, NotebookPen, Refrigerator, Sparkles } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { cn, haptic } from "@/lib/utils";
 import { Avatar } from "./ui";
@@ -24,111 +10,94 @@ import { Avatar } from "./ui";
 const ITEMS = [
   { href: "/", label: "Стрічка", icon: House },
   { href: "/explore", label: "Пошук", icon: Compass },
-  { href: "/decide", label: "Вирішити", icon: Sparkles },
+  { href: "/decide", label: "Вирішити", icon: Sparkles, center: true },
   { href: "/pantry", label: "Комора", icon: Refrigerator },
-  { href: "/products", label: "Товари", icon: Store },
+  { href: "/plan", label: "Тиждень", icon: CalendarDays },
   { href: "/diary", label: "Щоденник", icon: NotebookPen },
-  { href: "/plan", label: "План на тиждень", icon: CalendarDays },
-  { href: "/family", label: "Сімʼя", icon: Users },
-  { href: "/notifications", label: "Сповіщення", icon: Bell },
-  { href: "/me", label: "Профіль", icon: User },
 ];
 
-/** Бічна навігація — тільки для великих екранів (від lg). */
-export function Sidebar() {
-  const pathname = usePathname() || "/";
-  const profile = useApp((s) => s.profile);
-  const myCount = useApp((s) => s.myRecipes.length);
+/** Екрани без власного пункту підсвічують «батька»: покупки живуть у тижні. */
+const PARENT: Array<[RegExp, string]> = [[/^\/shopping/, "/plan"]];
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+/** Де рейки немає: готування займає весь екран, вхід — до застосунку. */
+const HIDE_ON = [/\/cook$/, /^\/auth/];
+
+/**
+ * Навігаційна рейка планшета (від md): вузька колонка зліва замість нижньої
+ * «пігулки». На широкому екрані палець тягнеться вбік, а не вниз, і вертикаль
+ * лишається контенту — на альбомних 600 px вона найдорожча.
+ */
+export function NavRail() {
+  const pathname = usePathname() || "/";
+  const account = useApp((s) => s.account);
+  const profile = useApp((s) => s.profile);
+  const unread = useApp((s) => s.notifications.filter((n) => !n.readAt).length);
+  if (!account || HIDE_ON.some((re) => re.test(pathname))) return null;
+
+  const current = PARENT.find(([re]) => re.test(pathname))?.[1] ?? pathname;
+  const isActive = (href: string) => (href === "/" ? current === "/" : current.startsWith(href));
 
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[248px] shrink-0 flex-col border-r border-line bg-bg-elev/60 px-3 py-5 lg:flex xl:w-[276px]">
-      {/* Логотип */}
-      <Link href="/" className="mb-6 flex items-center gap-2.5 px-2">
-        <span className="grid h-10 w-10 place-items-center rounded-2xl brand-gradient text-xl text-brand-ink shadow-[var(--shadow-pop)]">
-          🍲
-        </span>
-        <span className="min-w-0">
-          <span className="block font-display text-[19px] font-extrabold leading-none">Ням</span>
-          <span className="block truncate text-[11px] text-muted">що поїсти сьогодні</span>
-        </span>
-      </Link>
-
-      {/* Навігація */}
-      <nav className="flex flex-col gap-1">
-        {ITEMS.map((item) => {
-          const active = isActive(item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => haptic(8)}
-              className="relative flex items-center gap-3 rounded-2xl px-3 py-2.5"
-            >
-              {active && (
-                <motion.span
-                  layoutId="sidebar-pill"
-                  transition={{ type: "spring", stiffness: 460, damping: 36 }}
-                  className="absolute inset-0 rounded-2xl bg-surface-2"
-                />
-              )}
-              <Icon
-                size={19}
-                strokeWidth={active ? 2.5 : 2}
-                className={cn("relative z-10 shrink-0", active ? "text-brand" : "text-muted")}
-              />
-              <span
-                className={cn(
-                  "relative z-10 truncate text-[14px] font-bold",
-                  active ? "text-ink" : "text-muted",
-                )}
-              >
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Головна дія */}
+    <nav className="sticky top-0 z-30 hidden h-dvh w-[92px] shrink-0 flex-col items-center gap-1 border-r border-line bg-[rgb(13_13_16_/_0.6)] pb-3.5 pt-4 md:flex light:bg-bg-elev">
       <Link
-        href="/new"
-        onClick={() => haptic(12)}
-        className="mt-5 flex items-center justify-center gap-2 rounded-2xl brand-gradient py-3 text-[14px] font-bold text-brand-ink shadow-[var(--shadow-pop)] transition-transform active:scale-[0.97]"
+        href="/"
+        aria-label="Ням — на головну"
+        className="mb-3 grid h-[46px] w-[46px] place-items-center rounded-[16px] brand-gradient text-[24px] shadow-[0_12px_30px_-10px_rgb(255_107_53_/_0.6)]"
       >
-        <Plus size={18} strokeWidth={2.6} />
-        Додати рецепт
+        🍲
       </Link>
+
+      {ITEMS.map((item) => {
+        const active = isActive(item.href);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={() => haptic(8)}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex h-[58px] w-[76px] flex-col items-center justify-center gap-1 rounded-[18px] transition-colors",
+              item.center
+                ? "brand-gradient text-brand-ink"
+                : active
+                  ? "bg-surface-2 text-brand"
+                  : "text-muted active:bg-surface-2",
+            )}
+          >
+            <Icon size={22} strokeWidth={item.center ? 2.4 : 2} />
+            <span className="text-[11px] font-bold tracking-[0.01em]">{item.label}</span>
+          </Link>
+        );
+      })}
 
       <div className="flex-1" />
 
-      {/* Профіль */}
-      <div className="flex items-center gap-2.5 rounded-2xl border border-line bg-surface p-2.5">
-        <Link href="/me" className="flex min-w-0 flex-1 items-center gap-2.5">
-          <Avatar
-            emoji={profile.emoji}
-            gradient={profile.gradient}
-            src={profile.avatar}
-            size={36}
-          />
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-bold">{profile.name}</span>
-            <span className="block truncate text-[11px] text-muted">
-              {myCount} {myCount === 1 ? "рецепт" : "рецептів"}
-            </span>
-          </span>
-        </Link>
-        <Link
-          href="/settings"
-          aria-label="Налаштування"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted"
-        >
-          <Settings2 size={16} />
-        </Link>
-      </div>
-    </aside>
+      <Link
+        href="/notifications"
+        aria-label={unread ? `Сповіщення, непрочитаних: ${unread}` : "Сповіщення"}
+        className={cn(
+          "relative grid h-12 w-12 place-items-center rounded-[16px]",
+          pathname.startsWith("/notifications") ? "bg-surface-2 text-brand" : "text-muted active:bg-surface-2",
+        )}
+      >
+        <Bell size={22} />
+        {unread > 0 && (
+          <span className="absolute right-[11px] top-2.5 h-[9px] w-[9px] rounded-full bg-berry shadow-[0_0_0_2px_var(--bg-elev)]" />
+        )}
+      </Link>
+      <Link
+        href="/me"
+        aria-label="Профіль"
+        className={cn(
+          "mt-1.5 rounded-full",
+          pathname.startsWith("/me") || pathname.startsWith("/settings")
+            ? "shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--brand)]"
+            : "shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--line-strong)]",
+        )}
+      >
+        <Avatar emoji={profile.emoji} gradient={profile.gradient} src={profile.avatar} size={46} />
+      </Link>
+    </nav>
   );
 }

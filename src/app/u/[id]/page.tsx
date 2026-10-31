@@ -1,16 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Flame, MapPin, Star, Users } from "lucide-react";
+import { Check, MapPin, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { RecipeTile } from "@/components/RecipeCard";
+import { RecipeRow } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Avatar, Button, EmptyState, Segmented, useToast } from "@/components/ui";
+import { Avatar, Panel, PanelHeader, Segmented, useToast } from "@/components/ui";
 import { allRecipes, effectiveStats, profileById, useApp } from "@/lib/store";
 import { topBy } from "@/lib/matching";
-import { avgRating, compactNumber, plural } from "@/lib/utils";
+import { avgRating, cn, compactNumber, formatMinutes, haptic, plural } from "@/lib/utils";
 
 type Sort = "popular" | "new";
 
@@ -60,144 +60,144 @@ export default function UserPage() {
 
   return (
     <div className="pb-8">
-      <TopBar title={profile.name} subtitle={`@${profile.handle}`} />
+      {/* Імʼя лишається в шапці: вона липка, і поки гортаєш рецепти, видно, чиї вони. */}
+      <TopBar title={profile.name} />
 
-      {/* Шапка профілю */}
-      <section className="px-4 pt-4">
-        <div
-          className="overflow-hidden rounded-xl3 border border-line bg-surface"
-          style={{
-            backgroundImage: `linear-gradient(140deg, ${profile.gradient[0]}22, transparent 60%)`,
-          }}
-        >
-          <div className="flex items-center gap-4 p-4">
-            <Avatar
-              emoji={profile.emoji}
-              gradient={profile.gradient}
-              src={profile.avatar}
-              size={72}
-              ring
-            />
+      <div className="flex flex-col gap-2.5 px-4">
+        {/* Шапка профілю */}
+        <Panel>
+          <div className="flex items-center gap-3.5 p-3.5">
+            <Avatar emoji={profile.emoji} gradient={profile.gradient} src={profile.avatar} size={64} />
             <div className="min-w-0 flex-1">
-              <h2 className="truncate font-display text-[19px] font-extrabold leading-tight">
-                {profile.name}
-              </h2>
-              <p className="truncate text-[12.5px] text-muted">@{profile.handle}</p>
+              <h2 className="truncate font-display text-[17px] font-bold leading-tight">{profile.name}</h2>
+              <p className="truncate text-[12.5px] font-semibold text-faint">@{profile.handle}</p>
               {profile.city && (
-                <p className="mt-1 flex items-center gap-1 text-[12px] text-muted">
-                  <MapPin size={11} />
+                <p className="mt-0.5 flex items-center gap-1 truncate text-[12px] font-semibold text-faint">
+                  <MapPin size={11} className="shrink-0" />
                   {profile.city}
                 </p>
               )}
+              {profile.bio && <p className="mt-1 text-[12.5px] leading-[1.4] text-muted">{profile.bio}</p>}
             </div>
           </div>
 
-          {profile.bio && (
-            <p className="px-4 pb-3 text-[13.5px] leading-relaxed text-muted">{profile.bio}</p>
-          )}
-
-          <div className="grid grid-cols-4 gap-px border-t border-line bg-line">
-            <MiniStat
-              icon={<Users size={13} />}
+          <div className="grid grid-cols-4 border-t border-line">
+            <Stat
               value={compactNumber(profile.followers + (following ? 1 : 0))}
               label="підписників"
               href={`/u/${params.id}/followers`}
+              first
             />
-            <MiniStat value={String(recipes.length)} label="рецептів" />
-            <MiniStat
-              icon={<Flame size={13} />}
-              value={compactNumber(totalCooks)}
-              label="приготувань"
-            />
-            <MiniStat
-              icon={<Star size={13} />}
-              value={avg > 0 ? avg.toFixed(1) : "—"}
-              label="рейтинг"
-            />
+            <Stat value={String(recipes.length)} label="рецептів" />
+            <Stat value={compactNumber(totalCooks)} label="приготувань" />
+            <Stat value={avg > 0 ? avg.toFixed(1) : "—"} label="рейтинг" accent={avg > 0} />
           </div>
 
-          <div className="p-3">
-            <Button
-              full
-              variant={following ? "secondary" : "primary"}
+          <div className="border-t border-line p-3">
+            <motion.button
+              whileTap={{ scale: 0.97 }}
               onClick={() => {
+                haptic(10);
                 toggleFollow(profile.id);
                 toast(following ? "Ви відписались" : `Тепер ви стежите за ${profile.name}`, "👋");
               }}
+              className={cn(
+                "flex h-11 w-full items-center justify-center gap-1.5 rounded-[10px] text-[14px] font-extrabold transition-colors",
+                following ? "bg-surface-2 text-muted" : "brand-gradient text-brand-ink",
+              )}
             >
+              {following ? <Check size={16} strokeWidth={2.6} /> : <UserPlus size={16} strokeWidth={2.4} />}
               {following ? "Ви підписані" : "Підписатись"}
-            </Button>
+            </motion.button>
           </div>
-        </div>
-      </section>
+        </Panel>
 
-      {/* Рецепти */}
-      <section className="px-4 pt-6">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="font-display text-[17px] font-bold">
-            Рецепти · {recipes.length} {plural(recipes.length, "штука", "штуки", "штук")}
-          </h2>
-        </div>
-
+        {/* Рецепти */}
         <Segmented
           value={sort}
           onChange={setSort}
-          className="mb-4"
           options={[
             { value: "popular", label: "Популярні" },
             { value: "new", label: "Нові" },
           ]}
         />
 
-        {recipes.length === 0 ? (
-          <EmptyState emoji="🍽️" title="Тут поки порожньо" note="Цей кухар ще нічого не опублікував." />
-        ) : (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-5">
-            {recipes.map((r, i) => (
-              <motion.div
-                key={r.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i * 0.04, 0.3) }}
-              >
-                <RecipeTile recipe={r} />
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </section>
+        <Panel>
+          <PanelHeader
+            label="Рецепти"
+            aside={`${recipes.length} ${plural(recipes.length, "штука", "штуки", "штук")}`}
+          />
+          {recipes.length === 0 ? (
+            <div className="border-t border-line px-3.5 py-9 text-center">
+              <p className="text-[13.5px] font-bold text-muted">Тут поки порожньо</p>
+              <p className="mt-1 text-[12.5px] font-semibold text-faint">Цей кухар ще нічого не опублікував.</p>
+            </div>
+          ) : (
+            recipes.map((r, i) => {
+              const rating = avgRating({ ...r, stats: effectiveStats(useApp.getState(), r) });
+              return (
+                <motion.div
+                  key={r.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                >
+                  <RecipeRow
+                    flat
+                    recipe={r}
+                    href={`/recipe/${r.id}`}
+                    subtitle={
+                      <>
+                        {formatMinutes(r.timeMin)}
+                        {r.cuisine ? ` · ${r.cuisine}` : ""}
+                        {rating > 0 && (
+                          <>
+                            {" · "}
+                            <span className="text-brand-2">★</span> {rating.toFixed(1).replace(".", ",")}
+                          </>
+                        )}
+                      </>
+                    }
+                  />
+                </motion.div>
+              );
+            })
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }
 
-function MiniStat({
-  icon,
+/** Клітинка статистики, як у власному профілі. */
+function Stat({
   value,
   label,
   href,
+  accent,
+  first,
 }: {
-  icon?: React.ReactNode;
   value: string;
   label: string;
   /** Якщо задано — клітинка веде на окремий екран (напр. список підписників). */
   href?: string;
+  accent?: boolean;
+  first?: boolean;
 }) {
+  const cls = cn("flex min-w-0 flex-col items-center gap-0.5 py-2.5", !first && "border-l border-line");
   const body = (
     <>
-      <p className="flex items-center justify-center gap-1 font-display text-[15px] font-extrabold leading-none">
-        {icon && <span className="text-brand">{icon}</span>}
-        {value}
-      </p>
-      <p className="mt-1 truncate text-[10px] text-muted">{label}</p>
+      <span className={cn("font-display text-[16px] font-bold leading-tight", accent && "text-brand")}>{value}</span>
+      <span className="max-w-full truncate px-1 text-[11px] font-semibold text-faint">{label}</span>
     </>
   );
 
   if (href) {
     return (
-      <Link href={href} className="bg-surface px-1 py-2.5 text-center active:bg-surface-2">
+      <Link href={href} className={cn(cls, "active:bg-surface-2")}>
         {body}
       </Link>
     );
   }
-  return <div className="bg-surface px-1 py-2.5 text-center">{body}</div>;
+  return <div className={cls}>{body}</div>;
 }

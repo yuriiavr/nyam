@@ -3,7 +3,7 @@
 import { Check, Plus, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FridgePicker } from "@/components/FridgePicker";
-import { Button, QuantityInput, Sheet } from "@/components/ui";
+import { Button, Panel, QuantityInput, Sheet } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import { convertAmount, defaultRow, pantryCandidates, rawWord, weighsCooked, type CookWeight } from "@/lib/cooked";
 import { cookedComposition, type CookedPart } from "@/lib/diary";
@@ -348,155 +348,167 @@ export function CookedSheet({
         footer={
           <div className="flex flex-col gap-2">
             {problem && <p className="text-center text-[13px] font-semibold text-berry">{problem}</p>}
-            <Button full size="lg" loading={busy} disabled={!ready} onClick={() => void save()}>
+            <Button full loading={busy} disabled={!ready} onClick={() => void save()}>
               <Sparkles size={17} />
               {!ready ? "Впиши, скільки пішло" : portion ? "Порахувати порцію" : "Порахувати й зберегти"}
             </Button>
           </div>
         }
       >
-        <div className="flex flex-col gap-3 pb-2">
-          <p className="text-[12.5px] leading-snug text-muted">
+        <div className="flex flex-col gap-3 pb-3">
+          <p className="px-1 text-[12px] font-semibold leading-snug text-faint">
             {portion
               ? "Впиши, скільки чого було в одній порції, — міру можна змінити: у рецепті штуки, а зважив у грамах. Познач, з якої пачки: ШІ порахує калорії з етикеток саме цих пачок."
               : "Виправ, скільки чого поклали, — міру можна змінити: у рецепті штуки, а зважив у грамах. Познач, з якої пачки брали: ШІ порахує калорії з етикеток саме цих пачок, а комора спише те, що справді пішло."}
           </p>
 
-          {lines.map((line) => {
-            const row = line.rowId ? rows.get(line.rowId) : undefined;
-            const options = pantryCandidates(view, line.key, products);
-            const weighable = weighsCooked(line.key);
-            const raw = rawWord(line.key);
-            const typed = amountOf(line);
-            const hint = [
-              line.weighed ? "⚖️ зважено" : "",
-              line.recipeAmount != null && line.recipeUnit
-                ? `${recipeWord} ${formatQuantity(line.recipeAmount, line.recipeUnit)}`
-                : line.qty
-                  ? `${recipeWord} ${line.qty}`
-                  : "",
-              line.optional ? "за бажанням" : "",
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <div
-                key={line.id}
-                className={cn("rounded-2xl border p-3", lineMissing(line) ? "border-berry/50" : "border-line")}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{ing(line.key).emoji}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-bold">{row ? rowName(row) : line.name}</span>
-                    {hint && <span className="block truncate text-[11.5px] text-faint">{hint}</span>}
-                  </span>
-                  <button
-                    aria-label={`Не клали: ${line.name}`}
-                    onClick={() => {
-                      haptic(8);
-                      edit((list) => list.filter((l) => l.id !== line.id));
-                    }}
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-muted active:bg-surface-2"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
+          <Panel>
+            {lines.map((line, index) => {
+              const row = line.rowId ? rows.get(line.rowId) : undefined;
+              const options = pantryCandidates(view, line.key, products);
+              const weighable = weighsCooked(line.key);
+              const raw = rawWord(line.key);
+              const typed = amountOf(line);
+              const hint = [
+                line.weighed ? "⚖️ зважено" : "",
+                line.recipeAmount != null && line.recipeUnit
+                  ? `${recipeWord} ${formatQuantity(line.recipeAmount, line.recipeUnit)}`
+                  : line.qty
+                    ? `${recipeWord} ${line.qty}`
+                    : "",
+                line.optional ? "за бажанням" : "",
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <div
+                  key={line.id}
+                  className={cn(
+                    "flex flex-col gap-2 py-2.5 pl-3.5 pr-2",
+                    index > 0 && "border-t border-line",
+                    // Без кількості рядок не порахувати — підсвічуємо, що лишилось вписати.
+                    lineMissing(line) && "bg-berry/[0.07]",
+                  )}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[18px] leading-none">{ing(line.key).emoji}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-bold">{row ? rowName(row) : line.name}</span>
+                      {hint && <span className="block truncate text-[11.5px] font-semibold text-faint">{hint}</span>}
+                    </span>
+                    <button
+                      aria-label={`Не клали: ${line.name}`}
+                      onClick={() => {
+                        haptic(8);
+                        edit((list) => list.filter((l) => l.id !== line.id));
+                      }}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-faint active:bg-surface-2"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
 
-                {/* Кількість і міра — тим самим контролом, що в рецепті й коморі. */}
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <QuantityInput
-                    amount={line.amount.trim() && Number.isFinite(typed) ? typed : undefined}
-                    unit={line.unit}
-                    defaultUnit={line.unit}
-                    placeholder={line.cooked ? "300" : (line.qty ?? "0")}
-                    label={line.name}
-                    onChange={(next) => setQuantity(line, next)}
-                  />
-                  {weighable && line.unit !== "taste" && (
-                    <div className="flex items-center gap-1.5 text-[12px]">
-                      {([false, true] as const).map((cooked) => (
-                        <button
-                          key={String(cooked)}
-                          aria-pressed={line.cooked === cooked}
-                          onClick={() => {
-                            if (line.cooked === cooked) return;
-                            haptic(8);
-                            // Готове зважують у грамах; назад — міра з рецепта.
-                            patch(
-                              line.id,
-                              cooked
-                                ? { cooked, unit: "g", amount: "" }
-                                : {
-                                    cooked,
-                                    unit: line.recipeUnit ?? ing(line.key).defaultUnit ?? "g",
-                                    amount:
-                                      line.recipeAmount != null && line.recipeUnit
-                                        ? formatNumber(line.recipeAmount, unitDef(line.recipeUnit).decimals)
-                                        : "",
-                                  },
-                            );
-                          }}
-                          className={cn(
-                            "rounded-full border px-2.5 py-1 font-semibold",
-                            line.cooked === cooked ? "border-brand bg-brand/10 text-ink" : "border-line text-muted",
-                          )}
-                        >
-                          {cooked ? "готового" : raw}
-                        </button>
-                      ))}
+                  {/* Кількість і міра — тим самим контролом, що в рецепті й коморі. */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-1.5">
+                    <QuantityInput
+                      amount={line.amount.trim() && Number.isFinite(typed) ? typed : undefined}
+                      unit={line.unit}
+                      defaultUnit={line.unit}
+                      placeholder={line.cooked ? "300" : (line.qty ?? "0")}
+                      label={line.name}
+                      onChange={(next) => setQuantity(line, next)}
+                    />
+                    {weighable && line.unit !== "taste" && (
+                      <div className="flex items-center gap-1.5">
+                        {([false, true] as const).map((cooked) => (
+                          <button
+                            key={String(cooked)}
+                            aria-pressed={line.cooked === cooked}
+                            onClick={() => {
+                              if (line.cooked === cooked) return;
+                              haptic(8);
+                              // Готове зважують у грамах; назад — міра з рецепта.
+                              patch(
+                                line.id,
+                                cooked
+                                  ? { cooked, unit: "g", amount: "" }
+                                  : {
+                                      cooked,
+                                      unit: line.recipeUnit ?? ing(line.key).defaultUnit ?? "g",
+                                      amount:
+                                        line.recipeAmount != null && line.recipeUnit
+                                          ? formatNumber(line.recipeAmount, unitDef(line.recipeUnit).decimals)
+                                          : "",
+                                    },
+                              );
+                            }}
+                            className={cn(
+                              "h-8 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+                              line.cooked === cooked
+                                ? "border-brand/40 bg-brand/10 text-brand"
+                                : "border-line bg-surface-2 text-muted",
+                            )}
+                          >
+                            {cooked ? "готового" : raw}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {options.length > 0 && (
+                    <div className="no-scrollbar -ml-3.5 -mr-2 flex gap-1.5 overflow-x-auto pl-3.5 pr-2">
+                      {options.map((option) => {
+                        const on = line.rowId === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            aria-pressed={on}
+                            onClick={() => {
+                              haptic(8);
+                              patch(line.id, { rowId: on ? null : option.id });
+                            }}
+                            className={cn(
+                              "flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+                              on ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface-2 text-muted",
+                            )}
+                          >
+                            {on && <Check size={13} strokeWidth={3} />}
+                            <span className="max-w-[160px] truncate">{rowName(option)}</span>
+                            {option.amount != null && option.unit && (
+                              <span className="font-semibold text-faint">{formatQuantity(option.amount, option.unit)}</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
+                  {options.length > 0 && !row && <p className="text-[11.5px] font-semibold text-faint">не з комори</p>}
+
+                  {line.cooked && (
+                    <p className="pr-1.5 text-[11.5px] font-semibold leading-snug text-faint">
+                      {`Етикетка — на ${raw} продукт, тож готовий ШІ порахує сам`}
+                      {portion ? "." : ` і спише з пачки, скільки ${raw} на це пішло.`}
+                    </p>
+                  )}
                 </div>
+              );
+            })}
 
-                {options.length > 0 && (
-                  <div className="no-scrollbar -mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1">
-                    {options.map((option) => {
-                      const on = line.rowId === option.id;
-                      return (
-                        <button
-                          key={option.id}
-                          aria-pressed={on}
-                          onClick={() => {
-                            haptic(8);
-                            patch(line.id, { rowId: on ? null : option.id });
-                          }}
-                          className={cn(
-                            "flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[12.5px]",
-                            on ? "border-brand bg-brand/10 font-bold" : "border-line text-muted",
-                          )}
-                        >
-                          {on && <Check size={13} strokeWidth={3} className="text-brand" />}
-                          <span className="max-w-[160px] truncate">{rowName(option)}</span>
-                          {option.amount != null && option.unit && (
-                            <span className="font-normal text-faint">{formatQuantity(option.amount, option.unit)}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {options.length > 0 && !row && <p className="mt-1.5 text-[11.5px] text-faint">не з комори</p>}
-
-                {line.cooked && (
-                  <p className="mt-1.5 text-[11.5px] leading-snug text-faint">
-                    {`Етикетка — на ${raw} продукт, тож готовий ШІ порахує сам`}
-                    {portion ? "." : ` і спише з пачки, скільки ${raw} на це пішло.`}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-
-          <button
-            onClick={() => {
-              haptic(8);
-              setAdding(true);
-            }}
-            className="flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-line py-3 text-[13.5px] font-bold text-brand"
-          >
-            <Plus size={16} />
-            Додати з комори
-          </button>
+            <button
+              onClick={() => {
+                haptic(8);
+                setAdding(true);
+              }}
+              className={cn(
+                "flex h-12 w-full items-center gap-2.5 px-3.5 text-left active:bg-surface-2",
+                lines.length > 0 && "border-t border-line",
+              )}
+            >
+              <Plus size={16} strokeWidth={2.4} className="shrink-0 text-brand" />
+              <span className="text-[14px] font-bold text-brand">Додати з комори</span>
+            </button>
+          </Panel>
         </div>
       </Sheet>
 

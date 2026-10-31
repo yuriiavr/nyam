@@ -461,17 +461,17 @@ export function PushOffer() {
           </div>
         }
       >
-        <div className="flex flex-col gap-4 pb-2">
-          <div className="flex items-center gap-3">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl brand-gradient text-brand-ink">
-              <Bell size={22} />
+        <div className="flex flex-col gap-3 pb-3">
+          <div className="flex items-center gap-3 px-1">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-brand/15 text-brand">
+              <Bell size={19} strokeWidth={2.4} />
             </span>
             <p className="text-[14px] font-semibold leading-snug">
               Увімкни сповіщення — і Ням сам скаже, коли щось важливе.
             </p>
           </div>
 
-          <ul className="flex flex-col gap-2">
+          <ul className="overflow-hidden rounded-[10px] border border-line bg-surface">
             {/*
              * Таймер — тепер чесно. Дзвінок шле сервер (timer_pushes і
              * /api/push/timers), а не сторінка, тож він приходить і тоді, коли
@@ -487,7 +487,7 @@ export function PushOffer() {
             <Reason icon={<MessageCircle size={17} />}>Хтось прокоментував твій рецепт</Reason>
           </ul>
 
-          <p className="text-[12px] leading-relaxed text-muted">
+          <p className="px-1 text-[12px] font-semibold leading-relaxed text-faint">
             Приходить лише на цей пристрій. Передумаєш — Налаштування → Сповіщення.
           </p>
         </div>
@@ -500,15 +500,15 @@ export function PushOffer() {
         footer={installOffer ? <InstallFooter env={installOffer.env} onInstall={install} onClose={closeInstall} /> : null}
       >
         {installOffer && (
-          <div className="flex flex-col gap-4 pb-2">
+          <div className="flex flex-col gap-3 pb-3">
             {installOffer.env === "prompt" ? (
               <PromptPitch />
             ) : (
               <InstallGuide env={installOffer.env} signedIn={Boolean(accountId)} />
             )}
             {installOffer.push && (
-              <p className="flex items-start gap-2 rounded-2xl border border-brand/25 bg-brand/10 p-3 text-[12.5px] leading-relaxed">
-                <Bell size={15} className="mt-0.5 shrink-0 text-brand" />
+              <p className="flex items-start gap-2.5 rounded-[10px] border border-brand/40 bg-brand/10 px-3.5 py-3 text-[12.5px] font-semibold leading-relaxed">
+                <Bell size={15} strokeWidth={2.4} className="mt-0.5 shrink-0 text-brand" />
                 <span>
                   Лише звідти приходять сповіщення — зокрема дзвінок таймера готування, коли{" "}
                   {currentAppleDevice() === "iPad" ? "iPad" : "телефон"} заблоковано. Відкрий Ням з
@@ -582,15 +582,15 @@ function InstallFooter({
 function PromptPitch() {
   return (
     <>
-      <div className="flex items-center gap-3">
-        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[18px] brand-gradient text-3xl shadow-[var(--shadow-pop)]">
+      <div className="flex items-center gap-3 px-1">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[12px] brand-gradient text-[26px]">
           🍲
         </span>
         <p className="text-[14px] font-semibold leading-snug">
           Один дотик — і Ням житиме окремою іконкою, як звичайний застосунок.
         </p>
       </div>
-      <ul className="flex flex-col gap-2">
+      <ul className="overflow-hidden rounded-[10px] border border-line bg-surface">
         <Reason icon={<Maximize2 size={17} />}>На весь екран, без адресного рядка й вкладок</Reason>
         <Reason icon={<WifiOff size={17} />}>Рецепти й комора відкриваються і без інтернету</Reason>
         <Reason icon={<Timer size={17} />}>Таймер готування під рукою, а не загублений серед вкладок</Reason>
@@ -625,14 +625,14 @@ export function InstallGuide({
   const browser = currentBrowserName();
   const text = compact ? "text-[12.5px]" : "text-[13.5px]";
 
-  const note = cn(compact ? "text-[11.5px]" : "text-[12px]", "leading-relaxed text-muted");
+  const note = cn(compact ? "text-[11.5px]" : "text-[12px]", "font-semibold leading-relaxed text-muted");
 
   if (env === "in-app") {
     const ios = device !== null;
     const target = ios ? "Safari" : "Chrome";
     return (
       <div className="flex flex-col gap-3">
-        <p className={cn(text, "leading-relaxed text-muted")}>
+        <p className={cn(text, "font-semibold leading-relaxed text-muted")}>
           Ти у вбудованому браузері{browser ? ` ${browser}` : " застосунку"}. Звідси Ням на екран{" "}
           {device === "iPad" ? "iPad" : "телефона"} не додати
           {signedIn ? "" : ", а вхід через Google тут часто не пускає"} — відкрий сторінку в{" "}
@@ -642,7 +642,7 @@ export function InstallGuide({
           Один крок і запасний шлях під ним, без номера: «2. Такого пункту немає»
           читалось як наступна дія й як твердження, що пункту немає зовсім.
         */}
-        <ol className="flex flex-col gap-2">
+        <ol className="overflow-hidden rounded-[10px] border border-line bg-surface">
           <Step glyph={ios ? <MoreGlyph /> : <KebabGlyph />} compact={compact}>
             {ios ? (
               <>
@@ -673,7 +673,7 @@ export function InstallGuide({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className={cn(text, "leading-relaxed text-muted")}>
+      <p className={cn(text, "font-semibold leading-relaxed text-muted")}>
         {env === "ios-other-browser" ? (
           <>
             Кнопки, яка встановить сама, Apple сайтам не дає. Але {browser ?? "цей браузер"} на{" "}
@@ -687,7 +687,7 @@ export function InstallGuide({
         )}
       </p>
 
-      <ol className="flex flex-col gap-2">
+      <ol className="overflow-hidden rounded-[10px] border border-line bg-surface">
         {env === "ios-other-browser" ? (
           /*
            * Кнопку тут малює сам браузер, і назву дає він: у Chrome чи Firefox
@@ -720,7 +720,7 @@ export function InstallGuide({
 
         <Step n={2} glyph={<AddSquareGlyph />} compact={compact}>
           Прокрути список дій і обери
-          <span className="mt-1.5 flex items-center justify-between gap-2 rounded-xl border border-line bg-bg-elev px-3 py-2 font-semibold">
+          <span className="mt-1.5 flex h-10 items-center justify-between gap-2 rounded-[8px] border border-line bg-bg-elev px-3 font-semibold">
             На Початковий екран
             <AddSquareGlyph size={18} />
           </span>
@@ -761,7 +761,7 @@ export function InstallGuide({
 
 /** Дрібний рядок під кроком: англійська назва чи запасний шлях. */
 function Hint({ children }: { children: React.ReactNode }) {
-  return <span className="mt-1 block text-[11.5px] leading-snug text-faint">{children}</span>;
+  return <span className="mt-1 block text-[11.5px] font-semibold leading-snug text-faint">{children}</span>;
 }
 
 /** Крок інструкції. Без n — єдиний крок, і номер там лише заважав би. */
@@ -777,23 +777,23 @@ function Step({
   children: React.ReactNode;
 }) {
   return (
-    <li className="flex items-start gap-3 rounded-2xl bg-surface-2 p-3">
+    <li className="flex items-start gap-3 border-t border-line px-3.5 py-3 first:border-t-0">
       <span className="relative mt-px shrink-0">
         <span
           className={cn(
-            "grid place-items-center rounded-xl border border-line bg-bg-elev text-brand",
-            compact ? "h-9 w-9" : "h-11 w-11",
+            "grid place-items-center rounded-[10px] bg-surface-2 text-brand",
+            compact ? "h-9 w-9" : "h-10 w-10",
           )}
         >
           {glyph}
         </span>
         {n !== undefined && (
-          <span className="absolute -left-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full brand-gradient text-[11px] font-extrabold text-brand-ink">
+          <span className="absolute -left-1.5 -top-1.5 grid h-[18px] w-[18px] place-items-center rounded-[5px] bg-brand text-[11px] font-extrabold text-brand-ink">
             {n}
           </span>
         )}
       </span>
-      <span className={cn("min-w-0 flex-1 self-center leading-snug", compact ? "text-[12.5px]" : "text-[13px]")}>
+      <span className={cn("min-w-0 flex-1 self-center font-semibold leading-snug", compact ? "text-[12.5px]" : "text-[13.5px]")}>
         {children}
       </span>
     </li>
@@ -877,7 +877,7 @@ export function CopyLinkButton() {
         aria-label="Адреса Ням"
         onFocus={(e) => selectAll(e.currentTarget)}
         onClick={(e) => selectAll(e.currentTarget)}
-        className="w-full select-all truncate rounded-xl bg-surface-2 px-3 py-1.5 text-center text-[12px] text-muted outline-none"
+        className="h-8 w-full select-all truncate rounded-[8px] bg-surface-2 px-3 text-center text-[12px] font-semibold text-muted outline-none"
       />
     </div>
   );
@@ -933,9 +933,9 @@ function copyWithSelection(text: string): boolean {
 
 function Reason({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <li className="flex items-start gap-3 rounded-2xl bg-surface-2 p-3">
-      <span className="mt-px shrink-0 text-brand">{icon}</span>
-      <span className="text-[13px] leading-snug">{children}</span>
+    <li className="flex min-h-12 items-center gap-3 border-t border-line px-3.5 py-2.5 first:border-t-0">
+      <span className="shrink-0 text-brand">{icon}</span>
+      <span className="text-[13.5px] font-semibold leading-snug">{children}</span>
     </li>
   );
 }

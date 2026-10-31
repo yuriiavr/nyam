@@ -6,10 +6,12 @@ import { Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { RecipeMedia } from "@/components/RecipeCard";
-import { Button, Card } from "@/components/ui";
+import { Button, Panel, PanelHeader } from "@/components/ui";
 import { allRecipes, useApp } from "@/lib/store";
 import { recommend } from "@/lib/matching";
-import { haptic, pick } from "@/lib/utils";
+import { cn, formatMinutes, haptic, pick } from "@/lib/utils";
+
+const RECIPE_HREF = "/recipe/";
 import type { Recipe } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
@@ -23,56 +25,13 @@ interface Method {
 }
 
 const METHODS: Method[] = [
-  {
-    href: "/decide/roulette",
-    emoji: "🎡",
-    title: "Рулетка",
-    note: "Крути колесо — доля обере страву",
-    accent: "#ff6b35",
-    span: true,
-  },
-  {
-    href: "/decide/fridge",
-    emoji: "🧊",
-    title: "Що в холодильнику",
-    note: "Готуй з того, що вже є",
-    accent: "#34d399",
-  },
-  {
-    href: "/decide/duel",
-    emoji: "⚔️",
-    title: "Дуель страв",
-    note: "Переможець лишається, поки не програє",
-    accent: "#a78bfa",
-  },
-  {
-    href: "/decide/party",
-    emoji: "👥",
-    title: "Разом",
-    note: "Оберіть компанією на одному телефоні",
-    accent: "#f472b6",
-  },
-  {
-    href: "/decide/rescue",
-    emoji: "🆘",
-    title: "Врятувати продукт",
-    note: "Страви для того, що псується завтра",
-    accent: "#34d399",
-  },
-  {
-    href: "/decide/blackout",
-    emoji: "🕯️",
-    title: "Поки є світло",
-    note: "Встигнути у вікно між відключеннями",
-    accent: "#facc15",
-  },
-  {
-    href: "/plan",
-    emoji: "📅",
-    title: "План на тиждень",
-    note: "Згенерувати меню на 7 днів",
-    accent: "#fb923c",
-  },
+  { href: "/decide/roulette", emoji: "🎡", title: "Рулетка", note: "Крути колесо — доля обере", accent: "#ff6b35" },
+  { href: "/decide/fridge", emoji: "🧊", title: "Холодильник", note: "Готуй з того, що вже є", accent: "#38bdf8" },
+  { href: "/decide/duel", emoji: "⚔️", title: "Дуель", note: "Переможець лишається, поки не програє", accent: "#f43f6a" },
+  { href: "/decide/party", emoji: "👥", title: "Разом", note: "Оберіть компанією на одному телефоні", accent: "#a78bfa" },
+  { href: "/decide/rescue", emoji: "🆘", title: "Врятувати", note: "Страви з того, що псується", accent: "#34d399" },
+  { href: "/decide/blackout", emoji: "🕯️", title: "Поки є світло", note: "Встигнути між відключеннями", accent: "#ffb020" },
+  { href: "/plan", emoji: "📅", title: "Тиждень", note: "Меню на 7 днів без повторів і список покупок", accent: "#38bdf8", span: true },
 ];
 
 export default function DecidePage() {
@@ -100,95 +59,78 @@ export default function DecidePage() {
 
   return (
     <div className="pb-8">
-      <TopBar back={false} title="Вирішити за мене" subtitle="7 способів обрати страву" />
+      <TopBar back={false} title="Вирішити" />
 
-      {/* Найшвидший варіант */}
-      <section className="px-4 pt-4">
-        <Card className="overflow-hidden p-0">
-          <div className="p-4">
-            <div className="flex items-center gap-2">
-              <Zap size={16} className="text-brand" />
-              <p className="text-[12px] font-bold uppercase tracking-wide text-brand">
-                Найшвидше
-              </p>
+      {/* Планшет (lg): «Найшвидше» — висока ліва колонка, способи — сіткою 3×2 праворуч. */}
+      <div className="flex flex-col gap-2.5 px-4 md:px-6 lg:grid lg:grid-cols-[minmax(0,1.25fr)_minmax(0,3fr)] lg:gap-3">
+        {/* Найшвидший варіант */}
+        <Panel className="lg:flex lg:flex-col">
+          <PanelHeader label="Найшвидше" tone="brand" icon={<Zap size={13} className="fill-brand" strokeWidth={0} />} />
+          <div className="flex flex-col gap-3 border-t border-line px-3.5 pb-3.5 pt-3 lg:flex-1 lg:p-4">
+            <div>
+              <h2 className="font-display text-[17px] font-bold leading-tight">Просто скажи, що готувати</h2>
+              <p className="mt-1 text-[12.5px] font-semibold text-muted">Врахує смак, комору і час доби</p>
             </div>
-            <h2 className="mt-1.5 font-display text-[19px] font-extrabold leading-tight">
-              Просто скажи, що готувати
-            </h2>
-            <p className="mt-1 text-[13px] text-muted">
-              Одна кнопка. Врахує твій смак, комору і час доби.
-            </p>
 
             {instant && (
-              <motion.div
+              <motion.button
                 key={instant.id}
-                initial={{ opacity: 0, scale: 0.94, y: 8 }}
+                initial={{ opacity: 0, scale: 0.96, y: 6 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ type: "spring", stiffness: 320, damping: 24 }}
-                className="mt-4 flex items-center gap-3 rounded-2xl border border-line bg-bg-elev p-3"
+                onClick={() => router.push(RECIPE_HREF + instant.id)}
+                className="flex items-center gap-3 rounded-[10px] border border-line bg-bg-elev p-2 text-left"
               >
-                <RecipeMedia
-                  recipe={instant}
-                  className="h-16 w-16 shrink-0"
-                  rounded="rounded-2xl"
-                  emojiSize="text-3xl"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] font-bold uppercase text-muted">Твій вердикт</p>
-                  <h3 className="truncate font-display text-[16px] font-bold">{instant.title}</h3>
-                  <p className="truncate text-[12px] text-muted">
-                    {instant.timeMin} хв · {instant.cuisine}
-                  </p>
-                </div>
-                <Button size="sm" onClick={() => router.push(`/recipe/${instant.id}`)}>
-                  Готую
-                </Button>
-              </motion.div>
+                <RecipeMedia recipe={instant} className="h-14 w-14 shrink-0" rounded="rounded-[8px]" emojiSize="text-[28px]" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-faint">Твій вердикт</span>
+                  <span className="block truncate text-[15px] font-extrabold">{instant.title}</span>
+                  <span className="block truncate text-[12px] font-semibold text-muted">
+                    {formatMinutes(instant.timeMin)} · {instant.cuisine}
+                  </span>
+                </span>
+                <span className="shrink-0 pr-1.5 text-[13px] font-extrabold text-brand">Готую ›</span>
+              </motion.button>
             )}
 
-            <Button full size="lg" className="mt-4" onClick={rollInstant} disabled={!hydrated}>
+            {/* На планшеті колонка висока — порожнє місце займає кубик, а не дірка. */}
+            {!instant && <span className="hidden flex-1 place-items-center text-[88px] lg:grid">🎲</span>}
+
+            <Button full onClick={rollInstant} disabled={!hydrated} className="lg:mt-auto">
               {instant ? "Ще варіант" : "Обери за мене"}
             </Button>
           </div>
-        </Card>
-      </section>
+        </Panel>
 
-      {/* Способи вибору */}
-      <section className="px-4 pt-6">
-        <h2 className="mb-3 font-display text-[17px] font-bold">Способи вибору</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {METHODS.map((m, i) => (
-            <motion.div
-              key={m.href}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.035, type: "spring", stiffness: 300, damping: 26 }}
-              className={m.span ? "col-span-2" : undefined}
-            >
-              <Link href={m.href} onClick={() => haptic(12)}>
-                <motion.div
-                  whileTap={{ scale: 0.96 }}
-                  className="relative h-full overflow-hidden rounded-xl3 border border-line bg-surface p-4"
-                  style={{
-                    backgroundImage: `radial-gradient(circle at 100% 0%, ${m.accent}22, transparent 60%)`,
-                  }}
+        {/* Способи вибору */}
+        <Panel>
+          <PanelHeader label="Способи вибору" />
+          <div className="grid grid-cols-2 gap-px border-t border-line bg-line lg:grid-cols-3">
+            {METHODS.map((m) => (
+              <Link
+                key={m.href}
+                href={m.href}
+                onClick={() => haptic(12)}
+                className={cn(
+                  "flex min-h-[112px] flex-col gap-2.5 bg-surface p-3.5 active:bg-surface-2 lg:min-h-[150px] lg:p-4",
+                  m.span && "col-span-2 lg:col-span-3 lg:min-h-[96px] lg:flex-row lg:items-center lg:gap-3.5",
+                )}
+              >
+                <span
+                  className="grid h-10 w-10 place-items-center rounded-[10px] text-[21px]"
+                  style={{ background: `${m.accent}24` }}
                 >
-                  <div
-                    className="grid h-11 w-11 place-items-center rounded-2xl text-2xl"
-                    style={{ background: `${m.accent}22` }}
-                  >
-                    {m.emoji}
-                  </div>
-                  <h3 className="mt-3 font-display text-[15px] font-bold leading-tight">
-                    {m.title}
-                  </h3>
-                  <p className="mt-1 text-[12px] leading-snug text-muted">{m.note}</p>
-                </motion.div>
+                  {m.emoji}
+                </span>
+                <span>
+                  <span className="block text-[14px] font-extrabold">{m.title}</span>
+                  <span className="mt-0.5 block text-[11.5px] font-semibold leading-[1.35] text-faint">{m.note}</span>
+                </span>
               </Link>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }

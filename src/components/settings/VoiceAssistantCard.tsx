@@ -1,8 +1,8 @@
 "use client";
 
-import { Copy, KeyRound, Mic, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Card, Sheet, useToast } from "@/components/ui";
+import { Button, Panel, PanelHeader, Sheet, Spinner, useToast } from "@/components/ui";
 import { ConfirmSheet } from "@/components/ProductEditorSheet";
 import { useApp } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -59,47 +59,44 @@ export function VoiceAssistantCard() {
   };
 
   return (
-    <section className="px-4 pt-4">
-      <Card className="p-4">
-        <div className="flex items-center gap-2">
-          <Mic size={17} className="text-brand" />
-          <h2 className="font-display text-[16px] font-bold">Голосовий помічник</h2>
-        </div>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted">
-          Скажи помічнику «я зʼїв батончик Корона» чи «додай у комору молоко Галичина» — він запише сам. Працює з
-          Gemini і Claude через MCP.
-        </p>
-
-        {tokens && tokens.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1.5">
-            {tokens.map((t) => (
-              <div key={t.id} className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3 py-2">
-                <KeyRound size={16} className="shrink-0 text-muted" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-bold">
-                    {t.label} <span className="font-normal text-faint">…{t.hint}</span>
-                  </p>
-                  <p className="text-[11.5px] text-muted">
-                    {t.lastUsedAt ? `востаннє ${timeAgo(t.lastUsedAt)}` : "ще не користувались"}
-                  </p>
-                </div>
-                <button
-                  aria-label={`Відкликати ключ ${t.label}`}
-                  onClick={() => setRevoking(t)}
-                  className="grid h-9 w-9 place-items-center rounded-xl text-muted active:bg-line"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+    <>
+      <Panel>
+        <PanelHeader label="Голосовий помічник" />
+        {tokens?.map((t) => (
+          <div key={t.id} className="flex h-[54px] items-center gap-3 border-t border-line pl-3.5 pr-1.5">
+            <KeyRound size={17} className="shrink-0 text-muted" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[14px] font-semibold">
+                {t.label} <span className="font-medium text-faint">…{t.hint}</span>
+              </p>
+              <p className="truncate text-[11.5px] font-semibold text-faint">
+                {t.lastUsedAt ? `востаннє ${timeAgo(t.lastUsedAt)}` : "ще не користувались"}
+              </p>
+            </div>
+            <button
+              aria-label={`Відкликати ключ ${t.label}`}
+              onClick={() => setRevoking(t)}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] text-faint active:bg-surface-2"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
+        ))}
+        <button
+          onClick={() => void create()}
+          disabled={busy}
+          className="flex h-12 w-full items-center gap-2.5 border-t border-line px-3.5 text-left active:bg-surface-2 disabled:opacity-60"
+        >
+          {busy ? <Spinner className="h-4 w-4 text-brand" /> : <Plus size={16} strokeWidth={2.4} className="text-brand" />}
+          <span className="flex-1 text-[14px] font-semibold text-brand">Створити ключ для Claude чи Gemini</span>
+        </button>
+        {(!tokens || tokens.length === 0) && (
+          <p className="border-t border-line px-3.5 py-2.5 text-[11.5px] font-semibold leading-snug text-faint">
+            Скажи помічнику «я зʼїв батончик Корона» чи «додай у комору молоко Галичина» — він запише сам. Працює з
+            Gemini і Claude через MCP.
+          </p>
         )}
-
-        <Button full variant="secondary" className="mt-3" loading={busy} onClick={() => void create()}>
-          <KeyRound size={16} />
-          Підключити помічника
-        </Button>
-      </Card>
+      </Panel>
 
       <ConnectSheet secret={secret} onClose={() => setSecret(null)} />
 
@@ -115,7 +112,7 @@ export function VoiceAssistantCard() {
           setRevoking(null);
         }}
       />
-    </section>
+    </>
   );
 }
 
@@ -161,7 +158,7 @@ function ConnectSheet({ secret, onClose }: { secret: string | null; onClose: () 
       }
     >
       <div className="flex flex-col gap-4 pb-2">
-        <p className="rounded-2xl bg-berry/10 px-3 py-2.5 text-[12.5px] leading-snug text-berry">
+        <p className="rounded-[10px] bg-berry/10 px-3 py-2.5 text-[12.5px] leading-snug text-berry">
           Ключ показуємо лише зараз. Хто має ключ, той пише у твій щоденник і комору, — не публікуй його.
         </p>
 
@@ -194,14 +191,14 @@ function Block({ title, note, children }: { title: string; note: string; childre
 
 function Code({ text, onCopy }: { text: string; onCopy: () => void }) {
   return (
-    <div className="flex items-start gap-2 rounded-2xl bg-surface-2 p-2.5">
+    <div className="flex items-start gap-2 rounded-[10px] bg-surface-2 p-2.5">
       <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-[11.5px] leading-snug">
         {text}
       </pre>
       <button
         aria-label="Скопіювати"
         onClick={onCopy}
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-bg-elev active:bg-line"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-bg-elev active:bg-line"
       >
         <Copy size={15} />
       </button>

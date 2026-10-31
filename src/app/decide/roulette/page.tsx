@@ -1,14 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { RotateCw, Shuffle } from "lucide-react";
+import { Shuffle } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FilterButton, FilterSheet } from "@/components/FilterSheet";
 import { DrinkPicks, PairingSuggestions } from "@/components/Pairings";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Button, EmptyState, Segmented, useToast } from "@/components/ui";
+import { Button, EmptyState, Panel, PanelHeader, Segmented, useToast } from "@/components/ui";
 import {
   activeFilterCount,
   applyFilters,
@@ -120,63 +120,53 @@ export default function RoulettePage() {
   return (
     <div className="pb-8">
       <TopBar
-        title="Рулетка страв"
-        subtitle={`${pool.length} ${plural(pool.length, "страва", "страви", "страв")} у барабані`}
-        right={
-          <FilterButton
-            count={filterCount}
-            onClick={() => setFiltersOpen(true)}
-          />
-        }
+        title="Рулетка"
+        right={<FilterButton count={filterCount} onClick={() => setFiltersOpen(true)} />}
       />
 
-      <div className="px-4 pt-3">
+      <div className="flex flex-col gap-3.5 px-4 md:px-6">
         <Segmented
           value={filters.pool}
           onChange={(pool) => setFilters((f) => ({ ...f, pool }))}
           options={WHEEL_POOLS}
         />
-      </div>
 
-      {pool.length === 0 ? (
-        <EmptyState
-          emoji="🎡"
-          title={
-            filters.pool === "all" ? "Нічого не підходить" : "Тут поки порожньо"
-          }
-          note={
-            filterCount > 0
-              ? "Спробуй послабити умови — наприклад, прибрати обмеження часу."
-              : "У цьому джерелі ще немає страв. Обери інше або додай свій рецепт."
-          }
-          action={
-            filterCount > 0 ? (
-              <Button
-                onClick={() =>
-                  setFilters({ ...emptyFilters, pool: filters.pool })
-                }
-              >
-                Скинути фільтри
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div className="flex flex-col items-center px-4 pt-6">
-          {/* Колесо */}
-          <div className="relative">
-            {/* Стрілка */}
-            <div className="absolute left-1/2 top-[-6px] z-20 -translate-x-1/2">
+        {pool.length === 0 ? (
+          <EmptyState
+            emoji="🎡"
+            title={filters.pool === "all" ? "Нічого не підходить" : "Тут поки порожньо"}
+            note={
+              filterCount > 0
+                ? "Спробуй послабити умови — наприклад, прибрати обмеження часу."
+                : "У цьому джерелі ще немає страв. Обери інше або додай свій рецепт."
+            }
+            action={
+              filterCount > 0 ? (
+                <Button onClick={() => setFilters({ ...emptyFilters, pool: filters.pool })}>Скинути фільтри</Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          /*
+            Планшет (lg): колесо на темній сцені ліворуч, керування й результат —
+            у бічній колонці на 340 px. На телефоні обгортки з display: contents
+            зникають, і все стоїть однією колонкою по центру.
+          */
+          <div className="flex flex-col items-center gap-3.5 pt-1.5 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-4 lg:pt-0">
+            <div className="contents lg:sticky lg:top-4 lg:grid lg:h-[calc(100dvh-150px)] lg:min-h-[400px] lg:place-items-center lg:rounded-[10px] lg:border lg:border-line lg:bg-bg-elev lg:py-10">
+            {/* Колесо */}
+            <div className="relative aspect-square w-[300px] max-w-[80vw] lg:w-[min(400px,calc(100dvh-220px))] lg:max-w-none">
+              {/* Стрілка */}
               <div
-                className="h-6 w-6 rounded-b-[3px] brand-gradient shadow-[var(--shadow-pop)]"
-                style={{ clipPath: "polygon(50% 100%, 0 0, 100% 0)" }}
+                className="absolute left-1/2 top-[-6px] z-20 h-0 w-0 -translate-x-1/2 drop-shadow-[0_4px_8px_rgb(255_107_53_/_0.5)]"
+                style={{
+                  borderLeft: "11px solid transparent",
+                  borderRight: "11px solid transparent",
+                  borderTop: "20px solid var(--brand)",
+                }}
               />
-            </div>
 
-            <div className="rounded-full border-[6px] border-surface-2 bg-bg-elev p-1 shadow-[var(--shadow-card)]">
               <motion.svg
-                width={320}
-                height={320}
                 viewBox="0 0 320 320"
                 animate={{ rotate: rotation }}
                 transition={{ duration: 4.2, ease: [0.16, 0.9, 0.24, 1] }}
@@ -186,41 +176,19 @@ export default function RoulettePage() {
                     haptic([30, 60, 30]);
                   }
                 }}
-                className="max-w-[78vw]"
+                className="h-full w-full rounded-full border-2 border-line"
               >
-                <defs>
-                  {wheel.map((r, i) => (
-                    <linearGradient
-                      key={r.id}
-                      id={`seg-${i}`}
-                      x1="0"
-                      y1="0"
-                      x2="1"
-                      y2="1"
-                    >
-                      <stop offset="0%" stopColor={r.gradient[0]} />
-                      <stop offset="100%" stopColor={r.gradient[1]} />
-                    </linearGradient>
-                  ))}
-                </defs>
-
                 {wheel.map((r, i) => {
-                  const mid = polar(i * SEG + SEG / 2, R * 0.66);
+                  const mid = polar(i * SEG + SEG / 2, R * 0.68);
                   return (
                     <g key={r.id}>
-                      <path
-                        d={segmentPath(i)}
-                        fill={`url(#seg-${i})`}
-                        stroke="var(--bg-elev)"
-                        strokeWidth={2}
-                        opacity={0.92}
-                      />
+                      <path d={segmentPath(i)} fill={i % 2 ? "var(--surface-2)" : "var(--surface)"} />
                       <text
                         x={mid.x}
                         y={mid.y}
                         textAnchor="middle"
                         dominantBaseline="central"
-                        fontSize={34}
+                        fontSize={32}
                         transform={`rotate(${i * SEG + SEG / 2} ${mid.x} ${mid.y})`}
                       >
                         {r.emoji}
@@ -228,124 +196,109 @@ export default function RoulettePage() {
                     </g>
                   );
                 })}
-
-                <circle
-                  cx={CX}
-                  cy={CY}
-                  r={30}
-                  fill="var(--bg-elev)"
-                  stroke="var(--line)"
-                  strokeWidth={2}
-                />
-                <text
-                  x={CX}
-                  y={CY}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fontSize={22}
-                >
-                  🍽️
-                </text>
               </motion.svg>
+
+              <div className="absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full brand-gradient text-[22px] shadow-[0_0_0_6px_var(--bg)]">
+                🎲
+              </div>
+            </div>
+            </div>
+
+            <div className="contents lg:flex lg:flex-col lg:gap-3">
+            {/* Що випаде — заглушка в бічній колонці, поки колесо не крутили */}
+            {!winner && (
+              <Panel className="hidden lg:block">
+                <PanelHeader label="Що сьогодні?" tone="brand" />
+                <div className="flex flex-col items-center gap-2 border-t border-line px-4 py-8 text-center">
+                  <span className="text-[56px] leading-none">{spinning ? "🌀" : "🍽️"}</span>
+                  <p className="text-[14px] font-bold">{spinning ? "Крутиться…" : "Крутни колесо — доля обере"}</p>
+                  <p className="text-[12.5px] font-semibold text-faint">Тут зʼявиться страва, рецепт і що до неї подати</p>
+                </div>
+              </Panel>
+            )}
+
+            {/* Керування */}
+            <div className="flex w-full gap-2">
+              <button
+                onClick={() => {
+                  haptic(12);
+                  reshuffle();
+                }}
+                disabled={spinning}
+                aria-label="Перемішати страви на колесі"
+                className="grid h-[50px] w-[54px] shrink-0 place-items-center rounded-[10px] bg-surface-2 active:bg-line disabled:opacity-40"
+              >
+                <Shuffle size={19} />
+              </button>
+              <button
+                onClick={spin}
+                disabled={spinning}
+                className="h-[50px] flex-1 rounded-[10px] brand-gradient text-[15.5px] font-extrabold text-brand-ink transition-opacity disabled:opacity-60"
+              >
+                {spinning ? "Крутиться…" : winner ? "Ще раз" : "Крутити"}
+              </button>
+            </div>
+
+            <p className="-mt-1 text-center text-[11.5px] font-semibold text-faint">
+              На колесі 8 випадкових з {pool.length} {plural(pool.length, "страви", "страв", "страв")}
+            </p>
+
+            {/* Результат */}
+            <AnimatePresence>
+              {winner && !spinning && (
+                <motion.div
+                  initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 24 }}
+                  className="flex w-full flex-col gap-2.5"
+                >
+                  <Panel>
+                    <PanelHeader
+                      label="Доля обрала"
+                      tone="brand"
+                      aside={COURSE_LABEL[courseOf(winner)].toLowerCase()}
+                    />
+                    <Link
+                      href={`/recipe/${winner.id}`}
+                      className="flex items-center gap-3 border-t border-line px-3.5 pb-3 pt-2.5 active:bg-surface-2"
+                    >
+                      <RecipeMedia recipe={winner} className="h-14 w-14 shrink-0" rounded="rounded-[8px]" emojiSize="text-[28px]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[15px] font-extrabold">{winner.title}</span>
+                        <span className="block truncate text-[12px] font-semibold text-muted">
+                          {formatMinutes(winner.timeMin)} · {winner.cuisine}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[13px] font-extrabold text-brand">Рецепт ›</span>
+                    </Link>
+                    <div className="grid grid-cols-2 gap-px border-t border-line bg-line">
+                      <button
+                        onClick={() => {
+                          toggleWish(winner.id);
+                          toast("Додано в «хочу приготувати»", "📌");
+                        }}
+                        className="h-11 bg-surface text-[13.5px] font-bold text-muted active:bg-surface-2"
+                      >
+                        Пізніше
+                      </button>
+                      <Link
+                        href={`/recipe/${winner.id}/cook`}
+                        className="grid h-11 place-items-center bg-surface text-[13.5px] font-extrabold text-brand active:bg-surface-2"
+                      >
+                        Готувати зараз
+                      </Link>
+                    </div>
+                  </Panel>
+                  <PairingSuggestions recipe={winner} limit={2} />
+                  <DrinkPicks recipe={winner} />
+                </motion.div>
+              )}
+            </AnimatePresence>
             </div>
           </div>
-
-          {/* Керування */}
-          <div className="mt-6 flex w-full max-w-sm gap-2">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => {
-                haptic(12);
-                reshuffle();
-              }}
-              disabled={spinning}
-              className="w-14 px-0"
-              aria-label="Оновити страви на колесі"
-            >
-              <Shuffle size={19} />
-            </Button>
-            <Button
-              full
-              size="lg"
-              onClick={spin}
-              loading={spinning}
-              className="flex-1"
-            >
-              <RotateCw size={19} />
-              Крутити
-            </Button>
-          </div>
-
-          <p className="mt-3 text-center text-[12px] text-muted">
-            На колесі 8 випадкових страв із {pool.length}. Натисни «перемішати»,
-            щоб змінити склад.
-          </p>
-
-          {/* Результат */}
-          <AnimatePresence>
-            {winner && !spinning && (
-              <motion.div
-                initial={{ opacity: 0, y: 24, scale: 0.94 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 12, scale: 0.97 }}
-                transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                className="mt-6 w-full"
-              >
-                <div className="overflow-hidden rounded-xl3 border border-brand/30 bg-surface">
-                  <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-                    <span className="text-xl">🎉</span>
-                    <p className="flex-1 text-[13px] font-bold">Доля обрала за тебе</p>
-                    {/* Чим страва є на столі: з цього видно, чому далі йдуть підказки. */}
-                    <span className="rounded-full bg-surface-2 px-2 py-1 text-[10.5px] font-bold text-muted">
-                      {COURSE_LABEL[courseOf(winner)].toLowerCase()}
-                    </span>
-                  </div>
-                  <Link
-                    href={`/recipe/${winner.id}`}
-                    className="flex gap-3 p-3.5"
-                  >
-                    <RecipeMedia
-                      recipe={winner}
-                      className="h-20 w-20 shrink-0"
-                      rounded="rounded-2xl"
-                      emojiSize="text-4xl"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-display text-[17px] font-extrabold leading-tight">
-                        {winner.title}
-                      </h3>
-                      <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-muted">
-                        {winner.description}
-                      </p>
-                      <p className="mt-1.5 text-[12px] font-bold text-brand">
-                        {formatMinutes(winner.timeMin)} · {winner.cuisine}
-                      </p>
-                    </div>
-                  </Link>
-                  <div className="flex gap-2 px-3.5 pb-3.5">
-                    <Button
-                      variant="secondary"
-                      className="flex-1"
-                      onClick={() => {
-                        toggleWish(winner.id);
-                        toast("Додано в «хочу приготувати»", "📌");
-                      }}
-                    >
-                      Пізніше
-                    </Button>
-                    <Link href={`/recipe/${winner.id}/cook`} className="flex-1">
-                      <Button full>Готувати</Button>
-                    </Link>
-                  </div>
-                </div>
-                <PairingSuggestions recipe={winner} limit={2} />
-                <DrinkPicks recipe={winner} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
+        )}
+      </div>
 
       <FilterSheet
         suggesting

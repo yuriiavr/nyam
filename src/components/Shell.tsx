@@ -9,6 +9,8 @@ import { BottomNav, NAV_HEIGHT, useNavHidden } from "./BottomNav";
 import { CookingHost } from "./CookingHost";
 import { PushOffer } from "./PushOffer";
 import { useApp } from "@/lib/store";
+import { cn } from "@/lib/utils";
+import { NavRail } from "./Sidebar";
 
 /**
  * Оболонка застосунку: колонка шириною з телефон і нижня навігація.
@@ -20,25 +22,59 @@ import { useApp } from "@/lib/store";
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
   const navHidden = useNavHidden(pathname);
+  const wide = WIDE.some((re) => re.test(pathname));
 
   return (
-    <div className="relative mx-auto flex min-h-dvh w-full max-w-[560px] flex-col border-line md:border-x">
-      <main
-        className="flex-1"
-        style={
-          navHidden
-            ? undefined
-            : { paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + var(--cook-dock, 0px))` }
-        }
+    <div className="relative flex min-h-dvh w-full">
+      {/* Світіння згори — з планшетного макета; на телефоні його зʼїдала б шапка. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 hidden bg-[radial-gradient(50rem_30rem_at_60%_-20%,rgb(255_107_53_/_0.13),transparent_70%)] md:block light:md:hidden"
+      />
+      <NavRail />
+      <div
+        className={cn(
+          "relative mx-auto flex min-h-dvh w-full min-w-0 max-w-[560px] flex-1 flex-col",
+          wide ? "md:max-w-none" : "md:max-w-[720px]",
+        )}
       >
-        <AuthGate pathname={pathname}>
-          <PullToRefresh onRefresh={refreshFromServer}>{children}</PullToRefresh>
-        </AuthGate>
-      </main>
-      <BottomNav />
+        <main
+          className="flex-1 md:!pb-[var(--cook-dock,0px)]"
+          style={
+            navHidden
+              ? undefined
+              : { paddingBottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + var(--cook-dock, 0px))` }
+          }
+        >
+          <AuthGate pathname={pathname}>
+            <PullToRefresh onRefresh={refreshFromServer}>{children}</PullToRefresh>
+          </AuthGate>
+        </main>
+        <BottomNav />
+      </div>
     </div>
   );
 }
+
+/**
+ * Екрани з власною планшетною розкладкою (кілька колонок від lg). Решта на
+ * планшеті лишається колонкою до 720 px по центру — розтягнутий на всю ширину
+ * список читати важче, ніж вузький.
+ */
+const WIDE = [
+  /^\/$/,
+  /^\/explore$/,
+  /^\/decide$/,
+  /^\/decide\/roulette$/,
+  /^\/pantry$/,
+  /^\/plan$/,
+  /^\/shopping$/,
+  /^\/diary$/,
+  /^\/recipe\/[^/]+$/,
+  /^\/recipe\/[^/]+\/cook$/,
+  /^\/me$/,
+  /^\/notifications$/,
+];
 
 /**
  * Сторінки, доступні без входу.

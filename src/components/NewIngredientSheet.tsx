@@ -25,11 +25,12 @@ import { saveCustomIngredient, toCatalogError, unmergeCustomIngredient } from "@
 import type { IngredientCat, IngredientDef, Unit } from "@/lib/types";
 import { UNIT_GROUPS, unitLabel } from "@/lib/units";
 import { subscribeTypeEditor } from "@/lib/type-editor";
-import { haptic } from "@/lib/utils";
+import { cn, haptic } from "@/lib/utils";
 import { HistorySheet } from "./HistorySheet";
 import { IngredientPicker } from "./IngredientPicker";
 import { MergeSheet } from "./MergeSheet";
-import { Button, Chip, Sheet, useToast } from "./ui";
+import { LinkRow } from "./pantry/PantryGroups";
+import { Button, Panel, PanelHeader, Sheet, useToast } from "./ui";
 
 /**
  * Власний продукт.
@@ -385,35 +386,37 @@ export function NewIngredientSheet({
           </Button>
         }
       >
-        <div className="flex flex-col gap-4 pb-2">
+        <div className="flex flex-col gap-4 pb-3">
           {shared && (
-            <p className="rounded-2xl border border-brand/30 bg-brand/5 px-3.5 py-3 text-[12.5px] leading-snug">
-              Дописані типи спільні: правку побачать усі. Кожна зміна пишеться в історію, і її можна
-              повернути.{" "}
-              <button
+            <Panel>
+              <p className="px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-muted">
+                Дописані типи спільні: правку побачать усі. Кожна зміна пишеться в історію, і її можна
+                повернути.
+              </p>
+              <LinkRow
+                divided
                 onClick={() => setHistoryOpen(true)}
-                className="inline-flex items-center gap-1 font-bold text-brand"
+                icon={<History size={15} strokeWidth={2.2} className="shrink-0 text-faint" />}
               >
-                <History size={13} /> Історія змін
-              </button>
-              {" · "}
-              <button onClick={() => setMergeWith(null)} className="font-bold text-brand">
+                Історія змін
+              </LinkRow>
+              <LinkRow divided onClick={() => setMergeWith(null)}>
                 Це дублікат іншого типу…
-              </button>
-            </p>
+              </LinkRow>
+            </Panel>
           )}
           {problem && (
-            <p className="rounded-2xl border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] leading-snug text-berry">
+            <p className="rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-berry">
               {problem}
             </p>
           )}
           {shared && mergedHere.length > 0 && (
-            <div className="rounded-2xl border border-line bg-surface px-3.5 py-2.5">
-              <p className="text-[12px] font-bold text-muted">Обʼєднано з цим типом</p>
+            <Panel>
+              <PanelHeader label="Обʼєднано з цим типом" />
               {mergedHere.map((d) => (
-                <div key={d.key} className="mt-1.5 flex items-center gap-2.5">
-                  <span className="text-lg">{d.emoji}</span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{d.label}</span>
+                <div key={d.key} className="flex h-[50px] items-center gap-3 border-t border-line px-3.5">
+                  <span className="w-[22px] shrink-0 text-lg leading-none">{d.emoji}</span>
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{d.label}</span>
                   <Button
                     size="sm"
                     variant="outline"
@@ -425,12 +428,12 @@ export function NewIngredientSheet({
                   </Button>
                 </div>
               ))}
-            </div>
+            </Panel>
           )}
           <div>
             <Field>Назва</Field>
             <div className="flex gap-2">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface-2 text-xl">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[10px] bg-surface-2 text-xl">
                 {emoji}
               </span>
               <input
@@ -439,7 +442,7 @@ export function NewIngredientSheet({
                 placeholder="Кокосове борошно"
                 // Правку відкривають, щоб поміняти що завгодно, а не лише назву.
                 autoFocus={!editing}
-                className="h-11 min-w-0 flex-1 rounded-2xl border border-line bg-surface px-3.5 text-[15px]"
+                className={cn(INPUT, "min-w-0 flex-1")}
               />
             </div>
             <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto">
@@ -451,9 +454,10 @@ export function NewIngredientSheet({
                     edit("emoji", setEmoji)(e);
                   }}
                   aria-label={`Значок ${e}`}
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-lg ${
-                    emoji === e ? "bg-brand/15 ring-2 ring-brand" : "bg-surface-2"
-                  }`}
+                  className={cn(
+                    "grid h-9 w-9 shrink-0 place-items-center rounded-[8px] border text-lg",
+                    emoji === e ? "border-brand/60 bg-brand/10" : "border-transparent bg-surface-2",
+                  )}
                 >
                   {e}
                 </button>
@@ -462,9 +466,9 @@ export function NewIngredientSheet({
           </div>
 
           {duplicate && (
-            <div className="flex items-center gap-2.5 rounded-2xl border border-brand/40 bg-brand/5 px-3.5 py-2.5">
-              <span className="text-lg">{duplicate.emoji}</span>
-              <p className="min-w-0 flex-1 text-[12.5px] leading-snug">
+            <div className="flex items-center gap-3 rounded-[10px] border border-brand/40 bg-brand/10 px-3.5 py-2.5">
+              <span className="text-lg leading-none">{duplicate.emoji}</span>
+              <p className="min-w-0 flex-1 text-[12.5px] font-semibold leading-snug">
                 {editing
                   ? `Така назва вже є в типу «${duplicate.label}». Якщо це той самий тип — краще обʼєднати їх, ніж мати два.`
                   : `Вже є: «${duplicate.label}» — обрати його?`}
@@ -499,7 +503,7 @@ export function NewIngredientSheet({
               <button
                 onClick={() => setParentPickerOpen(true)}
                 aria-labelledby={`${parentId}-label ${parentId}-value`}
-                className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-line bg-surface px-3.5 text-left text-[15px]"
+                className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[10px] border border-line bg-surface px-3.5 text-left text-[15px] font-semibold active:bg-surface-2"
               >
                 {parent ? (
                   <>
@@ -522,16 +526,16 @@ export function NewIngredientSheet({
                     setDeclined(parent);
                   }}
                   aria-label="Без батьківського типу"
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-surface-2"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-[10px] bg-surface-2 active:bg-line"
                 >
                   <X size={16} className="text-muted" />
                 </button>
               )}
             </div>
             {suggestion && (
-              <div className="mt-2 flex items-center gap-2.5 rounded-2xl border border-line bg-surface-2 px-3.5 py-2">
-                <span className="text-lg">{suggestion.emoji}</span>
-                <p className="min-w-0 flex-1 text-[12.5px] leading-snug">
+              <div className="mt-2 flex items-center gap-3 rounded-[10px] border border-line bg-surface py-2 pl-3.5 pr-2">
+                <span className="text-lg leading-none">{suggestion.emoji}</span>
+                <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug">
                   Це різновид «{suggestion.label}»?
                 </p>
                 <Button
@@ -547,13 +551,13 @@ export function NewIngredientSheet({
                 <button
                   onClick={() => setDeclined(suggestion.key)}
                   aria-label={`Ні, не різновид «${suggestion.label}»`}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-xl"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px]"
                 >
                   <X size={15} className="text-muted" />
                 </button>
               </div>
             )}
-            <p className={`mt-1.5 text-[11px] leading-snug ${tooDeep ? "text-berry" : "text-faint"}`}>
+            <p className={cn("mt-1.5 px-1 text-[11.5px] font-semibold leading-snug", tooDeep ? "text-berry" : "text-faint")}>
               {tooDeep
                 ? "Забагато рівнів різновидів — обери загальніший тип."
                 : parent
@@ -564,14 +568,25 @@ export function NewIngredientSheet({
 
           <div>
             <Field>Де його шукати</Field>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {CAT_ORDER.map((c) => (
-                <Chip key={c} active={cat === c} onClick={() => edit("cat", setCat)(c)}>
+                <button
+                  key={c}
+                  aria-pressed={cat === c}
+                  onClick={() => {
+                    haptic(8);
+                    edit("cat", setCat)(c);
+                  }}
+                  className={cn(
+                    "h-8 shrink-0 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+                    cat === c ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted",
+                  )}
+                >
                   {CAT_LABEL[c]}
-                </Chip>
+                </button>
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] leading-snug text-faint">
+            <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-faint">
               Від категорії залежить і місце в коморі, і відділ у списку покупок.
             </p>
           </div>
@@ -581,7 +596,7 @@ export function NewIngredientSheet({
             <select
               value={unit}
               onChange={(e) => edit("unit", setUnit)(e.target.value as Unit)}
-              className="h-11 w-full rounded-2xl border border-line bg-surface px-3 text-[15px]"
+              className={cn(INPUT, "w-full px-3")}
             >
               {UNIT_GROUPS.map((group) => (
                 <optgroup key={group.title} label={group.title}>
@@ -600,9 +615,9 @@ export function NewIngredientSheet({
                   onChange={(e) => edit("perPiece", setPerPiece)(e.target.value.replace(/[^\d.,]/g, ""))}
                   inputMode="decimal"
                   placeholder="Скільки грамів у штуці"
-                  className="h-11 w-full rounded-2xl border border-line bg-surface px-3.5 text-[15px]"
+                  className={cn(INPUT, "w-full")}
                 />
-                <p className="mt-1.5 text-[11px] leading-snug text-faint">
+                <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-faint">
                   Потрібно, щоб «2 шт» перетворились на грами — інакше калорії не
                   порахуються.
                 </p>
@@ -619,7 +634,7 @@ export function NewIngredientSheet({
                 <NumField value={fat} onChange={edit("fat", setFat)} label="жири" />
                 <NumField value={carbs} onChange={edit("carbs", setCarbs)} label="вугл." />
               </div>
-              <p className="mt-1.5 text-[11px] leading-snug text-faint">
+              <p className="mt-1.5 px-1 text-[11.5px] font-semibold leading-snug text-faint">
                 Можна не вводити. Тоді страви з цим продуктом просто не
                 рахуватимуть калорій — це чесніше за вигадане число.
               </p>
@@ -627,7 +642,7 @@ export function NewIngredientSheet({
           ) : (
             <button
               onClick={() => setMore(true)}
-              className="self-start text-[13px] font-bold text-brand"
+              className="h-8 self-start px-1 text-[13.5px] font-bold text-brand"
             >
               + Харчова цінність
             </button>
@@ -709,9 +724,13 @@ export function TypeEditorHost() {
 /** Поля, які батько заповнює, поки людина їх не чіпала. */
 type Filled = "emoji" | "cat" | "unit" | "perPiece" | "kcal" | "protein" | "fat" | "carbs";
 
+/** Окреме поле аркуша: те саме, що в решті форм редизайну. */
+const INPUT =
+  "h-11 rounded-[10px] border border-line bg-surface px-3.5 text-[15px] font-semibold placeholder:text-faint";
+
 function Field({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-muted">{children}</p>
+    <p className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">{children}</p>
   );
 }
 
@@ -732,9 +751,9 @@ function NumField({
         inputMode="decimal"
         placeholder="0"
         aria-label={label}
-        className="h-11 w-full rounded-2xl border border-line bg-surface px-2 text-center text-[15px]"
+        className="h-11 w-full rounded-[10px] border border-line bg-surface px-2 text-center text-[15px] font-semibold placeholder:text-faint"
       />
-      <span className="text-center text-[10.5px] text-muted">{label}</span>
+      <span className="text-center text-[11px] font-semibold text-muted">{label}</span>
     </label>
   );
 }

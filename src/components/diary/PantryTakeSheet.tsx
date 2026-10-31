@@ -2,7 +2,7 @@
 
 import { Check, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Button, Sheet, useToast } from "@/components/ui";
+import { Button, Panel, PanelHeader, Sheet, useToast } from "@/components/ui";
 import { satisfies } from "@/data/ingredients";
 import { pantryDisplayName, rowGrams } from "@/lib/pantry";
 import { shortProductName } from "@/lib/products";
@@ -10,6 +10,7 @@ import { useApp } from "@/lib/store";
 import type { MealItem, PantryItem } from "@/lib/types";
 import { formatNumber, formatQuantity } from "@/lib/units";
 import { cn, haptic } from "@/lib/utils";
+import { SheetTitle } from "./SheetParts";
 
 interface Line {
   item: MealItem;
@@ -104,15 +105,17 @@ export function PantryTakeSheet({ mealId, onClose }: { mealId: string | null; on
     <Sheet
       open={!!mealId}
       onClose={onClose}
-      title="Що взяли з комори?"
+      title={
+        meal ? <SheetTitle emoji={meal.emoji} title="Що взяли з комори?" sub={meal.title} /> : "Що взяли з комори?"
+      }
       footer={
         !meal ? undefined : taken.length ? (
-          <Button full size="lg" onClick={onClose}>
+          <Button full onClick={onClose}>
             Готово
           </Button>
         ) : lines.length ? (
           <div className="flex flex-col gap-2">
-            <Button full size="lg" disabled={!takes.length} onClick={confirm}>
+            <Button full disabled={!takes.length} onClick={confirm}>
               {takes.length ? `Списати ${takes.length}` : "Обери, що брали"}
             </Button>
             <Button full variant="ghost" onClick={nothing}>
@@ -120,88 +123,94 @@ export function PantryTakeSheet({ mealId, onClose }: { mealId: string | null; on
             </Button>
           </div>
         ) : (
-          <Button full size="lg" onClick={nothing}>
+          <Button full onClick={nothing}>
             Зрозуміло
           </Button>
         )
       }
     >
       {!meal ? (
-        <p className="pb-4 text-[13px] leading-relaxed text-muted">
+        <Panel className="mb-3 px-3.5 py-3 text-[13px] font-semibold leading-relaxed text-muted">
           Цієї страви тут ще немає — щоденник оновлюється. Якщо вона так і не зʼявиться, запис могли прибрати.
-        </p>
+        </Panel>
       ) : (
-        <div className="flex flex-col gap-3 pb-2">
-          <p className="flex items-center gap-2 text-[14px] font-bold">
-            <span className="text-xl">{meal.emoji}</span>
-            {meal.title}
-          </p>
-
+        <div className="flex flex-col gap-3 pb-3">
           {taken.length > 0 ? (
-            <>
-              <p className="text-[12.5px] text-muted">Уже списано:</p>
-              <ul className="flex flex-col gap-1.5">
-                {taken.map((t) => (
-                  <li key={t.row.id} className="flex items-center justify-between rounded-2xl bg-surface-2 px-3 py-2 text-[13px]">
-                    <span className="truncate font-semibold">{name(t.row)}</span>
-                    <span className="shrink-0 text-muted">{t.row.unit ? formatQuantity(t.amount, t.row.unit) : ""}</span>
-                  </li>
-                ))}
-              </ul>
-              <Button variant="secondary" onClick={giveBack}>
-                <Undo2 size={16} />
-                Повернути в комору
-              </Button>
-            </>
-          ) : lines.length === 0 ? (
-            <p className="text-[13px] leading-relaxed text-muted">
-              У коморі немає нічого з цієї страви — списувати нічого.
-            </p>
-          ) : (
-            <>
-              <p className="text-[12.5px] leading-snug text-muted">
-                Помічник лише здогадується, яку пачку взяли й скільки. Виправ, якщо не так, — і комора не бреше.
-              </p>
-              {lines.map((line, index) => (
-                <div key={`${line.item.name}-${index}`} className="rounded-2xl border border-line p-3">
-                  <div className="flex items-center gap-2">
-                    <p className="min-w-0 flex-1 truncate text-[14px] font-semibold">{line.item.name}</p>
-                    <input
-                      value={line.grams}
-                      onChange={(e) => set(index, { grams: e.target.value.replace(/[^\d.,]/g, "") })}
-                      inputMode="decimal"
-                      aria-label={`Скільки грамів: ${line.item.name}`}
-                      className="h-9 w-16 rounded-xl border border-line bg-surface px-2 text-center text-[14px] font-bold"
-                    />
-                    <span className="text-[13px] text-muted">г</span>
-                  </div>
-                  <div className="no-scrollbar -mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1">
-                    {line.rows.map((row) => {
-                      const on = line.rowId === row.id;
-                      return (
-                        <button
-                          key={row.id}
-                          aria-pressed={on}
-                          onClick={() => {
-                            haptic(8);
-                            set(index, { rowId: on ? null : row.id });
-                          }}
-                          className={cn(
-                            "flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[12.5px]",
-                            on ? "border-brand bg-brand/10 font-bold" : "border-line text-muted",
-                          )}
-                        >
-                          {on && <Check size={13} strokeWidth={3} className="text-brand" />}
-                          {name(row)}
-                          {row.amount != null && row.unit && (
-                            <span className="font-normal text-faint">{formatQuantity(row.amount, row.unit)}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+            <Panel>
+              <PanelHeader label="Уже списано" aside={taken.length} />
+              {taken.map((t) => (
+                <div key={t.row.id} className="flex h-12 items-center gap-3 border-t border-line px-3.5">
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{name(t.row)}</span>
+                  <span className="shrink-0 text-[12.5px] font-bold text-muted">
+                    {t.row.unit ? formatQuantity(t.amount, t.row.unit) : ""}
+                  </span>
                 </div>
               ))}
+              <button
+                onClick={() => {
+                  haptic(10);
+                  giveBack();
+                }}
+                className="flex h-12 w-full items-center gap-2.5 border-t border-line px-3.5 text-left active:bg-surface-2"
+              >
+                <Undo2 size={16} strokeWidth={2.4} className="shrink-0 text-brand" />
+                <span className="text-[14px] font-bold text-brand">Повернути в комору</span>
+              </button>
+            </Panel>
+          ) : lines.length === 0 ? (
+            <Panel className="px-3.5 py-3 text-[13px] font-semibold leading-relaxed text-muted">
+              У коморі немає нічого з цієї страви — списувати нічого.
+            </Panel>
+          ) : (
+            <>
+              <p className="px-1 text-[12px] font-semibold leading-snug text-faint">
+                Помічник лише здогадується, яку пачку взяли й скільки. Виправ, якщо не так, — і комора не бреше.
+              </p>
+              <Panel>
+                {lines.map((line, index) => (
+                  <div
+                    key={`${line.item.name}-${index}`}
+                    className={cn("flex flex-col gap-2 px-3.5 py-2.5", index > 0 && "border-t border-line")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <p className="min-w-0 flex-1 truncate text-[14px] font-semibold">{line.item.name}</p>
+                      <input
+                        value={line.grams}
+                        onChange={(e) => set(index, { grams: e.target.value.replace(/[^\d.,]/g, "") })}
+                        inputMode="decimal"
+                        aria-label={`Скільки грамів: ${line.item.name}`}
+                        className="h-8 w-[64px] rounded-[8px] bg-surface-2 px-2.5 text-right text-[14px] font-bold"
+                      />
+                      <span className="text-[14px] font-bold text-muted">г</span>
+                    </div>
+                    <div className="no-scrollbar -mx-3.5 flex gap-1.5 overflow-x-auto px-3.5">
+                      {line.rows.map((row) => {
+                        const on = line.rowId === row.id;
+                        return (
+                          <button
+                            key={row.id}
+                            aria-pressed={on}
+                            onClick={() => {
+                              haptic(8);
+                              set(index, { rowId: on ? null : row.id });
+                            }}
+                            className={cn(
+                              "flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+                              on ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface-2 text-muted",
+                            )}
+                          >
+                            {on && <Check size={13} strokeWidth={3} />}
+                            {name(row)}
+                            {row.amount != null && row.unit && (
+                              <span className="font-semibold text-faint">{formatQuantity(row.amount, row.unit)}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </Panel>
             </>
           )}
         </div>

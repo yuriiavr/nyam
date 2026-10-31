@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, Check, Search, TriangleAlert, X } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronRight, Search, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { IngredientPicker } from "@/components/IngredientPicker";
 import { Button, Sheet, Spinner, useToast } from "@/components/ui";
@@ -161,7 +161,7 @@ function MergeProducts({ open, onClose, product, other: initialOther, onMerged }
     >
       <div className="flex flex-col gap-3 pb-3">
         {error && (
-          <p className="flex items-start gap-2 rounded-2xl border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] leading-snug text-berry">
+          <p className="flex items-start gap-2 rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-berry">
             <TriangleAlert size={15} className="mt-0.5 shrink-0" />
             {error}
           </p>
@@ -169,43 +169,53 @@ function MergeProducts({ open, onClose, product, other: initialOther, onMerged }
 
         {!other ? (
           <>
-            <p className="text-[13px] leading-snug text-muted">Яка картка — той самий товар, що «{product.name}»?</p>
-            <div className="flex h-12 items-center gap-2 rounded-2xl border border-line bg-surface px-3.5">
-              <Search size={17} className="shrink-0 text-muted" />
+            <p className="px-1 text-[13px] font-semibold leading-snug text-muted">
+              Яка картка — той самий товар, що «{product.name}»?
+            </p>
+            <div className="flex h-[46px] items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5">
+              <Search size={18} className="shrink-0 text-muted" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Назва чи виробник"
-                className="h-full min-w-0 flex-1 text-[15px]"
+                className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold placeholder:text-faint"
               />
               {query && (
-                <button onClick={() => setQuery("")} aria-label="Очистити">
+                <button onClick={() => setQuery("")} aria-label="Очистити" className="-mr-1.5 grid h-8 w-8 place-items-center">
                   <X size={16} className="text-muted" />
                 </button>
               )}
             </div>
             {results === null && query.trim().length >= 2 && !error && <Spinner className="mx-auto my-4" />}
             {results?.length === 0 && (
-              <p className="py-6 text-center text-[13px] text-muted">Схожих карток цього типу не знайшлось.</p>
+              <p className="py-6 text-center text-[13px] font-semibold text-muted">Схожих карток цього типу не знайшлось.</p>
             )}
-            {results?.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  haptic(8);
-                  setOther(p);
-                }}
-                className="flex items-center gap-2.5 rounded-2xl border border-line bg-surface px-3.5 py-2.5 text-left active:bg-surface-2"
-              >
-                <span className="text-lg">{ing(p.typeKey).emoji}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-bold">{p.name}</span>
-                  <span className="block truncate text-[11.5px] text-muted">
-                    {[productMeta(p), ing(p.typeKey).label].filter(Boolean).join(" · ")}
-                  </span>
-                </span>
-              </button>
-            ))}
+            {results && results.length > 0 && (
+              <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+                {results.map((p, i) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      haptic(8);
+                      setOther(p);
+                    }}
+                    className={cn(
+                      "flex min-h-[54px] w-full items-center gap-3 px-3.5 py-2 text-left active:bg-surface-2",
+                      i > 0 && "border-t border-line",
+                    )}
+                  >
+                    <span className="w-[22px] shrink-0 text-lg leading-none">{ing(p.typeKey).emoji}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-semibold">{p.name}</span>
+                      <span className="block truncate text-[11.5px] font-semibold text-faint">
+                        {[productMeta(p), ing(p.typeKey).label].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                    <ChevronRight size={15} strokeWidth={2.2} className="shrink-0 text-faint" />
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -220,19 +230,28 @@ function MergeProducts({ open, onClose, product, other: initialOther, onMerged }
                       setWinnerId(p.id);
                     }}
                     className={cn(
-                      "flex min-w-0 flex-col gap-1 rounded-2xl border bg-surface p-3 text-left",
-                      active ? "border-brand ring-2 ring-brand/40" : "border-line",
+                      "flex min-w-0 flex-col gap-1 rounded-[10px] border p-3 text-left",
+                      active ? "border-brand/40 bg-brand/10" : "border-line bg-surface",
                     )}
                   >
                     <span className="flex items-center justify-between gap-1">
-                      <span className="text-lg">{ing(p.typeKey).emoji}</span>
-                      {active && <Check size={15} className="text-brand" />}
+                      <span className="text-lg leading-none">{ing(p.typeKey).emoji}</span>
+                      <span
+                        className={cn(
+                          "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border-[1.5px]",
+                          active ? "border-brand bg-brand text-brand-ink" : "border-line-strong",
+                        )}
+                      >
+                        {active && <Check size={11} strokeWidth={3.5} />}
+                      </span>
                     </span>
                     <span className="line-clamp-3 text-[13.5px] font-bold leading-snug">{p.name}</span>
-                    {productMeta(p) && <span className="text-[11.5px] leading-snug text-muted">{productMeta(p)}</span>}
-                    <span className="text-[11px] leading-snug text-faint">{typeTrail(p.typeKey)}</span>
+                    {productMeta(p) && (
+                      <span className="text-[11.5px] font-semibold leading-snug text-muted">{productMeta(p)}</span>
+                    )}
+                    <span className="text-[11px] font-semibold leading-snug text-faint">{typeTrail(p.typeKey)}</span>
                     {counts[p.id] != null && (
-                      <span className="text-[11px] text-faint">
+                      <span className="text-[11px] font-semibold text-faint">
                         {counts[p.id] === 0 ? "штрихкодів і назв з чеків немає" : `штрихкодів і назв з чеків: ${counts[p.id]}`}
                       </span>
                     )}
@@ -247,24 +266,24 @@ function MergeProducts({ open, onClose, product, other: initialOther, onMerged }
                   setOther(null);
                   setWinnerId(null);
                 }}
-                className="flex items-center gap-1.5 self-start text-[12.5px] font-bold text-brand"
+                className="flex h-8 items-center gap-1.5 self-start px-1 text-[12.5px] font-bold text-brand"
               >
                 <ArrowLeftRight size={13} /> Інша картка
               </button>
             )}
 
             {!compatible ? (
-              <p className="rounded-2xl bg-surface-2 px-3.5 py-3 text-[12.5px] leading-snug text-berry">
+              <p className="rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-berry">
                 Спершу зроби однаковий тип.
               </p>
             ) : winner ? (
-              <>
+              <div className="rounded-[10px] border border-line bg-surface px-3.5 py-3">
                 <p className="text-[14px] font-bold">Лишиться: «{winner.name}»</p>
-                <p className="text-[13px] leading-relaxed text-muted">
+                <p className="mt-1 text-[12.5px] font-semibold leading-relaxed text-muted">
                   Штрихкоди й назви з чеків перейдуть до «{winner.name}», і в коморах теж буде «{winner.name}».
                   Розʼєднати можна пізніше — у картці «{winner.name}».
                 </p>
-              </>
+              </div>
             ) : (
               <Spinner className="mx-auto" />
             )}
@@ -358,37 +377,42 @@ function MergeTypes({ open, onClose, typeKey, otherTypeKey, onMerged }: TypesPro
       >
         <div className="flex flex-col gap-3 pb-3">
           {error && (
-            <p className="flex items-start gap-2 rounded-2xl border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] leading-snug text-berry">
+            <p className="flex items-start gap-2 rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-berry">
               <TriangleAlert size={15} className="mt-0.5 shrink-0" />
               {error}
             </p>
           )}
           <button
             onClick={() => setPicking(true)}
-            className="flex h-11 items-center gap-2 rounded-2xl border border-line bg-surface px-3.5 text-left text-[14px]"
+            className="flex h-12 items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5 text-left text-[14px] active:bg-surface-2"
           >
             {other ? (
               <>
-                <span>{ing(other).emoji}</span>
-                <span className="min-w-0 flex-1 truncate font-bold">{typeTrail(other)}</span>
-                <span className="shrink-0 text-[12px] font-bold text-brand">змінити</span>
+                <span className="w-[22px] shrink-0 text-lg leading-none">{ing(other).emoji}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">{typeTrail(other)}</span>
+                <span className="shrink-0 text-[12.5px] font-bold text-brand">змінити</span>
               </>
             ) : (
-              <span className="text-faint">З яким типом обʼєднати?</span>
+              <>
+                <span className="min-w-0 flex-1 truncate font-semibold text-faint">З яким типом обʼєднати?</span>
+                <ChevronRight size={15} strokeWidth={2.2} className="shrink-0 text-faint" />
+              </>
             )}
           </button>
 
           {blocked ? (
-            <p className="rounded-2xl bg-surface-2 px-3.5 py-3 text-[12.5px] leading-snug text-berry">{blocked}</p>
+            <p className="rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-berry">
+              {blocked}
+            </p>
           ) : (
             loser &&
             winner && (
               <>
-                <p className="text-[14px] leading-relaxed">
+                <p className="px-1 text-[14px] font-semibold leading-relaxed">
                   Обʼєднати тип «{ing(loser).label}» з «{ing(winner).label}»? Рецепти з «{ing(loser).label}»
                   рахуватимуться як «{ing(winner).label}».
                 </p>
-                <p className="text-[12.5px] leading-snug text-muted">
+                <p className="px-1 text-[12.5px] font-semibold leading-snug text-faint">
                   {isOwnKey(winner)
                     ? `Розʼєднати можна пізніше — у «Редагувати тип» для «${ing(winner).label}».`
                     : `Розʼєднати можна пізніше — у групі «${ing(winner).label}» в коморі.`}
@@ -396,7 +420,7 @@ function MergeTypes({ open, onClose, typeKey, otherTypeKey, onMerged }: TypesPro
                 {owns.length === 2 && (
                   <button
                     onClick={() => setLoserKey(winner)}
-                    className="flex items-center gap-1.5 self-start text-[12.5px] font-bold text-brand"
+                    className="flex h-8 items-center gap-1.5 self-start px-1 text-[12.5px] font-bold text-brand"
                   >
                     <ArrowLeftRight size={13} /> Лишити «{ing(loser).label}»
                   </button>

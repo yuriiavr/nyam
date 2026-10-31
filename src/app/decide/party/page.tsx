@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { FilterButton, FilterSheet } from "@/components/FilterSheet";
 import { RecipeMedia } from "@/components/RecipeCard";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, EmptyState } from "@/components/ui";
+import { EmptyState, Panel, PanelHeader } from "@/components/ui";
 import {
   activeFilterCount,
   applyFilters,
@@ -17,9 +17,14 @@ import {
 } from "@/lib/matching";
 import { useApp } from "@/lib/store";
 import type { Recipe } from "@/lib/types";
-import { formatMinutes, haptic, plural, shuffle } from "@/lib/utils";
+import { cn, formatMinutes, haptic, plural, shuffle } from "@/lib/utils";
 
 type Phase = "setup" | "handoff" | "voting" | "result";
+
+const PRIMARY =
+  "flex h-[52px] items-center justify-center gap-2 rounded-[12px] brand-gradient text-[15px] font-extrabold text-brand-ink";
+const SECONDARY =
+  "flex h-[52px] items-center justify-center gap-2 rounded-[12px] bg-surface-2 text-[15px] font-bold active:bg-line";
 
 const AVATARS = ["🦊", "🐼", "🐸", "🐙", "🦄", "🐯", "🐨", "🦖"];
 const ROUND_SIZE = 8;
@@ -108,16 +113,15 @@ export default function PartyPage() {
     <div className="flex min-h-dvh flex-col pb-8">
       <TopBar
         title="Обираємо разом"
-        subtitle={
-          phase === "voting"
-            ? `${names[voterIndex]} · ${cardIndex + 1}/${deck.length}`
-            : phase === "result"
-              ? "Результат"
-              : "Один телефон на всіх"
-        }
         right={
           phase === "setup" ? (
             <FilterButton count={activeFilterCount(filters)} onClick={() => setFiltersOpen(true)} />
+          ) : phase === "voting" ? (
+            <span className="max-w-[140px] shrink-0 truncate text-[12px] font-bold text-faint">
+              {names[voterIndex]} · {cardIndex + 1}/{deck.length}
+            </span>
+          ) : phase === "result" ? (
+            <span className="shrink-0 text-[12px] font-bold text-faint">Результат</span>
           ) : undefined
         }
       />
@@ -130,40 +134,40 @@ export default function PartyPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="px-4 pt-5"
+            className="flex flex-col gap-2.5 px-4"
           >
-            <Card className="p-4">
-              <div className="flex items-center gap-2">
-                <Users size={17} className="text-brand" />
-                <h2 className="font-display text-[16px] font-bold">Хто обирає?</h2>
-              </div>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+            <Panel>
+              <PanelHeader
+                label="Хто обирає?"
+                tone="brand"
+                icon={<Users size={13} strokeWidth={2.4} />}
+                aside="Один телефон на всіх"
+              />
+              <p className="border-t border-line px-3.5 py-3 text-[13px] font-semibold leading-relaxed text-muted">
                 Кожен по черзі голосує за страви на цьому ж телефоні. Наприкінці покажемо, на чому
                 зійшлись усі.
               </p>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {names.map((n, i) => (
-                  <span
-                    key={`${n}-${i}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 py-2 pl-3 pr-2 text-[13px] font-semibold"
-                  >
-                    <span>{AVATARS[i % AVATARS.length]}</span>
-                    {n}
-                    {names.length > 2 && (
-                      <button
-                        onClick={() => setNames((prev) => prev.filter((_, j) => j !== i))}
-                        aria-label={`Прибрати ${n}`}
-                      >
-                        <X size={13} className="text-faint" />
-                      </button>
-                    )}
+              {names.map((n, i) => (
+                <div key={`${n}-${i}`} className="flex h-12 items-center gap-3 border-t border-line px-3.5">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-2 text-[17px]">
+                    {AVATARS[i % AVATARS.length]}
                   </span>
-                ))}
-              </div>
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{n}</span>
+                  {names.length > 2 && (
+                    <button
+                      onClick={() => setNames((prev) => prev.filter((_, j) => j !== i))}
+                      aria-label={`Прибрати ${n}`}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-faint active:bg-surface-2"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
+              ))}
 
               {names.length < 8 && (
-                <div className="mt-3 flex gap-2">
+                <div className="flex items-center gap-2 border-t border-line px-3.5 py-2.5">
                   <input
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
@@ -174,30 +178,30 @@ export default function PartyPage() {
                       }
                     }}
                     placeholder="Імʼя учасника"
-                    className="h-11 flex-1 rounded-2xl border border-line bg-bg-elev px-4 text-[15px]"
+                    className="h-10 min-w-0 flex-1 rounded-[8px] bg-surface-2 px-3 text-[15px] font-semibold"
                   />
-                  <Button
-                    variant="secondary"
+                  <motion.button
+                    whileTap={{ scale: 0.92 }}
                     onClick={() => {
                       if (!draft.trim()) return;
                       haptic(10);
                       setNames((p) => [...p, draft.trim()]);
                       setDraft("");
                     }}
-                    className="w-12 px-0"
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] brand-gradient text-brand-ink"
                     aria-label="Додати учасника"
                   >
-                    <Plus size={18} />
-                  </Button>
+                    <Plus size={18} strokeWidth={2.6} />
+                  </motion.button>
                 </div>
               )}
-            </Card>
+            </Panel>
 
-            <Button full size="lg" className="mt-4" onClick={start}>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={start} className={PRIMARY}>
               Почати голосування
               <ArrowRight size={18} />
-            </Button>
-            <p className="mt-2.5 text-center text-[12px] text-muted">
+            </motion.button>
+            <p className="text-center text-[11.5px] font-semibold text-faint">
               {Math.min(ROUND_SIZE, pool.length)} страв ·{" "}
               {names.length} {plural(names.length, "учасник", "учасники", "учасників")}
             </p>
@@ -213,30 +217,30 @@ export default function PartyPage() {
             exit={{ opacity: 0 }}
             className="flex flex-1 flex-col items-center justify-center px-8 text-center"
           >
-            <div className="floaty text-7xl">{AVATARS[voterIndex % AVATARS.length]}</div>
-            <h2 className="mt-5 font-display text-2xl font-extrabold leading-tight">
-              Передай телефон
-            </h2>
-            <p className="mt-1 font-display text-2xl font-extrabold text-gradient">
+            <div className="floaty grid h-24 w-24 place-items-center rounded-full bg-surface-2 text-[52px]">
+              {AVATARS[voterIndex % AVATARS.length]}
+            </div>
+            <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">
+              Учасник {voterIndex + 1} з {names.length}
+            </p>
+            <h2 className="mt-1.5 font-display text-[22px] font-bold leading-tight">Передай телефон</h2>
+            <p className="mt-0.5 font-display text-[22px] font-bold leading-tight text-brand">
               {names[voterIndex]}
             </p>
-            <p className="mt-3 text-[13.5px] leading-relaxed text-muted">
+            <p className="mt-3 text-[13.5px] font-semibold leading-relaxed text-muted">
               Голосуй чесно і не підглядай за іншими. Твої відповіді нікому не покажемо — лише
               спільний результат.
             </p>
-            <Button
-              size="lg"
-              className="mt-7 w-full max-w-xs"
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              className={cn(PRIMARY, "mt-7 w-full max-w-xs")}
               onClick={() => {
                 haptic(12);
                 setPhase("voting");
               }}
             >
               Я {names[voterIndex]}, почали
-            </Button>
-            <p className="mt-3 text-[12px] text-muted">
-              Учасник {voterIndex + 1} з {names.length}
-            </p>
+            </motion.button>
           </motion.div>
         )}
 
@@ -247,13 +251,13 @@ export default function PartyPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex flex-1 flex-col px-4 pt-4"
+            className="flex flex-1 flex-col px-4 pt-1"
           >
             <div className="flex gap-1">
               {deck.map((_, i) => (
                 <div
                   key={i}
-                  className={`h-1 flex-1 rounded-full ${i <= cardIndex ? "bg-brand" : "bg-line"}`}
+                  className={`h-1 flex-1 rounded-[2px] ${i <= cardIndex ? "bg-brand" : "bg-surface-2"}`}
                 />
               ))}
             </div>
@@ -265,7 +269,7 @@ export default function PartyPage() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -24, scale: 0.96 }}
                 transition={{ duration: 0.2 }}
-                className="mt-4 flex-1 overflow-hidden rounded-xl4 border border-line bg-surface"
+                className="mt-3 flex-1 overflow-hidden rounded-[12px] border border-line bg-surface"
               >
                 <RecipeMedia
                   recipe={deck[cardIndex]}
@@ -273,11 +277,9 @@ export default function PartyPage() {
                   rounded="rounded-none"
                   emojiSize="text-8xl"
                 />
-                <div className="p-4">
-                  <h2 className="font-display text-[19px] font-extrabold leading-tight">
-                    {deck[cardIndex].title}
-                  </h2>
-                  <p className="mt-1.5 line-clamp-3 text-[13px] leading-relaxed text-muted">
+                <div className="border-t border-line px-3.5 pb-3.5 pt-3">
+                  <h2 className="text-[18px] font-extrabold leading-tight">{deck[cardIndex].title}</h2>
+                  <p className="mt-1.5 line-clamp-3 text-[13.5px] leading-relaxed text-muted">
                     {deck[cardIndex].description}
                   </p>
                   <p className="mt-2 text-[12px] font-bold text-brand">
@@ -287,15 +289,23 @@ export default function PartyPage() {
               </motion.div>
             </AnimatePresence>
 
-            <div className="flex gap-3 py-4">
-              <Button variant="secondary" size="lg" className="flex-1" onClick={() => vote(false)}>
-                <X size={20} />
+            <div className="flex gap-2 py-3">
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                className={cn(SECONDARY, "flex-1")}
+                onClick={() => vote(false)}
+              >
+                <X size={19} strokeWidth={2.4} />
                 Ні
-              </Button>
-              <Button size="lg" className="flex-1" onClick={() => vote(true)}>
-                <Check size={20} />
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                className={cn(PRIMARY, "flex-1")}
+                onClick={() => vote(true)}
+              >
+                <Check size={19} strokeWidth={2.6} />
                 Так
-              </Button>
+              </motion.button>
             </div>
           </motion.div>
         )}
@@ -306,70 +316,96 @@ export default function PartyPage() {
             key="result"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            className="px-4 pt-6"
+            className="flex flex-col gap-2.5 px-4"
           >
-            <div className="text-center">
-              <div className="pop-in text-5xl">{unanimous.length ? "🎉" : "🤝"}</div>
-              <h2 className="mt-3 font-display text-xl font-extrabold">
-                {unanimous.length
-                  ? `Одностайно: ${unanimous.length} ${plural(unanimous.length, "страва", "страви", "страв")}`
-                  : "Повного збігу немає"}
-              </h2>
-              <p className="mt-1 text-[13px] text-muted">
-                {unanimous.length
-                  ? "Усі сказали «так» цим стравам."
-                  : "Ось рейтинг за кількістю голосів — беріть верхню."}
-              </p>
-            </div>
+            <Panel>
+              <PanelHeader
+                label="Рейтинг"
+                tone="brand"
+                icon={<Trophy size={13} strokeWidth={2.4} />}
+                aside={`${names.length} ${plural(names.length, "учасник", "учасники", "учасників")}`}
+              />
+              <div className="flex items-center gap-3 border-t border-line px-3.5 py-3">
+                <span className="pop-in grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-brand/15 text-[21px]">
+                  {unanimous.length ? "🎉" : "🤝"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-extrabold leading-tight">
+                    {unanimous.length
+                      ? `Одностайно: ${unanimous.length} ${plural(unanimous.length, "страва", "страви", "страв")}`
+                      : "Повного збігу немає"}
+                  </span>
+                  <span className="mt-0.5 block text-[12px] font-semibold leading-snug text-muted">
+                    {unanimous.length
+                      ? "Усі сказали «так» цим стравам."
+                      : "Ось рейтинг за кількістю голосів — беріть верхню."}
+                  </span>
+                </span>
+              </div>
 
-            <div className="mt-5 flex flex-col gap-2.5">
               {ranked.map(({ recipe, count }, i) => {
                 const isTop = count > 0 && count === ranked[0].count;
                 return (
-                  <Link key={recipe.id} href={`/recipe/${recipe.id}`}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className={`flex items-center gap-3 rounded-2xl border p-2.5 ${
-                        isTop ? "border-brand/40 bg-brand/5" : "border-line bg-surface"
-                      }`}
+                  <motion.div
+                    key={recipe.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                  >
+                    <Link
+                      href={`/recipe/${recipe.id}`}
+                      className={cn(
+                        "flex h-16 items-center gap-3 border-t border-line px-3.5 active:bg-surface-2",
+                        isTop && "bg-brand/[0.06]",
+                      )}
                     >
                       <RecipeMedia
                         recipe={recipe}
-                        className="h-14 w-14 shrink-0"
-                        rounded="rounded-2xl"
-                        emojiSize="text-2xl"
+                        className="h-11 w-11 shrink-0"
+                        rounded="rounded-[8px]"
+                        emojiSize="text-[22px]"
                       />
-                      <div className="min-w-0 flex-1">
-                        <h4 className="truncate text-[14px] font-bold">{recipe.title}</h4>
-                        <p className="text-[11.5px] text-muted">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] font-bold">{recipe.title}</span>
+                        <span className="block truncate text-[12px] font-semibold text-faint">
                           {formatMinutes(recipe.timeMin)} · {recipe.cuisine}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1.5">
                         {isTop && <Trophy size={14} className="text-brand" />}
                         <span
-                          className={`rounded-full px-2.5 py-1 text-[12px] font-extrabold ${
-                            count === 0 ? "bg-surface-2 text-faint" : "bg-brand/15 text-brand"
-                          }`}
+                          className={cn(
+                            "flex h-6 items-center rounded-[6px] px-2 text-[12px] font-extrabold",
+                            count === 0 ? "bg-surface-2 text-faint" : "bg-brand/15 text-brand",
+                          )}
                         >
                           {count}/{names.length}
                         </span>
-                      </div>
-                    </motion.div>
-                  </Link>
+                      </span>
+                    </Link>
+                  </motion.div>
                 );
               })}
-            </div>
+            </Panel>
 
-            <div className="mt-5 flex gap-2 pb-4">
-              <Button variant="secondary" className="flex-1" onClick={reset}>
+            <div className="flex gap-2 pb-4">
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                className={cn(SECONDARY, "flex-1")}
+                onClick={() => {
+                  haptic(10);
+                  reset();
+                }}
+              >
                 Ще раунд
-              </Button>
+              </motion.button>
               {ranked[0] && (
-                <Link href={`/recipe/${ranked[0].recipe.id}/cook`} className="flex-1">
-                  <Button full>Готувати переможця</Button>
+                <Link
+                  href={`/recipe/${ranked[0].recipe.id}/cook`}
+                  onClick={() => haptic(10)}
+                  className={cn(PRIMARY, "flex-1 px-2")}
+                >
+                  Готувати переможця
                 </Link>
               )}
             </div>

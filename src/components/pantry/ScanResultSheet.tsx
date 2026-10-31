@@ -171,7 +171,7 @@ export function ScanResultSheet({
             code={outcome.code}
           />
 
-          <div className="mt-4 rounded-2xl border border-line bg-surface-2 p-3.5">
+          <div className="mt-3 rounded-[10px] border border-line bg-surface p-3.5">
             <p className="text-[13px] leading-snug">
               {outcome.kind === "type"
                 ? `Знаємо, що це «${ing(outcome.typeKey).label}», але ще не знаємо назви. Заповни картку — і наступного разу він додасться сам.`
@@ -236,12 +236,12 @@ function ScanHeader({
   code: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3">
+    <div className="flex items-center gap-3 rounded-[10px] border border-line bg-surface p-3">
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt="" className="h-16 w-16 rounded-2xl bg-surface-2 object-contain" />
+        <img src={image} alt="" className="h-16 w-16 rounded-[10px] bg-surface-2 object-contain" />
       ) : (
-        <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-surface-2 text-2xl">
+        <span className="grid h-16 w-16 shrink-0 place-items-center rounded-[10px] bg-surface-2 text-2xl">
           {emoji}
         </span>
       )}
@@ -379,8 +379,8 @@ function KnownProduct({
         code={outcome.code}
       />
 
-      <div className="mt-4 rounded-2xl border border-mint/30 bg-mint/10 p-3.5">
-        <p className="text-[13px] font-bold text-mint">✓ У коморі: {product.name}</p>
+      <div className="mt-3 rounded-[10px] border border-brand/30 bg-brand/10 p-3.5">
+        <p className="text-[13px] font-bold text-brand">✓ У коморі: {product.name}</p>
         {together && (
           <p className="mt-1 text-[12.5px] font-semibold">Тепер разом: {together}</p>
         )}
@@ -425,7 +425,7 @@ function KnownProduct({
             type="date"
             autoFocus
             onChange={(e) => e.target.value && applyExpiry(e.target.value)}
-            className="mt-2 h-11 w-full rounded-2xl border border-line bg-surface-2 px-3.5 text-[15px]"
+            className="mt-2 h-11 w-full rounded-[10px] border border-line bg-surface-2 px-3.5 text-[15px] font-semibold"
           />
         )}
 

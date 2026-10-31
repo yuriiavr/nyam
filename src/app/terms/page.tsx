@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { TopBar } from "@/components/TopBar";
-import { LegalSection, LegalPage, SUPPORT_EMAIL } from "@/components/legal";
+import { LegalIntro, LegalSection, LegalPage, SUPPORT_EMAIL } from "@/components/legal";
 
 export const metadata: Metadata = {
   title: "Умови використання — Ням",
@@ -12,10 +12,10 @@ export default function TermsPage() {
     <div className="pb-8">
       <TopBar title="Умови використання" />
       <LegalPage updated="10 вересня 2026">
-        <p>
+        <LegalIntro>
           Користуючись «Нямом», ти погоджуєшся з цими умовами. Вони написані людською мовою, бо
           застосунок простий і ховати тут нема чого.
-        </p>
+        </LegalIntro>
 
         <LegalSection title="Що це таке">
           «Ням» — безкоштовний застосунок для зберігання рецептів, обліку продуктів удома та

@@ -9,9 +9,10 @@ import { useFoodFlows } from "@/components/diary/useFoodFlows";
 import { ProductEditorSheet, packLabel, useOnline } from "@/components/ProductEditorSheet";
 import { ProductCard } from "@/components/products/ProductCard";
 import { TopBar } from "@/components/TopBar";
-import { Chip, EmptyState, IconButton, Skeleton } from "@/components/ui";
+import { EmptyState, Panel, PanelHeader, TILE_BUTTON, TILE_BUTTON_BRAND } from "@/components/ui";
 import { CAT_LABEL, CAT_ORDER, allIngredients, ing, knownIngredient, lineage } from "@/data/ingredients";
 import type { Product } from "@/lib/product-types";
+import { restaurantOfProductId } from "@/lib/restaurants";
 import { diaryUserId, useApp } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { browseProducts, fetchProductsByIds, searchProducts } from "@/lib/supabase/products-api";
@@ -71,7 +72,10 @@ export default function ProductsPage() {
 
   /** Моя полиця: комора й зʼїдене. Картки, яких нема в кеші, дочитуємо. */
   const mineIds = useMemo(() => {
-    const eaten = foodLog.filter((e) => e.userId === me && e.productId).map((e) => e.productId as string);
+    // Страви із закладів теж лежать у productId, але це не товари каталогу.
+    const eaten = foodLog
+      .filter((e) => e.userId === me && e.productId && !restaurantOfProductId(e.productId))
+      .map((e) => e.productId as string);
     return [...new Set([...inPantry, ...eaten])];
   }, [foodLog, me, inPantry]);
 
@@ -189,58 +193,85 @@ export default function ProductsPage() {
         title="Товари"
         subtitle="Твоя полиця і спільний каталог"
         right={
-          <div className="flex gap-2">
-            <IconButton label="Новий товар" onClick={() => setCreating(true)}>
+          <>
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              aria-label="Новий товар"
+              onClick={() => {
+                haptic(8);
+                setCreating(true);
+              }}
+              className={TILE_BUTTON}
+            >
               <Plus size={19} />
-            </IconButton>
-            <IconButton label="Сканувати штрихкод" onClick={() => setScanning(true)} className="brand-gradient text-brand-ink">
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              aria-label="Сканувати штрихкод"
+              onClick={() => {
+                haptic(8);
+                setScanning(true);
+              }}
+              className={TILE_BUTTON_BRAND}
+            >
               <Barcode size={19} />
-            </IconButton>
-          </div>
+            </motion.button>
+          </>
         }
       />
 
-      <div className="sticky top-[calc(56px+env(safe-area-inset-top))] z-20 bg-bg/95 px-4 pb-2 pt-3 backdrop-blur">
-        <label className="flex h-11 items-center gap-2 rounded-2xl bg-surface-2 px-3.5">
-          <Search size={17} className="shrink-0 text-muted" />
+      {/* Пошук і категорії липнуть під шапкою: каталог довгий, а перемкнути полицю треба будь-коли. */}
+      <div className="sticky top-[calc(56px+env(safe-area-inset-top))] z-20 bg-bg px-4 pb-2.5">
+        <label className="flex h-[46px] items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5">
+          <Search size={18} className="shrink-0 text-muted" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Молоко безлактозне Галичина"
-            className="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold outline-none"
           />
           {query && (
             <button aria-label="Очистити" onClick={() => setQuery("")} className="text-muted">
-              <X size={17} />
+              <X size={16} />
             </button>
           )}
         </label>
         {typed.length < 2 && (
-          <div className="no-scrollbar -mx-4 mt-2.5 flex gap-2 overflow-x-auto px-4">
-            <Chip active={tab === "mine"} onClick={() => setTab("mine")}>
+          <div className="no-scrollbar -mx-4 mt-2.5 flex gap-1.5 overflow-x-auto px-4">
+            <CatChip active={tab === "mine"} onClick={() => setTab("mine")}>
               ⭐ Мої
-            </Chip>
+            </CatChip>
             {CAT_ORDER.map((cat) => (
-              <Chip key={cat} active={tab === cat} onClick={() => setTab(cat)}>
+              <CatChip key={cat} active={tab === cat} onClick={() => setTab(cat)}>
                 {CAT_EMOJI[cat]} {CAT_LABEL[cat]}
-              </Chip>
+              </CatChip>
             ))}
           </div>
         )}
       </div>
 
+      <div className="flex flex-col gap-2.5 px-4">
       {!online && (
-        <p className="mx-4 mt-2 flex items-center gap-2 rounded-2xl bg-surface-2 px-3 py-2 text-[12.5px] text-muted">
-          <WifiOff size={15} /> Без звʼязку — показую те, що вже є на телефоні.
+        <p className="flex items-center gap-2 rounded-[10px] border border-line bg-surface px-3.5 py-2.5 text-[12.5px] font-semibold text-muted">
+          <WifiOff size={15} className="shrink-0" /> Без звʼязку — показую те, що вже є на телефоні.
         </p>
       )}
 
       {!hydrated || (loading && visible.length === 0) ? (
-        <div className="grid grid-cols-2 gap-3 px-4 pt-4 sm:grid-cols-3">
+        <Panel aria-busy>
+          <div className="flex h-9 items-center px-3.5">
+            <span className="shimmer h-2.5 w-24 rounded-[4px] bg-surface-2" />
+          </div>
           {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} className="aspect-[3/4] w-full rounded-3xl" />
+            <div key={i} className="flex h-16 items-center gap-3 border-t border-line px-3.5">
+              <span className="shimmer h-11 w-11 shrink-0 rounded-[8px] bg-surface-2" />
+              <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span className="shimmer h-3 w-3/5 rounded-[4px] bg-surface-2" />
+                <span className="shimmer h-2.5 w-2/5 rounded-[4px] bg-surface-2" />
+              </span>
+            </div>
           ))}
-        </div>
+        </Panel>
       ) : groups.length === 0 ? (
         typed.length >= 2 ? (
           <EmptyState
@@ -258,23 +289,24 @@ export default function ProductsPage() {
           <EmptyState emoji={CAT_EMOJI[tab]} title="Тут поки пусто" note="Відскануй товар цієї категорії — він стане першим." />
         )
       ) : (
-        <div className="flex flex-col gap-6 pt-3">
-          {groups.map(({ root, list }) => (
-            <section key={root}>
-              <h2 className="mb-2.5 flex items-baseline gap-2 px-4 font-display text-[16px] font-bold">
-                <span>{ing(root).emoji}</span>
-                {ing(root).label}
-                <span className="text-[12px] font-semibold text-faint">{list.length}</span>
-              </h2>
-              <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-3">
-                {list.map((p) => (
-                  <Tile key={p.id} product={p} inPantry={inPantry.has(p.id)} onClick={() => pick(p)} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+        groups.map(({ root, list }) => (
+          <Panel key={root}>
+            <PanelHeader
+              label={
+                <>
+                  <span className="text-[13px] normal-case tracking-normal">{ing(root).emoji}</span>
+                  {ing(root).label}
+                </>
+              }
+              aside={String(list.length)}
+            />
+            {list.map((p) => (
+              <Tile key={p.id} product={p} inPantry={inPantry.has(p.id)} onClick={() => pick(p)} />
+            ))}
+          </Panel>
+        ))
       )}
+      </div>
 
       <ProductCard
         product={open}
@@ -309,29 +341,57 @@ export default function ProductsPage() {
   );
 }
 
+/** Категорія над списком: як фільтри в редизайні, а не круглі чипи. */
+function CatChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={() => {
+        haptic(8);
+        onClick();
+      }}
+      aria-pressed={active}
+      className={cn(
+        "flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-[8px] border px-2.5 text-[12.5px] font-bold transition-colors",
+        active ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Рядок товару в панелі групи: фото, назва, бренд і пачка, калорії праворуч. */
 function Tile({ product, inPantry, onClick }: { product: Product; inPantry: boolean; onClick: () => void }) {
   const n = product.nutrition;
   const sub = [product.brand, packLabel(product)].filter(Boolean).join(" · ");
   return (
-    <motion.button whileTap={{ scale: 0.97 }} onClick={onClick} className="flex flex-col text-left">
-      <div className="relative">
-        <ProductThumb product={product} className="aspect-square w-full rounded-3xl" emojiClass="text-[52px]" />
-        <span
-          className={cn(
-            "absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-bold backdrop-blur",
-            n ? "bg-bg-elev/90 text-ink" : "bg-bg-elev/80 text-faint",
+    <button
+      onClick={onClick}
+      className="flex h-16 w-full items-center gap-3 border-t border-line px-3.5 text-left active:bg-surface-2"
+    >
+      <ProductThumb product={product} className="h-11 w-11 shrink-0 rounded-[8px]" emojiClass="text-[22px]" />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-[14px] font-bold">{product.name}</span>
+          {inPantry && (
+            <span className="flex h-[18px] shrink-0 items-center rounded-[5px] bg-brand/15 px-1.5 text-[10.5px] font-extrabold text-brand">
+              вдома
+            </span>
           )}
-        >
-          {n ? `${product.nutritionSource === "ai" ? "≈" : ""}${Math.round(n.kcal)} ккал` : "КБЖВ ?"}
         </span>
-        {inPantry && (
-          <span className="absolute right-2 top-2 rounded-full bg-mint px-2 py-0.5 text-[10.5px] font-bold text-white">
-            вдома
-          </span>
-        )}
-      </div>
-      <p className="mt-2 line-clamp-2 text-[13.5px] font-bold leading-snug">{product.name}</p>
-      {sub && <p className="mt-0.5 truncate text-[11.5px] text-muted">{sub}</p>}
-    </motion.button>
+        {sub && <span className="block truncate text-[12px] font-semibold text-faint">{sub}</span>}
+      </span>
+      <span className={cn("shrink-0 text-[12.5px] font-bold", n ? "text-muted" : "text-faint")}>
+        {n ? `${product.nutritionSource === "ai" ? "≈" : ""}${Math.round(n.kcal)} ккал` : "КБЖВ ?"}
+      </span>
+    </button>
   );
 }

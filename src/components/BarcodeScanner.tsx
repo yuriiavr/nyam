@@ -436,15 +436,15 @@ export function BarcodeScanner({
            */}
           <div className="pointer-events-none absolute inset-0">
             <div
-              className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] ${
+              className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[16px] shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] ${
                 qrMode ? "aspect-square w-[min(65vw,300px,55svh)]" : "h-[190px] w-[86%] max-w-[380px]"
               }`}
             >
-              <div className="absolute inset-0 rounded-3xl border-2 border-white/70" />
-              <Corner className="left-[-2px] top-[-2px] rounded-tl-3xl border-l-4 border-t-4" />
-              <Corner className="right-[-2px] top-[-2px] rounded-tr-3xl border-r-4 border-t-4" />
-              <Corner className="bottom-[-2px] left-[-2px] rounded-bl-3xl border-b-4 border-l-4" />
-              <Corner className="bottom-[-2px] right-[-2px] rounded-br-3xl border-b-4 border-r-4" />
+              <div className="absolute inset-0 rounded-[16px] border-2 border-white/70" />
+              <Corner className="left-[-2px] top-[-2px] rounded-tl-[16px] border-l-4 border-t-4" />
+              <Corner className="right-[-2px] top-[-2px] rounded-tr-[16px] border-r-4 border-t-4" />
+              <Corner className="bottom-[-2px] left-[-2px] rounded-bl-[16px] border-b-4 border-l-4" />
+              <Corner className="bottom-[-2px] right-[-2px] rounded-br-[16px] border-b-4 border-r-4" />
               {status === "scanning" && (
                 /*
                  * Лінію рухаємо через transform на обгортці заввишки з рамку:
@@ -475,16 +475,16 @@ export function BarcodeScanner({
                 onClose();
               }}
               aria-label="Закрити сканер"
-              className="grid h-11 w-11 place-items-center rounded-2xl bg-black/60 text-white"
+              className="grid h-10 w-10 place-items-center rounded-[10px] bg-black/60 text-white"
             >
-              <X size={20} />
+              <X size={19} strokeWidth={2.2} />
             </button>
             <div className="flex gap-2">
               {torchAvailable && (
                 <button
                   onClick={toggleTorch}
                   aria-label="Ліхтарик"
-                  className={`grid h-11 w-11 place-items-center rounded-2xl ${
+                  className={`grid h-10 w-10 place-items-center rounded-[10px] ${
                     torchOn ? "bg-white text-black" : "bg-black/60 text-white"
                   }`}
                 >
@@ -495,7 +495,7 @@ export function BarcodeScanner({
                 <button
                   onClick={() => setManual((v) => !v)}
                   aria-label="Ввести код вручну"
-                  className="grid h-11 w-11 place-items-center rounded-2xl bg-black/60 text-white"
+                  className="grid h-10 w-10 place-items-center rounded-[10px] bg-black/60 text-white"
                 >
                   <Keyboard size={19} />
                 </button>
@@ -504,11 +504,11 @@ export function BarcodeScanner({
           </div>
 
           {/* Підказка / помилка / ручний ввід */}
-          <div className="pad-safe-b absolute inset-x-0 bottom-0 p-5">
+          <div className="pad-safe-b absolute inset-x-0 bottom-0 p-4">
             {(manualEntry && manual) || (manualEntry && (status === "denied" || status === "error")) ? (
-              <div className="rounded-xl3 border border-white/15 bg-black/80 p-4">
-                {message && <p className="mb-3 text-[13px] leading-snug text-white/80">{message}</p>}
-                <label className="mb-2 block text-[12px] font-bold text-white/70">
+              <div className="rounded-[12px] border border-white/15 bg-black/80 p-3.5">
+                {message && <p className="mb-3 text-[13px] font-semibold leading-snug text-white/80">{message}</p>}
+                <label className="mb-2 block text-[11px] font-extrabold uppercase tracking-[0.07em] text-white/70">
                   Введи цифри під штрихкодом
                 </label>
                 <div className="flex gap-2">
@@ -517,7 +517,7 @@ export function BarcodeScanner({
                     onChange={(e) => setManualCode(e.target.value.replace(/\D/g, ""))}
                     inputMode="numeric"
                     placeholder="4820000000000"
-                    className="h-12 flex-1 rounded-2xl border border-white/20 bg-white/10 px-4 text-white placeholder:text-white/40"
+                    className="h-12 min-w-0 flex-1 rounded-[10px] border border-white/20 bg-white/10 px-3.5 text-[15px] font-semibold tabular-nums text-white placeholder:text-white/40"
                   />
                   <Button
                     onClick={() => manualCode.length >= 6 && handleHit(manualCode)}
@@ -529,8 +529,8 @@ export function BarcodeScanner({
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-center gap-2 rounded-full bg-black/70 px-4 py-3">
-                  <ScanBarcode size={17} className="text-[var(--brand)]" />
+                <div className="flex min-h-12 items-center justify-center gap-2 rounded-[12px] bg-black/70 px-4 py-2.5">
+                  <ScanBarcode size={17} strokeWidth={2.2} className="shrink-0 text-[var(--brand)]" />
                   <p className="text-[13px] font-semibold text-white">
                     {status === "starting" ? "Вмикаю камеру…" : message || hint}
                   </p>

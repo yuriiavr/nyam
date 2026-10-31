@@ -585,7 +585,7 @@ function ReceiptRow({
   return (
     <div
       className={cn(
-        "rounded-2xl border p-3",
+        "rounded-[10px] border p-3",
         checked ? "border-line bg-surface" : "border-line/50 bg-surface/40",
       )}
     >
@@ -611,7 +611,7 @@ function ReceiptRow({
             {state !== "nonfood" && draft.line.name}
             {draft.line.sum != null && `${state !== "nonfood" ? " · " : ""}${formatNumber(draft.line.sum)} ₴`}
             {canUseProducts && state === "known" && !byHand && draft.resolution?.hit && (
-              <span className="font-semibold text-mint"> · знайомий товар</span>
+              <span className="font-semibold text-brand"> · знайомий товар</span>
             )}
           </p>
         </div>

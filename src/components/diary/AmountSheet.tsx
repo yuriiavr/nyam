@@ -1,11 +1,11 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ProductEditorSheet, nutritionLine, productMeta } from "@/components/ProductEditorSheet";
-import { Button, Chip, Segmented, Sheet, useToast } from "@/components/ui";
+import { Button, Panel, Sheet, formatKcal, useToast } from "@/components/ui";
 import { ing, knownIngredient } from "@/data/ingredients";
-import { SLOT_META, SLOT_ORDER, eatenAtFor, forGrams, portionPresets } from "@/lib/diary";
+import { eatenAtFor, forGrams, portionPresets } from "@/lib/diary";
 import { consumeRows, productTakes } from "@/lib/pantry";
 import type { Product } from "@/lib/product-types";
 import { diaryUserId, useApp } from "@/lib/store";
@@ -14,6 +14,7 @@ import { formatNumber } from "@/lib/units";
 import { cn, dateKey, haptic, newId } from "@/lib/utils";
 import { PeopleSwitch, usePeople } from "./people";
 import { ProductThumb } from "./ProductThumb";
+import { CheckRow, KcalAside, MacroCells, SheetTitle, SlotRow } from "./SheetParts";
 
 /** Що саме зʼїли: конкретний товар із каталогу або просто тип («банан»). */
 export type FoodTarget =
@@ -130,107 +131,125 @@ export function AmountSheet({
       <Sheet
         open={open && !editing}
         onClose={onClose}
+        title={
+          <SheetTitle
+            emoji={
+              <ProductThumb
+                product={product}
+                typeKey={typeKey}
+                className="h-10 w-10 shrink-0 rounded-[10px]"
+                emojiClass="text-[22px]"
+              />
+            }
+            title={title}
+            sub={product ? productMeta(product) : undefined}
+            aside={eaten && <KcalAside kcal={formatKcal(eaten.kcal)} />}
+          />
+        }
         footer={
-          <Button full size="lg" disabled={!valid} onClick={save}>
+          <Button full disabled={!valid} onClick={save}>
             Записати{eaten ? ` · ${eaten.kcal} ккал` : ""}
           </Button>
         }
       >
-        <div className="flex flex-col gap-4 pb-2">
-          <div className="flex items-center gap-3">
-            <ProductThumb product={product} typeKey={typeKey} className="h-16 w-16 shrink-0 rounded-2xl" />
-            <div className="min-w-0 flex-1">
-              <h2 className="font-display text-[17px] font-bold leading-tight">{title}</h2>
-              {product && productMeta(product) && (
-                <p className="mt-0.5 truncate text-[12px] text-muted">{productMeta(product)}</p>
-              )}
+        <div className="flex flex-col gap-3 pb-3">
+          {(eaten || per100) && (
+            <Panel>
+              {eaten && <MacroCells nutrition={eaten} />}
               {per100 && (
-                <p className="mt-1 text-[11.5px] text-muted">
+                <p className={cn("px-3.5 py-2.5 text-[11.5px] font-semibold text-faint", eaten && "border-t border-line")}>
                   {product?.nutritionSource === "ai" && <span className="font-bold text-brand">≈ </span>}
-                  {nutritionLine(per100)} <span className="text-faint">/ 100 {liquid ? "мл" : "г"}</span>
+                  {nutritionLine(per100)} / 100 {liquid ? "мл" : "г"}
                 </p>
               )}
-            </div>
-          </div>
+            </Panel>
+          )}
 
           {product && (!label || product.nutritionSource === "ai") && (
-            <div className="rounded-2xl bg-surface-2 p-3">
-              <p className="text-[12.5px] leading-snug">
+            <Panel>
+              <p className="px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-muted">
                 {label
                   ? "Числа — оцінка ШІ. Пачка під рукою? Перепиши з етикетки — картка стане точною для всіх."
                   : byType
                     ? `У картки немає КБЖВ — поки рахую за середнім для «${type?.label}». Точніше буде з етикетки цього товару.`
                     : "У картки немає КБЖВ — без них калорії не порахувати."}
               </p>
-              <Button size="sm" variant="secondary" className="mt-2" onClick={() => setEditing(true)}>
-                <Sparkles size={15} />
-                {label ? "Уточнити КБЖВ" : "Додати КБЖВ"}
-              </Button>
-            </div>
+              <button
+                onClick={() => {
+                  haptic(8);
+                  setEditing(true);
+                }}
+                className="flex h-12 w-full items-center gap-2.5 border-t border-line px-3.5 text-left active:bg-surface-2"
+              >
+                <Sparkles size={16} strokeWidth={2.2} className="shrink-0 text-brand" />
+                <span className="min-w-0 flex-1 text-[14px] font-bold text-brand">
+                  {label ? "Уточнити КБЖВ" : "Додати КБЖВ"}
+                </span>
+                <ChevronRight size={15} strokeWidth={2.2} className="shrink-0 text-faint" />
+              </button>
+            </Panel>
           )}
 
-          <div>
-            <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-muted">Скільки</p>
-            <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-              {presets.map((p) => (
-                <Chip key={p.label} active={valid && Math.abs(amount - p.grams) < 0.5} onClick={() => setGrams(formatNumber(p.grams, 0))}>
-                  {p.label}
-                </Chip>
-              ))}
-            </div>
-            <div className="mt-2 flex items-center gap-2">
+          <Panel>
+            <label className="flex h-[50px] items-center gap-2 px-3.5">
+              <span className="flex-1 text-[14px] font-semibold text-muted">Скільки</span>
               <input
                 value={grams}
                 onChange={(e) => setGrams(e.target.value.replace(/[^\d.,]/g, ""))}
                 inputMode="decimal"
                 aria-label="Скільки грамів"
                 className={cn(
-                  "h-12 w-28 rounded-2xl border bg-surface px-3 text-center font-display text-[20px] font-bold",
-                  valid || !grams ? "border-line" : "border-berry",
+                  "h-8 w-[84px] rounded-[8px] bg-surface-2 px-2.5 text-right text-[14px] font-bold",
+                  !(valid || !grams) && "text-berry ring-1 ring-berry",
                 )}
               />
-              <span className="text-[15px] font-semibold text-muted">{liquid ? "мл" : "г"}</span>
-              {eaten && (
-                <span className="ml-auto text-right text-[12px] leading-tight text-muted">
-                  <span className="font-display text-[18px] font-extrabold text-ink">{eaten.kcal}</span> ккал
-                  <br />Б {formatNumber(eaten.protein, 1)} · Ж {formatNumber(eaten.fat, 1)} · В {formatNumber(eaten.carbs, 1)}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {preview.length > 0 && (
-            <label className="flex items-center gap-2.5 px-1 text-[13px]">
-              <input
-                type="checkbox"
-                checked={fromPantry}
-                onChange={(e) => setFromPantry(e.target.checked)}
-                className="h-5 w-5 accent-[var(--brand)]"
-              />
-              <span>
+              <span className="w-5 text-[14px] font-bold text-muted">{liquid ? "мл" : "г"}</span>
+            </label>
+            {presets.length > 0 && (
+              <div className="no-scrollbar flex gap-1.5 overflow-x-auto px-3.5 pb-3">
+                {presets.map((p) => {
+                  const on = valid && Math.abs(amount - p.grams) < 0.5;
+                  return (
+                    <button
+                      key={p.label}
+                      aria-pressed={on}
+                      onClick={() => {
+                        haptic(8);
+                        setGrams(formatNumber(p.grams, 0));
+                      }}
+                      className={cn(
+                        "h-8 shrink-0 rounded-[8px] border px-2.5 text-[12.5px] font-bold transition-colors",
+                        on ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface-2 text-muted",
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {preview.length > 0 && (
+              <CheckRow checked={fromPantry} onChange={setFromPantry} divided>
                 Взяв з комори
-                <span className="text-muted">
+                <span className="font-semibold text-faint">
                   {" · "}
                   {preview.every((c) => c.left == null)
                     ? "там більше не лишиться"
                     : `лишиться ${preview.map((c) => c.left).filter(Boolean).join(" + ")}`}
                 </span>
-              </span>
-            </label>
-          )}
+              </CheckRow>
+            )}
+          </Panel>
 
-          <Segmented
-            value={slot}
-            onChange={setSlot}
-            options={SLOT_ORDER.map((s) => ({ value: s, label: SLOT_META[s].label }))}
-          />
-
-          {people.length > 1 && (
-            <div>
-              <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-muted">Хто зʼїв</p>
-              <PeopleSwitch people={people} value={who} onChange={setWho} />
-            </div>
-          )}
+          <Panel>
+            <SlotRow value={slot} onChange={setSlot} />
+            {people.length > 1 && (
+              <div className="flex flex-col gap-2 border-t border-line px-3.5 pb-3 pt-2.5">
+                <span className="text-[14px] font-semibold text-muted">Хто зʼїв</span>
+                <PeopleSwitch people={people} value={who} onChange={setWho} />
+              </div>
+            )}
+          </Panel>
         </div>
       </Sheet>
 

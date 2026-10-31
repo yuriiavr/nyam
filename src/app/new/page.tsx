@@ -6,6 +6,8 @@ import {
   Check,
   GripVertical,
   ImagePlus,
+  Loader2,
+  Minus,
   Plus,
   Refrigerator,
   ScanBarcode,
@@ -17,7 +19,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "@/components/TopBar";
-import { Button, Card, Chip, QuantityInput, Sheet, useToast } from "@/components/ui";
+import { Panel, PanelHeader, QuantityInput, Segmented, Sheet, Spinner, useToast } from "@/components/ui";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { FridgePicker } from "@/components/FridgePicker";
 import {
@@ -47,7 +49,7 @@ import { EditTypeButton } from "@/components/EditTypeButton";
 import { NewIngredientSheet } from "@/components/NewIngredientSheet";
 import { FOOD_EMOJI } from "@/data/emoji";
 import { COURSE_LABEL, COURSE_ORDER, courseOf } from "@/lib/pairing";
-import { compressImage, haptic, MEAL_LABEL, MOOD_META, newId } from "@/lib/utils";
+import { cn, compressImage, haptic, MEAL_LABEL, MOOD_META, newId } from "@/lib/utils";
 
 
 /** Міри таймера. Зберігаємо в секундах, показуємо в зручній. */
@@ -291,150 +293,196 @@ function RecipeForm() {
         subtitle={title || "Розкажи, що ти готуєш"}
       />
 
-      {/* Обкладинка */}
-      <section className="px-4 pt-4">
-        <div
-          className="relative aspect-[16/10] overflow-hidden rounded-xl3 border border-line"
-          style={
-            image
-              ? undefined
-              : { backgroundImage: `linear-gradient(140deg, ${gradient[0]}, ${gradient[1]})` }
-          }
-        >
-          {image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={image} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="grid h-full place-items-center text-7xl">{emoji}</div>
-          )}
+      <div className="flex flex-col gap-2.5 px-4">
+        {/* Обкладинка */}
+        <Panel>
+          <PanelHeader label="Обкладинка" />
+          <div
+            className="relative aspect-[16/10] border-t border-line"
+            style={
+              image
+                ? undefined
+                : { backgroundImage: `linear-gradient(140deg, ${gradient[0]}, ${gradient[1]})` }
+            }
+          >
+            {image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={image} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="grid h-full place-items-center text-[76px] leading-none">{emoji}</div>
+            )}
 
-          <div className="absolute inset-x-0 bottom-0 flex gap-2 bg-gradient-to-t from-black/70 to-transparent p-3">
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-1.5 rounded-2xl bg-black/50 px-3 py-2 text-[12.5px] font-bold text-white backdrop-blur"
-            >
-              <Camera size={15} />
-              {image ? "Змінити фото" : "Додати фото"}
-            </button>
-            <button
-              onClick={() => setStyleOpen(true)}
-              className="flex items-center gap-1.5 rounded-2xl bg-black/50 px-3 py-2 text-[12.5px] font-bold text-white backdrop-blur"
-            >
-              <ImagePlus size={15} />
-              Стиль
-            </button>
             {image && (
               <button
                 onClick={() => setImage(null)}
                 aria-label="Прибрати фото"
-                className="ml-auto grid h-9 w-9 place-items-center rounded-2xl bg-black/50 text-white backdrop-blur"
+                className="absolute right-2.5 top-2.5 grid h-[34px] w-[34px] place-items-center rounded-[8px] bg-[rgb(8_8_10_/_0.55)] text-white backdrop-blur-md"
               >
-                <X size={16} />
+                <X size={16} strokeWidth={2.2} />
               </button>
             )}
           </div>
-        </div>
-        {/*
-          Без `capture`: саме цей атрибут змушував телефон одразу відкривати
-          камеру, і зняти фото було єдиним способом. Тепер система пропонує
-          вибір — галерея, камера або файл.
-        */}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => pickImage(e.target.files?.[0])}
-        />
-      </section>
-
-      {/* Основне */}
-      <section className="px-4 pt-5">
-        <Field label="Назва страви">
+          <div className="grid grid-cols-2 gap-px border-t border-line bg-line">
+            <button onClick={() => fileRef.current?.click()} className={GRID_ACTION}>
+              <Camera size={16} className="text-muted" />
+              {image ? "Змінити фото" : "Додати фото"}
+            </button>
+            <button onClick={() => setStyleOpen(true)} className={GRID_ACTION}>
+              <ImagePlus size={16} className="text-muted" />
+              Стиль
+            </button>
+          </div>
+          {/*
+            Без `capture`: саме цей атрибут змушував телефон одразу відкривати
+            камеру, і зняти фото було єдиним способом. Тепер система пропонує
+            вибір — галерея, камера або файл.
+          */}
           <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Наприклад: Паста з грибами"
-            maxLength={70}
-            className="h-12 w-full rounded-2xl border border-line bg-surface px-4 text-[15px]"
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => pickImage(e.target.files?.[0])}
           />
-        </Field>
+        </Panel>
 
-        <Field label="Короткий опис">
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Чим ця страва особлива? Одне-два речення."
-            rows={3}
-            maxLength={220}
-            className="w-full resize-none rounded-2xl border border-line bg-surface p-4 text-[15px] leading-relaxed"
-          />
-        </Field>
+        {/* Основне */}
+        <Panel>
+          <PanelHeader label="Про страву" />
+          <Field label="Назва страви">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Наприклад: Паста з грибами"
+              maxLength={70}
+              className={INPUT}
+            />
+          </Field>
 
-        <Field label="Кухня">
-          <input
-            value={cuisine}
-            onChange={(e) => setCuisine(e.target.value)}
-            placeholder="Українська, італійська, азійська…"
-            className="h-12 w-full rounded-2xl border border-line bg-surface px-4 text-[15px]"
-          />
-        </Field>
-      </section>
+          <Field label="Короткий опис">
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Чим ця страва особлива? Одне-два речення."
+              rows={3}
+              maxLength={220}
+              className="w-full resize-none rounded-[8px] bg-surface-2 px-3 py-2.5 text-[14px] font-medium leading-relaxed placeholder:text-faint"
+            />
+          </Field>
 
-      {/* Параметри */}
-      <section className="px-4 pt-2">
+          <Field label="Кухня">
+            <input
+              value={cuisine}
+              onChange={(e) => setCuisine(e.target.value)}
+              placeholder="Українська, італійська, азійська…"
+              className={INPUT}
+            />
+          </Field>
+        </Panel>
+
+        {/* Параметри */}
+        <Panel>
+          <PanelHeader label="Параметри" />
+          <div className={STEPPER_ROW}>
+            <span className="min-w-0 flex-1 text-[14px] font-semibold">Час, хв</span>
+            <NumberInput value={timeMin} onChange={setTimeMin} min={1} max={600} step={5} />
+          </div>
+          <div className={STEPPER_ROW}>
+            <span className="min-w-0 flex-1 text-[14px] font-semibold">Порцій</span>
+            <NumberInput value={servings} onChange={setServings} min={1} max={20} step={1} />
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-line px-3.5 pb-3 pt-2.5">
+            <span className="text-[14px] font-semibold">Складність</span>
+            {/* Значення з префіксом: у двох перемикачів однакові «1,2,3», а
+                повзунок Segmented шукає свій перемикач саме за значеннями. */}
+            <Segmented
+              value={`d${difficulty}`}
+              onChange={(v) => setDifficulty(Number(v.slice(1)) as 1 | 2 | 3)}
+              className="bg-bg-elev"
+              options={([1, 2, 3] as const).map((d) => ({
+                value: `d${d}`,
+                label: ["", "Просто", "Середньо", "Складно"][d],
+              }))}
+            />
+          </div>
+
+          <div className="flex min-h-[52px] items-center gap-2 border-t border-line py-2 pl-3.5 pr-2">
+            <span className="min-w-0 flex-1 text-[14px] font-semibold">Бюджет</span>
+            <Segmented
+              value={`c${costLevel}`}
+              onChange={(v) => setCostLevel(Number(v.slice(1)) as 1 | 2 | 3)}
+              className="w-[176px] shrink-0 bg-bg-elev"
+              options={([1, 2, 3] as const).map((c) => ({ value: `c${c}`, label: "₴".repeat(c) }))}
+            />
+          </div>
+
+          {/* Калорій руками більше не просимо: ШІ рахує їх точніше, бо читає й кроки. */}
+          <p className="border-t border-line px-3.5 py-2.5 text-[11.5px] font-semibold leading-relaxed text-faint">
+            {isSupabaseConfigured
+              ? "Калорії й БЖВ порахує ШІ за складом і кроками — щойно рецепт збережеться."
+              : "Калорії й БЖВ порахуються самі — зі складу рецепта."}
+          </p>
+        </Panel>
+
         {/* Чим страва є на столі — від цього залежать і фільтри, і підказки
             «до цього підійде…». Одне значення, а не набір: страва не буває
             одночасно гарніром і супом. */}
-        <Field label="Що це за страва">
-          <div className="flex flex-wrap gap-2">
+        <Panel>
+          <PanelHeader label="Що це за страва" />
+          <div className={PILLS}>
             {COURSE_ORDER.map((c) => (
-              <Chip key={c} active={course === c} onClick={() => setCourse(c)}>
+              <Pill key={c} active={course === c} onClick={() => setCourse(c)}>
                 {COURSE_LABEL[c]}
-              </Chip>
+              </Pill>
             ))}
           </div>
-        </Field>
+        </Panel>
 
-        <Field label="Коли це їдять">
-          <div className="flex flex-wrap gap-2">
+        <Panel>
+          <PanelHeader label="Коли це їдять" />
+          <div className={PILLS}>
             {MEALS.map((m) => (
-              <Chip
+              <Pill
                 key={m}
                 active={mealTypes.includes(m)}
                 onClick={() => toggle(mealTypes, m, setMealTypes)}
               >
                 {MEAL_LABEL[m]}
-              </Chip>
+              </Pill>
             ))}
           </div>
-        </Field>
+        </Panel>
 
-        <Field label="Настрій страви">
-          <div className="flex flex-wrap gap-2">
+        <Panel>
+          <PanelHeader label="Настрій страви" />
+          <div className={PILLS}>
             {MOODS.map((m) => (
-              <Chip key={m} active={moods.includes(m)} onClick={() => toggle(moods, m, setMoods)}>
+              <Pill key={m} active={moods.includes(m)} onClick={() => toggle(moods, m, setMoods)}>
                 <span>{MOOD_META[m].emoji}</span>
                 {MOOD_META[m].label}
-              </Chip>
+              </Pill>
             ))}
           </div>
-        </Field>
+        </Panel>
 
-        <Field label="Теги">
-          <div className="mb-2 flex flex-wrap gap-2">
-            {tags.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTags((p) => p.filter((x) => x !== t))}
-                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 py-2 pl-3 pr-2 text-[13px] font-semibold"
-              >
-                {t}
-                <X size={13} className="text-faint" />
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
+        <Panel>
+          <PanelHeader label="Теги" aside={tags.length || undefined} />
+          {tags.length > 0 && (
+            <div className={PILLS}>
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTags((p) => p.filter((x) => x !== t))}
+                  className="inline-flex h-8 items-center gap-1 rounded-[8px] bg-surface-2 pl-2.5 pr-1.5 text-[12.5px] font-bold active:bg-line"
+                >
+                  {t}
+                  <X size={13} strokeWidth={2.4} className="text-faint" />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 border-t border-line px-3.5 py-2.5">
             <input
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
@@ -445,114 +493,41 @@ function RecipeForm() {
                 }
               }}
               placeholder="швидко, на компанію, без духовки…"
-              className="h-11 flex-1 rounded-2xl border border-line bg-surface px-4 text-[15px]"
+              className="h-10 min-w-0 flex-1 rounded-[8px] bg-surface-2 px-3 text-[14px] font-semibold placeholder:text-faint"
             />
-            <Button
-              variant="secondary"
-              className="w-12 px-0"
+            <button
               aria-label="Додати тег"
               onClick={() => {
+                haptic(10);
                 if (!tagDraft.trim()) return;
                 setTags((p) => [...new Set([...p, tagDraft.trim()])]);
                 setTagDraft("");
               }}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] bg-surface-2 text-brand active:bg-line"
             >
-              <Plus size={18} />
-            </Button>
+              <Plus size={17} strokeWidth={2.4} />
+            </button>
           </div>
-        </Field>
+        </Panel>
 
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          <Field label="Час, хв">
-            <NumberInput value={timeMin} onChange={setTimeMin} min={1} max={600} step={5} />
-          </Field>
-          <Field label="Порцій">
-            <NumberInput value={servings} onChange={setServings} min={1} max={20} step={1} />
-          </Field>
-        </div>
+        {/* Інгредієнти */}
+        <Panel>
+          <PanelHeader label="Інгредієнти" aside={ingredients.length || undefined} />
 
-        <Field label="Складність">
-          <div className="flex gap-2">
-            {([1, 2, 3] as const).map((d) => (
-              <Chip key={d} active={difficulty === d} onClick={() => setDifficulty(d)}>
-                {["", "Просто", "Середньо", "Складно"][d]}
-              </Chip>
-            ))}
-          </div>
-        </Field>
-
-        <Field label="Бюджет">
-          <div className="flex gap-2">
-            {([1, 2, 3] as const).map((c) => (
-              <Chip key={c} active={costLevel === c} onClick={() => setCostLevel(c)}>
-                {"₴".repeat(c)}
-              </Chip>
-            ))}
-          </div>
-        </Field>
-
-        {/* Калорій руками більше не просимо: ШІ рахує їх точніше, бо читає й кроки. */}
-        <p className="pb-4 text-[12.5px] leading-relaxed text-muted">
-          {isSupabaseConfigured
-            ? "Калорії й БЖВ порахує ШІ за складом і кроками — щойно рецепт збережеться."
-            : "Калорії й БЖВ порахуються самі — зі складу рецепта."}
-        </p>
-      </section>
-
-      {/* Інгредієнти */}
-      <section className="px-4 pt-4">
-        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-display text-[16px] font-bold">
-            Інгредієнти{ingredients.length > 0 && ` · ${ingredients.length}`}
-          </h2>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={scanBusy}
-              onClick={() => {
-                haptic(10);
-                setScanOpen(true);
-              }}
+          {ingredients.length === 0 ? (
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="flex w-full flex-col items-center gap-1 border-t border-line px-6 py-5 text-center active:bg-surface-2"
             >
-              <ScanBarcode size={15} />
-              Сканувати
-            </Button>
-            {hasPantry && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  haptic(10);
-                  setFridgeOpen(true);
-                }}
-              >
-                <Refrigerator size={15} />
-                З холодильника
-              </Button>
-            )}
-            <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
-              <Plus size={15} />
-              Додати
-            </Button>
-          </div>
-        </div>
-
-        {ingredients.length === 0 ? (
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="w-full rounded-xl3 border border-dashed border-line bg-surface/40 p-6 text-center"
-          >
-            <p className="text-[13.5px] font-semibold">Додай перший інгредієнт</p>
-            <p className="mt-1 text-[12px] text-muted">
-              Це потрібно, щоб рецепт зʼявлявся в підборі за холодильником
-            </p>
-            <p className="mt-2 text-[11.5px] text-brand">
-              Або скануй штрихкод — калорії підтягнуться з етикетки
-            </p>
-          </button>
-        ) : (
-          <Card className="divide-y divide-line p-0">
+              <span className="text-[14px] font-bold">Додай перший інгредієнт</span>
+              <span className="text-[12px] font-semibold leading-snug text-faint">
+                Це потрібно, щоб рецепт зʼявлявся в підборі за холодильником
+              </span>
+              <span className="mt-1 text-[11.5px] font-semibold text-brand">
+                Або скануй штрихкод — калорії підтягнуться з етикетки
+              </span>
+            </button>
+          ) : (
             <AnimatePresence initial={false}>
               {ingredients.map((item, i) => {
                 const def = ing(item.key);
@@ -563,128 +538,192 @@ function RecipeForm() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="flex items-center gap-2.5 px-3 py-2.5"
+                    className="overflow-hidden border-t border-line"
                   >
-                    <span className="text-lg">{item.label ? "🏷️" : def.emoji}</span>
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
-                      {item.label ?? def.label}
-                      {item.nutrition && (
-                        <span className="ml-1.5 text-[10px] font-bold text-mint">
-                          {item.nutrition.kcal} ккал/100 г
+                    <div className="flex flex-col gap-2 py-2.5 pl-3.5 pr-2">
+                      {/* Назва — окремим рядком: поруч із кількістю й кнопками
+                          їй лишалось кілька літер. */}
+                      <div className="flex min-h-6 items-center gap-2.5 pr-1.5">
+                        <span className="w-6 shrink-0 text-center text-[18px] leading-none">
+                          {item.label ? "🏷️" : def.emoji}
                         </span>
-                      )}
-                    </span>
-                    <QuantityInput
-                      amount={item.amount}
-                      unit={item.unit}
-                      defaultUnit={def.defaultUnit}
-                      label={item.label ?? def.label}
-                      onChange={({ amount, unit }) =>
-                        setIngredients((prev) =>
-                          prev.map((x, j) =>
-                            j === i
-                              ? {
-                                  ...x,
-                                  amount,
-                                  unit,
-                                  // Старий вільний текст більше не потрібен, щойно
-                                  // зʼявились число й одиниця — інакше вони конфліктують.
-                                  qty: undefined,
-                                }
-                              : x,
-                          ),
-                        )
-                      }
-                    />
-                    <button
-                      onClick={() =>
-                        setIngredients((prev) =>
-                          prev.map((x, j) => (j === i ? { ...x, optional: !x.optional } : x)),
-                        )
-                      }
-                      aria-label="За бажанням"
-                      title="За бажанням"
-                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[10px] font-extrabold ${
-                        item.optional ? "bg-brand/20 text-brand" : "bg-surface-2 text-faint"
-                      }`}
-                    >
-                      опц
-                    </button>
-                    <button
-                      onClick={() => setIngredients((prev) => prev.filter((_, j) => j !== i))}
-                      aria-label="Прибрати"
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-faint"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+                          {item.label ?? def.label}
+                        </span>
+                        {item.nutrition && (
+                          <span className="shrink-0 text-[11.5px] font-bold text-brand">
+                            {item.nutrition.kcal} ккал/100 г
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <QuantityInput
+                          amount={item.amount}
+                          unit={item.unit}
+                          defaultUnit={def.defaultUnit}
+                          label={item.label ?? def.label}
+                          onChange={({ amount, unit }) =>
+                            setIngredients((prev) =>
+                              prev.map((x, j) =>
+                                j === i
+                                  ? {
+                                      ...x,
+                                      amount,
+                                      unit,
+                                      // Старий вільний текст більше не потрібен, щойно
+                                      // зʼявились число й одиниця — інакше вони конфліктують.
+                                      qty: undefined,
+                                    }
+                                  : x,
+                              ),
+                            )
+                          }
+                        />
+                        <button
+                          onClick={() =>
+                            setIngredients((prev) =>
+                              prev.map((x, j) => (j === i ? { ...x, optional: !x.optional } : x)),
+                            )
+                          }
+                          aria-label="За бажанням"
+                          aria-pressed={!!item.optional}
+                          title="За бажанням"
+                          className={cn(
+                            "h-9 shrink-0 rounded-[8px] px-2.5 text-[12px] font-bold transition-colors",
+                            item.optional ? "bg-brand/15 text-brand" : "bg-surface-2 text-faint",
+                          )}
+                        >
+                          за бажанням
+                        </button>
+                        <button
+                          onClick={() => setIngredients((prev) => prev.filter((_, j) => j !== i))}
+                          aria-label="Прибрати"
+                          className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-[8px] text-faint active:bg-surface-2"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
                   </motion.div>
                 );
               })}
             </AnimatePresence>
-          </Card>
-        )}
-      </section>
+          )}
 
-      {/* Кроки */}
-      <section className="px-4 pt-6">
-        <h2 className="mb-2.5 font-display text-[16px] font-bold">Кроки приготування</h2>
-        {/*
-          Порядок кроків міняється перетягуванням за ручку праворуч. Саме за
-          ручку, а не за картку: усередині текстові поля, і тягнути треба
-          вміти так, щоб при цьому можна було й слово виділити.
-        */}
-        <Reorder.Group
-          axis="y"
-          values={steps}
-          onReorder={setSteps}
-          className="flex flex-col gap-3"
-        >
-          {steps.map((step, i) => (
-            <StepCard
-              key={step.uid}
-              step={step}
-              index={i}
-              removable={steps.length > 1}
-              onChange={(patch) =>
-                setSteps((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)))
-              }
-              onRemove={() => setSteps((prev) => prev.filter((_, j) => j !== i))}
-            />
-          ))}
-        </Reorder.Group>
+          <button
+            onClick={() => {
+              haptic(10);
+              setPickerOpen(true);
+            }}
+            className={ACTION_ROW}
+          >
+            <Plus size={16} strokeWidth={2.4} className="text-brand" />
+            <span className="flex-1 text-[14px] font-bold text-brand">Додати інгредієнт</span>
+          </button>
+          <div className={cn("grid gap-px border-t border-line bg-line", hasPantry ? "grid-cols-2" : "grid-cols-1")}>
+            <button
+              disabled={scanBusy}
+              onClick={() => {
+                haptic(10);
+                setScanOpen(true);
+              }}
+              className={GRID_ACTION}
+            >
+              {scanBusy ? <Spinner className="h-4 w-4" /> : <ScanBarcode size={16} className="text-muted" />}
+              Сканувати
+            </button>
+            {hasPantry && (
+              <button
+                onClick={() => {
+                  haptic(10);
+                  setFridgeOpen(true);
+                }}
+                className={GRID_ACTION}
+              >
+                <Refrigerator size={16} className="text-muted" />
+                З холодильника
+              </button>
+            )}
+          </div>
+        </Panel>
 
-        <Button
-          variant="secondary"
-          full
-          className="mt-3"
-          onClick={() => {
-            haptic(10);
-            setSteps((p) => [...p, { uid: newId(), text: "" }]);
-          }}
-        >
-          <Plus size={17} />
-          Додати крок
-        </Button>
-      </section>
+        {/* Кроки */}
+        <Panel>
+          <PanelHeader label="Кроки приготування" aside={steps.length} />
+          {/*
+            Порядок кроків міняється перетягуванням за ручку праворуч. Саме за
+            ручку, а не за картку: усередині текстові поля, і тягнути треба
+            вміти так, щоб при цьому можна було й слово виділити.
+          */}
+          <Reorder.Group
+            axis="y"
+            values={steps}
+            onReorder={setSteps}
+            className="flex flex-col"
+          >
+            {steps.map((step, i) => (
+              <StepCard
+                key={step.uid}
+                step={step}
+                index={i}
+                removable={steps.length > 1}
+                onChange={(patch) =>
+                  setSteps((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)))
+                }
+                onRemove={() => setSteps((prev) => prev.filter((_, j) => j !== i))}
+              />
+            ))}
+          </Reorder.Group>
 
-      {/* Збереження */}
-      <div className="pad-safe-b fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[560px] glass border-t border-line p-4">
-        <Button full size="lg" disabled={!valid} loading={saving} onClick={save}>
-          <Check size={19} />
-          {editId ? "Зберегти зміни" : "Опублікувати рецепт"}
-        </Button>
-        {!valid && (
-          <p className="mt-2 text-center text-[11.5px] text-muted">
-            Потрібні назва, хоча б один інгредієнт і один крок
-          </p>
-        )}
+          <button
+            onClick={() => {
+              haptic(10);
+              setSteps((p) => [...p, { uid: newId(), text: "" }]);
+            }}
+            className={ACTION_ROW}
+          >
+            <Plus size={16} strokeWidth={2.4} className="text-brand" />
+            <span className="flex-1 text-[14px] font-bold text-brand">Додати крок</span>
+          </button>
+        </Panel>
+      </div>
+
+      {/* Збереження. Відступ під виріз і видимий відступ — на різних
+          елементах: разом вони сперечалися б за padding-bottom. */}
+      <div className="pad-safe-b fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[560px] border-t md:left-[92px] md:max-w-[720px] border-line bg-bg/90 backdrop-blur-md">
+        <div className="px-4 pb-4 pt-3">
+          <motion.button
+            whileTap={{ scale: !valid || saving ? 1 : 0.95 }}
+            transition={{ type: "spring", stiffness: 520, damping: 28 }}
+            disabled={!valid || saving}
+            onClick={() => {
+              haptic(10);
+              save();
+            }}
+            className="flex h-[52px] w-full select-none items-center justify-center gap-2 rounded-[12px] brand-gradient px-4 text-[15.5px] font-extrabold text-brand-ink shadow-[0_14px_36px_-12px_rgb(255_107_53_/_0.6)] disabled:opacity-45 disabled:shadow-none"
+          >
+            {saving ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <>
+                <Check size={19} strokeWidth={2.6} />
+                {editId ? "Зберегти зміни" : "Опублікувати рецепт"}
+              </>
+            )}
+          </motion.button>
+          {!valid && (
+            <p className="mt-2 text-center text-[11.5px] font-semibold text-faint">
+              Потрібні назва, хоча б один інгредієнт і один крок
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Вибір стилю обкладинки */}
       <Sheet open={styleOpen} onClose={() => setStyleOpen(false)} title="Стиль обкладинки">
         <div className="pb-4">
-          <h3 className="mb-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">Емодзі</h3>
-          <div className="grid grid-cols-8 gap-2">
+          <h3 className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">Емодзі</h3>
+          <div className="grid grid-cols-8 gap-1.5">
             {FOOD_EMOJI.map((e) => (
               <button
                 key={e}
@@ -692,19 +731,21 @@ function RecipeForm() {
                   haptic(8);
                   setEmoji(e);
                 }}
-                className={`grid aspect-square place-items-center rounded-2xl text-2xl ${
-                  emoji === e ? "bg-brand/20 ring-2 ring-brand" : "bg-surface-2"
-                }`}
+                aria-pressed={emoji === e}
+                className={cn(
+                  "grid aspect-square place-items-center rounded-[8px] text-2xl",
+                  emoji === e ? "bg-brand/15 ring-[1.5px] ring-brand" : "bg-surface-2",
+                )}
               >
                 {e}
               </button>
             ))}
           </div>
 
-          <h3 className="mb-2.5 mt-5 text-[12px] font-bold uppercase tracking-wide text-muted">
+          <h3 className="mb-2 mt-5 px-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">
             Градієнт
           </h3>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-1.5">
             {GRADIENTS.map((g) => (
               <button
                 key={g.join()}
@@ -712,10 +753,12 @@ function RecipeForm() {
                   haptic(8);
                   setGradient(g);
                 }}
+                aria-pressed={gradient.join() === g.join()}
                 style={{ backgroundImage: `linear-gradient(140deg, ${g[0]}, ${g[1]})` }}
-                className={`aspect-[3/2] rounded-2xl ${
-                  gradient.join() === g.join() ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""
-                }`}
+                className={cn(
+                  "aspect-[3/2] rounded-[8px]",
+                  gradient.join() === g.join() && "ring-2 ring-ink ring-offset-2 ring-offset-bg-elev",
+                )}
               />
             ))}
           </div>
@@ -819,28 +862,29 @@ function StepCard({
       value={step}
       dragListener={false}
       dragControls={controls}
-      className="rounded-xl3 border border-line bg-surface p-3 shadow-[var(--shadow-card)]"
+      // relative і власне тло: перетягуваний крок пливе поверх сусідів, а не крізь них.
+      className="relative border-t border-line bg-surface py-3 pl-3.5 pr-1.5"
     >
-      <div className="flex items-start gap-2.5">
-        <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full brand-gradient text-[12px] font-extrabold text-brand-ink">
+      <div className="flex items-start gap-3">
+        <span className="mt-2 grid h-6 w-6 shrink-0 place-items-center rounded-[7px] bg-surface-2 text-[12px] font-extrabold text-brand">
           {index + 1}
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <textarea
             value={step.text}
             onChange={(e) => onChange({ text: e.target.value })}
             placeholder={`Що робимо на кроці ${index + 1}?`}
             rows={2}
-            className="w-full resize-none rounded-xl bg-surface-2 p-3 text-[14px] leading-relaxed"
+            className="w-full resize-none rounded-[8px] bg-surface-2 px-3 py-2.5 text-[14px] leading-[1.5] placeholder:text-faint"
           />
 
-          <div className="mt-2 flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <TimerInput seconds={step.timerSec} onChange={(timerSec) => onChange({ timerSec })} />
             {removable && (
               <button
                 onClick={onRemove}
                 aria-label={`Видалити крок ${index + 1}`}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-faint"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-surface-2 text-faint active:bg-line"
               >
                 <Trash2 size={15} />
               </button>
@@ -851,7 +895,7 @@ function StepCard({
             value={step.tip ?? ""}
             onChange={(e) => onChange({ tip: e.target.value || undefined })}
             placeholder="💡 Порада до кроку (необовʼязково)"
-            className="mt-2 h-9 w-full rounded-xl bg-surface-2 px-3 text-[13px]"
+            className="h-9 w-full rounded-[8px] bg-surface-2 px-3 text-[13px] font-semibold placeholder:text-faint"
           />
         </div>
 
@@ -899,7 +943,7 @@ function TimerInput({
   const shown = seconds ? String(Math.round((seconds / size) * 100) / 100) : "";
 
   return (
-    <div className="flex h-9 flex-1 items-center gap-1.5 rounded-xl bg-surface-2 pl-2.5">
+    <div className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-[8px] bg-surface-2 pl-2.5">
       <Timer size={14} className="shrink-0 text-muted" />
       <input
         value={shown}
@@ -909,7 +953,7 @@ function TimerInput({
         }}
         inputMode="numeric"
         placeholder="таймер"
-        className="h-full min-w-0 flex-1 text-[13px]"
+        className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-semibold placeholder:text-faint"
       />
       <select
         value={unit}
@@ -922,7 +966,7 @@ function TimerInput({
           if (value > 0) onChange(value * TIMER_UNITS[next]);
         }}
         aria-label="Міра таймера"
-        className="h-full shrink-0 rounded-r-xl bg-surface-2 px-2 text-[12px] font-semibold text-muted"
+        className="h-full shrink-0 rounded-r-[8px] bg-surface-2 px-2 text-[12px] font-bold text-muted"
       >
         <option value="sec">сек</option>
         <option value="min">хв</option>
@@ -932,14 +976,53 @@ function TimerInput({
   );
 }
 
+/* Класи рядків панелей — однакові для всіх секцій форми. */
+const INPUT =
+  "h-11 w-full rounded-[8px] bg-surface-2 px-3 text-[15px] font-semibold placeholder:text-faint";
+const STEPPER_ROW = "flex h-[52px] items-center gap-2 border-t border-line pl-3.5 pr-2";
+const PILLS = "flex flex-wrap gap-1.5 border-t border-line px-3.5 py-3";
+const ACTION_ROW =
+  "flex h-12 w-full items-center gap-2.5 border-t border-line px-3.5 text-left active:bg-surface-2";
+const GRID_ACTION =
+  "flex h-11 items-center justify-center gap-2 bg-surface text-[13.5px] font-bold active:bg-surface-2 disabled:opacity-45";
+const STEP_BUTTON =
+  "grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-surface-2 active:bg-line";
+
+/** Поле рядком панелі: підпис над ним. `label` — щоб натиск на підпис ставив курсор у поле. */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="pb-4">
-      <label className="mb-2 block text-[12px] font-bold uppercase tracking-wide text-muted">
-        {label}
-      </label>
+    <label className="flex flex-col gap-1.5 border-t border-line px-3.5 pb-3 pt-2.5">
+      <span className="text-[12px] font-bold text-muted">{label}</span>
       {children}
-    </div>
+    </label>
+  );
+}
+
+/** Чип вибору в групі: «Вечеря», «🌶️ Гостре». */
+function Pill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.94 }}
+      onClick={() => {
+        haptic(8);
+        onClick();
+      }}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-8 shrink-0 select-none items-center gap-1.5 rounded-[8px] border px-2.5 text-[12.5px] font-bold transition-colors",
+        active ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted",
+      )}
+    >
+      {children}
+    </motion.button>
   );
 }
 
@@ -957,16 +1040,16 @@ function NumberInput({
   step: number;
 }) {
   return (
-    <div className="flex h-12 items-center rounded-2xl border border-line bg-surface px-2">
+    <div className="flex shrink-0 items-center gap-1">
       <button
         onClick={() => {
           haptic(8);
           onChange(Math.max(min, value - step));
         }}
         aria-label="Менше"
-        className="grid h-9 w-9 place-items-center rounded-xl bg-surface-2 text-lg font-bold"
+        className={STEP_BUTTON}
       >
-        −
+        <Minus size={16} strokeWidth={2.4} />
       </button>
       <input
         value={value}
@@ -975,7 +1058,7 @@ function NumberInput({
           onChange(Math.min(max, Math.max(min, n || min)));
         }}
         inputMode="numeric"
-        className="h-full min-w-0 flex-1 text-center text-[16px] font-bold"
+        className="h-8 w-[56px] bg-transparent text-center text-[15px] font-extrabold"
       />
       <button
         onClick={() => {
@@ -983,9 +1066,9 @@ function NumberInput({
           onChange(Math.min(max, value + step));
         }}
         aria-label="Більше"
-        className="grid h-9 w-9 place-items-center rounded-xl bg-surface-2 text-lg font-bold"
+        className={STEP_BUTTON}
       >
-        +
+        <Plus size={16} strokeWidth={2.4} />
       </button>
     </div>
   );
@@ -1024,13 +1107,13 @@ function IngredientPicker({
   return (
     <Sheet open={open} onClose={onClose} title="Додати інгредієнт">
       <div className="sticky top-0 z-10 -mx-5 mb-2 bg-bg-elev px-5 pb-3">
-        <div className="flex h-12 items-center gap-2 rounded-2xl border border-line bg-surface px-3.5">
-          <Search size={17} className="shrink-0 text-muted" />
+        <div className="flex h-[46px] items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5">
+          <Search size={18} className="shrink-0 text-muted" />
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Пошук продукту…"
-            className="h-full flex-1 text-[15px]"
+            className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold placeholder:text-faint"
           />
         </div>
       </div>
@@ -1042,33 +1125,33 @@ function IngredientPicker({
             onQueryChange("");
             onClose();
           }}
-          className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-line bg-surface px-3.5 py-3 text-left"
+          className="mb-2.5 flex min-h-[54px] w-full items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5 py-2 text-left active:bg-surface-2"
         >
-          <span className="text-lg">📦</span>
+          <span className="w-[22px] shrink-0 text-lg leading-none">📦</span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[14px] font-bold">
+            <span className="block truncate text-[14px] font-bold text-brand">
               Створити «{query.trim()}»
             </span>
-            <span className="block text-[11.5px] text-muted">
+            <span className="block text-[11.5px] font-semibold text-faint">
               Свій продукт — з мірою й калоріями
             </span>
           </span>
-          <Plus size={16} className="shrink-0 text-brand" />
+          <Plus size={16} strokeWidth={2.4} className="shrink-0 text-brand" />
         </button>
       )}
 
       {list.length === 0 ? (
-        <p className="py-8 text-center text-[13px] text-muted">
+        <p className="py-8 text-center text-[13px] font-semibold text-muted">
           Нічого не знайшлось — але продукт можна створити рядком вище
         </p>
       ) : (
         <div className="flex flex-col gap-4 pb-4">
           {grouped.map(([cat, items]) => (
             <div key={cat}>
-              <h3 className="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">
+              <h3 className="mb-2 px-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">
                 {CAT_LABEL[cat]}
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {items.map((def) => {
                   const own = isOwnKey(def.key);
                   const pick = (
@@ -1083,13 +1166,13 @@ function IngredientPicker({
                       }}
                       className={
                         own
-                          ? "inline-flex items-center gap-1.5 py-2 pl-3 pr-1 text-[13px] font-semibold"
-                          : "inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 px-3 text-[13px] font-semibold active:bg-surface-2"
+                          ? "inline-flex h-9 items-center gap-1.5 pl-3 pr-1 text-[13px] font-semibold"
+                          : "inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line bg-surface px-3 text-[13px] font-semibold active:bg-surface-2"
                       }
                     >
                       <span>{def.emoji}</span>
                       {def.label}
-                      <Plus size={13} className="text-brand" />
+                      <Plus size={13} strokeWidth={2.4} className="text-brand" />
                     </button>
                   );
                   /*
@@ -1099,7 +1182,7 @@ function IngredientPicker({
                   return own ? (
                     <span
                       key={def.key}
-                      className="inline-flex items-center rounded-full border border-line bg-surface pr-1 active:bg-surface-2"
+                      className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface pr-1 active:bg-surface-2"
                     >
                       {pick}
                       <EditTypeButton typeKey={def.key} icon />

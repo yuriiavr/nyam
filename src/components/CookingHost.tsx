@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Pause, Timer } from "lucide-react";
+import { ChevronRight, Pause, Timer } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NAV_HEIGHT, useNavHidden } from "./BottomNav";
@@ -299,9 +299,18 @@ function CookDock({ pathname }: { pathname: string }) {
   useEffect(() => () => document.documentElement.style.setProperty("--cook-dock", "0px"), []);
 
   return (
+    /*
+      Телефон — над нижньою навігацією по центру. Планшет — навігація зліва,
+      тож панель стає карткою в правому нижньому куті. На головній планшета
+      «Готуєш зараз» уже є в бічній колонці — там панель не дублюємо.
+    */
     <div
-      className="pointer-events-none fixed inset-x-0 z-[35] mx-auto w-full max-w-[560px] px-3"
-      style={{ bottom: `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + 6px)` }}
+      className={cn(
+        "pointer-events-none fixed inset-x-0 bottom-[var(--dock-bottom)] z-[35] mx-auto w-full max-w-[560px] px-3",
+        "md:inset-x-auto md:bottom-4 md:right-6 md:mx-0 md:w-[360px] md:px-0",
+        pathname === "/" && "lg:hidden",
+      )}
+      style={{ "--dock-bottom": `calc(${NAV_HEIGHT}px + env(safe-area-inset-bottom) + 6px)` } as React.CSSProperties}
     >
       <div ref={ref} className="flex flex-col gap-1.5">
         <AnimatePresence initial={false}>
@@ -349,39 +358,35 @@ function DockRow({ session, now, onOpen }: { session: CookSession; now: number; 
       onClick={onOpen}
       aria-label={`Повернутись до готування «${title}»`}
       className={cn(
-        "glass pointer-events-auto flex w-full items-center gap-3 rounded-2xl border py-2 pl-3 pr-2 text-left shadow-[var(--shadow-card)]",
+        "pointer-events-auto flex h-[52px] w-full items-center gap-3 rounded-[12px] border bg-surface-2 pl-3.5 pr-3 text-left",
         rang ? "border-berry/50" : "border-line",
       )}
     >
-      <span className="text-xl leading-none">{session.emoji}</span>
+      <span className="w-6 shrink-0 text-center text-[20px] leading-none">{session.emoji}</span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-bold leading-tight">{title}</span>
-        <span className="block truncate text-[11px] text-muted">
-          {where}
-          {more}
+        <span className="block truncate text-[14px] font-bold leading-tight">{title}</span>
+        <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] font-semibold tabular-nums text-faint">
+          {top && rang && (
+            <span className="shrink-0 font-bold text-berry">Час вийшов · крок {top.step + 1} ·</span>
+          )}
+          <span className="truncate">{where}</span>
+          {top && !rang && (
+            <span className="flex shrink-0 items-center gap-1">
+              <span aria-hidden>·</span>
+              {top.timer.deadline != null ? (
+                <Timer size={12} strokeWidth={2.4} className="text-brand" />
+              ) : (
+                <Pause size={12} strokeWidth={2.4} />
+              )}
+              <span className={top.timer.deadline != null ? "font-bold text-muted" : undefined}>
+                {formatClock(timerLeft(top.timer, now))}
+              </span>
+            </span>
+          )}
+          {more && <span className="shrink-0">{more}</span>}
         </span>
       </span>
-      {top && (
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 font-display text-[15px] font-extrabold tabular-nums",
-            rang ? "bg-berry/15 text-berry" : top.timer.deadline != null ? "bg-brand/12 text-ink" : "bg-surface-2 text-muted",
-          )}
-        >
-          {rang ? (
-            <span className="font-sans text-[12px] font-bold">Час вийшов · крок {top.step + 1}</span>
-          ) : (
-            <>
-              {top.timer.deadline != null ? (
-                <Timer size={14} className="text-brand" />
-              ) : (
-                <Pause size={14} />
-              )}
-              {formatClock(timerLeft(top.timer, now))}
-            </>
-          )}
-        </span>
-      )}
+      <ChevronRight size={16} strokeWidth={2.4} className="shrink-0 text-brand" />
     </motion.button>
   );
 }

@@ -3,7 +3,7 @@
 import { Barcode, Plus, Search, WifiOff, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { NewIngredientSheet } from "@/components/NewIngredientSheet";
-import { Sheet, Spinner } from "@/components/ui";
+import { Panel, Sheet, Spinner } from "@/components/ui";
 import {
   CAT_LABEL,
   CAT_ORDER,
@@ -21,7 +21,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { searchProducts } from "@/lib/supabase/products-api";
 import type { IngredientCat, IngredientDef, Unit } from "@/lib/types";
 import { formatSummed, sumQuantities } from "@/lib/units";
-import { haptic } from "@/lib/utils";
+import { cn, haptic } from "@/lib/utils";
 import { EditTypeButton } from "./EditTypeButton";
 import { ProductEditorSheet, packLabel, useOnline, type ProductSaveOutcome } from "./ProductEditorSheet";
 
@@ -249,87 +249,110 @@ export function ProductPicker({
     <>
       <Sheet open={open} onClose={onClose} title={title}>
         <div className="sticky top-0 z-10 -mx-5 mb-2 bg-bg-elev px-5 pb-3">
-          {subtitle && <p className="mb-2 truncate font-mono text-[12px] text-muted">{subtitle}</p>}
-          <div className="flex h-12 items-center gap-2 rounded-2xl border border-line bg-surface px-3.5">
-            <Search size={17} className="shrink-0 text-muted" />
+          {subtitle && <p className="mb-2 truncate px-1 font-mono text-[12px] font-semibold text-faint">{subtitle}</p>}
+          <div className="flex h-[46px] items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3.5">
+            <Search size={18} className="shrink-0 text-muted" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={products ? "Молоко, Галичина, 4820…" : "Помідор, курка, рис…"}
-              className="h-full min-w-0 flex-1 text-[15px]"
+              className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-semibold placeholder:text-faint"
             />
             {searching && <Spinner className="h-4 w-4" />}
             {q && (
-              <button onClick={() => setQ("")} aria-label="Очистити">
+              <button onClick={() => setQ("")} aria-label="Очистити" className="-mr-1.5 grid h-8 w-8 place-items-center">
                 <X size={16} className="text-muted" />
               </button>
             )}
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 pb-4">
+        <div className="flex flex-col gap-3 pb-4">
           {isEan && onBarcode && (
-            <ActionRow
-              icon={<Barcode size={18} className="text-brand" />}
-              title={`Штрихкод ${typed}`}
-              note="Знайти товар за кодом"
-              onClick={() => {
-                onBarcode(typed);
-                onClose();
-              }}
-            />
+            <Panel>
+              <ActionRow
+                icon={<Barcode size={18} className="text-brand" />}
+                title={`Штрихкод ${typed}`}
+                note="Знайти товар за кодом"
+                onClick={() => {
+                  onBarcode(typed);
+                  onClose();
+                }}
+              />
+            </Panel>
           )}
 
           {showRecent && (
             <Section title="Нещодавні товари">
-              {recentProducts.slice(0, 8).map((p) => (
-                <ProductRow key={p.id} product={p} held={heldProducts.has(p.id)} onClick={() => pickProduct(p)} />
-              ))}
+              <Panel>
+                {recentProducts.slice(0, 8).map((p, i) => (
+                  <ProductRow
+                    key={p.id}
+                    product={p}
+                    held={heldProducts.has(p.id)}
+                    divided={i > 0}
+                    onClick={() => pickProduct(p)}
+                  />
+                ))}
+              </Panel>
             </Section>
           )}
 
           {products && typed.length >= 2 && !isEan && (
             <Section title="Товари">
               {!online && (
-                <p className="flex items-center gap-1.5 text-[12px] text-faint">
+                <p className="flex items-center gap-1.5 px-1 text-[12px] font-semibold text-faint">
                   <WifiOff size={13} /> Товари спільноти — коли зʼявиться звʼязок
                 </p>
               )}
-              {productList.map((p) => (
-                <ProductRow key={p.id} product={p} held={heldProducts.has(p.id)} onClick={() => pickProduct(p)} />
-              ))}
-              {productList.length === 0 && online && !searching && remote !== null && (
-                <p className="text-[12.5px] text-faint">Такої картки ще немає.</p>
-              )}
-              <ActionRow
-                title={`＋ Створити товар «${typed}»`}
-                note={online ? "Картка з назвою, упаковкою й КБЖВ — спільна для всіх" : "Потрібен звʼязок"}
-                onClick={createProduct}
-                dashed
-              />
+              <Panel>
+                {productList.map((p, i) => (
+                  <ProductRow
+                    key={p.id}
+                    product={p}
+                    held={heldProducts.has(p.id)}
+                    divided={i > 0}
+                    onClick={() => pickProduct(p)}
+                  />
+                ))}
+                {productList.length === 0 && online && !searching && remote !== null && (
+                  <p className="px-3.5 py-3 text-[12.5px] font-semibold text-faint">Такої картки ще немає.</p>
+                )}
+                <ActionRow
+                  title={`＋ Створити товар «${typed}»`}
+                  note={online ? "Картка з назвою, упаковкою й КБЖВ — спільна для всіх" : "Потрібен звʼязок"}
+                  onClick={createProduct}
+                  divided={productList.length > 0 || (online && !searching && remote !== null)}
+                  brand
+                />
+              </Panel>
             </Section>
           )}
 
           <Section title="Типи">
             {typed && (
-              <ActionRow
-                title={`＋ Новий тип «${typed}»`}
-                note="Свій тип продукту — з мірою й калоріями"
-                onClick={createType}
-                dashed
-              />
+              <Panel>
+                <ActionRow
+                  title={`＋ Новий тип «${typed}»`}
+                  note="Свій тип продукту — з мірою й калоріями"
+                  onClick={createType}
+                  brand
+                />
+              </Panel>
             )}
             {types.length === 0 ? (
-              <p className="py-2 text-[12.5px] text-faint">Такого типу немає — його можна створити рядком вище.</p>
+              <p className="px-1 py-2 text-[12.5px] font-semibold text-faint">
+                Такого типу немає — його можна створити рядком вище.
+              </p>
             ) : (
               grouped.map(([cat, items]) => (
                 <div key={cat}>
                   {!typed && (
-                    <h4 className="mb-2 mt-1 text-[11px] font-bold uppercase tracking-wide text-faint">
+                    <h4 className="mb-2 mt-1 px-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">
                       {CAT_LABEL[cat]}
                     </h4>
                   )}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {items.map((def) => {
                       const have = haveLabel(def.key);
                       const parent = ancestors(def.key)[0];
@@ -340,15 +363,15 @@ export function ProductPicker({
                           onClick={() => pickType(def)}
                           className={
                             own
-                              ? "inline-flex items-center gap-1.5 py-2 pl-3 pr-1 text-[13px] font-semibold"
-                              : "inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-2 pl-3 pr-3 text-[13px] font-semibold active:bg-surface-2"
+                              ? "inline-flex h-9 items-center gap-1.5 pl-3 pr-1 text-[13px] font-semibold"
+                              : "inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line bg-surface px-3 text-[13px] font-semibold active:bg-surface-2"
                           }
                         >
                           <span>{def.emoji}</span>
                           {def.label}
-                          {parent && <span className="text-[11px] font-normal text-faint">› {ing(parent).label}</span>}
+                          {parent && <span className="text-[11px] font-semibold text-faint">› {ing(parent).label}</span>}
                           {have && (
-                            <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-brand">
+                            <span className="rounded-[5px] bg-brand/10 px-1.5 py-0.5 text-[10.5px] font-bold text-brand">
                               {have}
                             </span>
                           )}
@@ -358,7 +381,7 @@ export function ProductPicker({
                       return own ? (
                         <span
                           key={def.key}
-                          className="inline-flex items-center rounded-full border border-line bg-surface pr-1 active:bg-surface-2"
+                          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface pr-1 active:bg-surface-2"
                         >
                           {chip}
                           <EditTypeButton typeKey={def.key} icon />
@@ -410,31 +433,44 @@ export function ProductPicker({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{title}</h3>
+      <h3 className="px-1 pt-1 text-[11px] font-extrabold uppercase tracking-[0.07em] text-faint">{title}</h3>
       {children}
     </div>
   );
 }
 
-function ProductRow({ product, held, onClick }: { product: Product; held: boolean; onClick: () => void }) {
+function ProductRow({
+  product,
+  held,
+  divided,
+  onClick,
+}: {
+  product: Product;
+  held: boolean;
+  divided?: boolean;
+  onClick: () => void;
+}) {
   const pack = packLabel(product);
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-2.5 rounded-2xl border border-line bg-surface px-3.5 py-2.5 text-left active:bg-surface-2"
+      className={cn(
+        "flex min-h-[54px] w-full items-center gap-3 px-3.5 py-2 text-left active:bg-surface-2",
+        divided && "border-t border-line",
+      )}
     >
-      <span className="text-lg">{ing(product.typeKey).emoji}</span>
+      <span className="w-[22px] shrink-0 text-lg leading-none">{ing(product.typeKey).emoji}</span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14px] font-bold">
+        <span className="block truncate text-[14px] font-semibold">
           {product.name}
-          {pack && <span className="font-normal text-muted"> · {pack}</span>}
+          {pack && <span className="text-muted"> · {pack}</span>}
         </span>
-        <span className="block truncate text-[11.5px] text-muted">
+        <span className="block truncate text-[11.5px] font-semibold text-faint">
           {[product.brand, ing(product.typeKey).label].filter(Boolean).join(" · ")}
           {held ? " · вже є в коморі" : ""}
         </span>
       </span>
-      <Plus size={16} className="shrink-0 text-brand" />
+      <Plus size={16} strokeWidth={2.2} className="shrink-0 text-muted" />
     </button>
   );
 }
@@ -444,13 +480,17 @@ function ActionRow({
   title,
   note,
   onClick,
-  dashed,
+  divided,
+  brand,
 }: {
   icon?: React.ReactNode;
   title: string;
   note?: string;
   onClick: () => void;
-  dashed?: boolean;
+  /** Лінія згори — коли рядок іде під іншими в тій самій картці. */
+  divided?: boolean;
+  /** «＋ Створити…» — дія, тож помаранчевим. */
+  brand?: boolean;
 }) {
   return (
     <button
@@ -458,14 +498,15 @@ function ActionRow({
         haptic(8);
         onClick();
       }}
-      className={`flex w-full items-center gap-2.5 rounded-2xl border px-3.5 py-3 text-left ${
-        dashed ? "border-dashed border-brand/50 bg-brand/5" : "border-line bg-surface"
-      }`}
+      className={cn(
+        "flex min-h-[54px] w-full items-center gap-3 px-3.5 py-2 text-left active:bg-surface-2",
+        divided && "border-t border-line",
+      )}
     >
-      {icon && <span className="grid h-7 w-7 shrink-0 place-items-center">{icon}</span>}
+      {icon && <span className="grid w-[22px] shrink-0 place-items-center">{icon}</span>}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14px] font-bold">{title}</span>
-        {note && <span className="block text-[11.5px] text-muted">{note}</span>}
+        <span className={cn("block truncate text-[14px] font-bold", brand && "text-brand")}>{title}</span>
+        {note && <span className="block text-[11.5px] font-semibold text-faint">{note}</span>}
       </span>
     </button>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Scale } from "lucide-react";
+import { Check, ChevronRight, Scale } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, Sheet } from "@/components/ui";
 import { ing } from "@/data/ingredients";
@@ -57,8 +57,8 @@ export function WeighSheet({
       onClose={onClose}
       title={
         item ? (
-          <span className="flex items-center gap-2">
-            <span className="text-xl">{ing(item.key).emoji}</span>
+          <span className="flex items-center gap-3">
+            <span className="text-[26px] leading-none">{ing(item.key).emoji}</span>
             <span className="min-w-0 truncate">{item.label ?? ing(item.key).label}</span>
           </span>
         ) : (
@@ -77,8 +77,8 @@ export function WeighSheet({
           onSave={(w) => onSave(item.key, w)}
         />
       ) : (
-        <div className="flex flex-col pb-2">
-          {items.map((i) => {
+        <div className="mb-3 overflow-hidden rounded-[10px] border border-line bg-surface">
+          {items.map((i, n) => {
             const w = weights[i.key];
             return (
               <button
@@ -87,18 +87,22 @@ export function WeighSheet({
                   haptic(8);
                   onPick(i.key);
                 }}
-                className="flex items-center gap-3 border-b border-line py-3 text-left last:border-0"
+                className={cn(
+                  "flex h-12 w-full items-center gap-3 px-3.5 text-left active:bg-surface-2",
+                  n > 0 && "border-t border-line",
+                )}
               >
-                <span className="text-lg">{ing(i.key).emoji}</span>
+                <span className="w-[22px] shrink-0 text-lg leading-none">{ing(i.key).emoji}</span>
                 <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{i.label ?? ing(i.key).label}</span>
                 {w ? (
-                  <span className="text-[13px] font-bold text-mint">
+                  <span className="shrink-0 text-[12.5px] font-bold text-brand">
                     {formatQuantity(w.amount, w.unit)}
                     {w.cooked ? " готового" : ""}
                   </span>
                 ) : (
-                  <span className="text-[12.5px] text-muted">{ingredientQtyLabel(i)}</span>
+                  <span className="shrink-0 text-[12.5px] font-bold text-muted">{ingredientQtyLabel(i)}</span>
                 )}
+                <ChevronRight size={15} strokeWidth={2.2} className="shrink-0 text-faint" />
               </button>
             );
           })}
@@ -157,16 +161,16 @@ function WeighForm({
   };
 
   return (
-    <div className="flex flex-col gap-3 pb-2">
+    <div className="flex flex-col gap-3 pb-3">
       {(recipeHint || weight) && (
-        <p className="text-[12.5px] text-muted">
+        <p className="px-1 text-[12.5px] font-semibold text-faint">
           {[recipeHint, weight ? `записано ${formatQuantity(weight.amount, weight.unit)}${weight.cooked ? " готового" : ""}` : ""]
             .filter(Boolean)
             .join(" · ")}
         </p>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex h-16 items-center gap-2 rounded-[10px] border border-line bg-surface px-3.5">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value.replace(/[^\d.,]/g, "").slice(0, 7))}
@@ -174,51 +178,61 @@ function WeighForm({
           autoFocus
           placeholder={weight ? formatNumber(weight.amount, 1) : "50"}
           aria-label="Скільки"
-          className="h-16 min-w-0 flex-1 rounded-2xl bg-surface-2 text-center font-display text-3xl font-extrabold tabular-nums"
+          className="h-full min-w-0 flex-1 bg-transparent text-center font-display text-[28px] font-bold tabular-nums placeholder:text-faint"
         />
-        <span className="w-12 text-[17px] font-bold text-muted">{unitLabel(actualUnit)}</span>
+        <span className="w-10 shrink-0 text-[15px] font-bold text-muted">{unitLabel(actualUnit)}</span>
       </div>
 
-      {!cooked && units.length > 1 && (
-        <div className="grid grid-cols-2 gap-2">
-          {units.map((u) => (
-            <button
-              key={u}
-              aria-pressed={unit === u}
-              onClick={() => {
-                haptic(8);
-                setUnit(u);
-              }}
-              className={cn(
-                "rounded-2xl border py-2 text-[13px] font-bold",
-                unit === u ? "border-brand bg-brand/10 text-brand" : "border-line bg-surface text-muted",
-              )}
-            >
-              {unitLabel(u)}
-            </button>
-          ))}
-        </div>
-      )}
+      {((!cooked && units.length > 1) || weighable) && (
+        <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+          {!cooked && units.length > 1 && (
+            <div className="flex h-[50px] items-center gap-1.5 px-3.5">
+              <span className="min-w-0 flex-1 text-[14px] font-semibold text-muted">Міра</span>
+              {units.map((u) => (
+                <button
+                  key={u}
+                  aria-pressed={unit === u}
+                  onClick={() => {
+                    haptic(8);
+                    setUnit(u);
+                  }}
+                  className={cn(
+                    "h-8 shrink-0 rounded-[8px] border px-3 text-[12.5px] font-bold",
+                    unit === u ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted",
+                  )}
+                >
+                  {unitLabel(u)}
+                </button>
+              ))}
+            </div>
+          )}
 
-      {weighable && (
-        <div className="flex items-center gap-1.5 text-[12.5px]">
-          <span className="text-muted">Вага:</span>
-          {([false, true] as const).map((c) => (
-            <button
-              key={String(c)}
-              aria-pressed={cooked === c}
-              onClick={() => {
-                haptic(8);
-                setCooked(c);
-              }}
+          {weighable && (
+            <div
               className={cn(
-                "rounded-full border px-3 py-1.5 font-semibold",
-                cooked === c ? "border-brand bg-brand/10 text-ink" : "border-line text-muted",
+                "flex h-[50px] items-center gap-1.5 px-3.5",
+                !cooked && units.length > 1 && "border-t border-line",
               )}
             >
-              {c ? "готового" : raw}
-            </button>
-          ))}
+              <span className="min-w-0 flex-1 text-[14px] font-semibold text-muted">Вага</span>
+              {([false, true] as const).map((c) => (
+                <button
+                  key={String(c)}
+                  aria-pressed={cooked === c}
+                  onClick={() => {
+                    haptic(8);
+                    setCooked(c);
+                  }}
+                  className={cn(
+                    "h-8 shrink-0 rounded-[8px] border px-3 text-[12.5px] font-bold",
+                    cooked === c ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted",
+                  )}
+                >
+                  {c ? "готового" : raw}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -235,14 +249,14 @@ function WeighForm({
                   setRowId(on ? null : row.id);
                 }}
                 className={cn(
-                  "flex shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[12.5px]",
-                  on ? "border-brand bg-brand/10 font-bold" : "border-line text-muted",
+                  "flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+                  on ? "border-brand/40 bg-brand/10 text-brand" : "border-line bg-surface text-muted",
                 )}
               >
-                {on && <Check size={13} strokeWidth={3} className="text-brand" />}
+                {on && <Check size={13} strokeWidth={3.5} />}
                 <span className="max-w-[160px] truncate">{rowName(row)}</span>
                 {row.amount != null && row.unit && (
-                  <span className="font-normal text-faint">{formatQuantity(row.amount, row.unit)}</span>
+                  <span className="font-semibold text-faint">{formatQuantity(row.amount, row.unit)}</span>
                 )}
               </button>
             );
@@ -260,7 +274,7 @@ function WeighForm({
           </Button>
         </div>
       ) : (
-        <Button full size="lg" disabled={!valid} onClick={() => save(amount)}>
+        <Button full disabled={!valid} onClick={() => save(amount)}>
           <Scale size={18} />
           Записати{valid ? ` ${formatQuantity(amount, actualUnit)}` : ""}
         </Button>
@@ -271,7 +285,7 @@ function WeighForm({
             haptic(8);
             onSave(null);
           }}
-          className="py-1 text-[12.5px] font-semibold text-muted underline"
+          className="h-10 text-[13.5px] font-semibold text-berry"
         >
           Прибрати записане
         </button>

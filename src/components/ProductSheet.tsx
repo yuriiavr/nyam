@@ -2,7 +2,8 @@
 
 import { Barcode, Ellipsis, History, Pencil, ReceiptText, TriangleAlert } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Button, Sheet, Skeleton, useToast } from "@/components/ui";
+import { LinkRow } from "@/components/pantry/PantryGroups";
+import { Button, Panel, PanelHeader, Sheet, useToast } from "@/components/ui";
 import { ing } from "@/data/ingredients";
 import type { CommunityTable, Product, ProductIdentifier } from "@/lib/product-types";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -15,7 +16,7 @@ import {
   toCatalogError,
   unmergeProduct,
 } from "@/lib/supabase/products-api";
-import { cn, haptic } from "@/lib/utils";
+import { haptic } from "@/lib/utils";
 import { HistorySheet } from "./HistorySheet";
 import { MergeSheet } from "./MergeSheet";
 import { EditTypeButton } from "./EditTypeButton";
@@ -225,10 +226,10 @@ export function ProductSheet({
   return (
     <>
       <Sheet open={open} onClose={onClose} title="Картка товару" footer={children}>
-        <div className="flex flex-col gap-4 pb-3">
+        <div className="flex flex-col gap-3 pb-3">
           {current.archived && (
-            <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface-2 px-3.5 py-3">
-              <p className="min-w-0 flex-1 text-[13px] font-bold">Картку прибрано</p>
+            <div className="flex min-h-[50px] items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5 py-2">
+              <p className="min-w-0 flex-1 text-[14px] font-bold">Картку прибрано</p>
               <Button size="sm" variant="secondary" loading={busy} onClick={() => void setArchived(false)}>
                 Повернути
               </Button>
@@ -236,28 +237,28 @@ export function ProductSheet({
           )}
 
           {error && (
-            <p className="flex items-start gap-2 rounded-2xl border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] leading-snug text-berry">
+            <p className="flex items-start gap-2 rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-berry">
               <TriangleAlert size={15} className="mt-0.5 shrink-0" />
               {error}
             </p>
           )}
 
-          <div className="flex items-start gap-3">
+          <div className="flex items-center gap-3 px-1">
             {current.image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={current.image}
                 alt=""
-                className="h-16 w-16 shrink-0 rounded-2xl border border-line bg-surface object-contain"
+                className="h-14 w-14 shrink-0 rounded-[10px] border border-line bg-surface object-contain"
               />
             ) : (
-              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-surface-2 text-3xl">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[10px] bg-surface-2 text-[28px]">
                 {ing(current.typeKey).emoji}
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <h3 className="font-display text-[18px] font-bold leading-snug">{current.name}</h3>
-              {meta && <p className="mt-0.5 text-[13px] text-muted">{meta}</p>}
+              <h3 className="font-display text-[16px] font-bold leading-snug">{current.name}</h3>
+              {meta && <p className="mt-0.5 text-[12.5px] font-semibold text-faint">{meta}</p>}
             </div>
             {!current.archived && (
               <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
@@ -266,42 +267,46 @@ export function ProductSheet({
             )}
           </div>
 
-          <div className="rounded-2xl bg-surface-2 px-3.5 py-3 text-[13px] leading-snug">
-            <p>
-              <span className="text-muted">Рецепти рахують як: </span>
-              <span className="font-bold">
-                {ing(current.typeKey).emoji} {typeTrail(current.typeKey)}
+          <Panel>
+            <div className="flex min-h-[50px] flex-col justify-center gap-0.5 px-3.5 py-2.5">
+              <span className="text-[12px] font-semibold text-faint">Рецепти рахують як</span>
+              <span className="flex flex-wrap items-baseline gap-x-2 text-[14px] font-semibold">
+                <span>
+                  {ing(current.typeKey).emoji} {typeTrail(current.typeKey)}
+                </span>
+                <EditTypeButton typeKey={current.typeKey} />
               </span>
-              <EditTypeButton typeKey={current.typeKey} className="ml-2" />
-            </p>
+            </div>
             {current.nutrition && (
-              <p className="mt-1.5">
-                <span className="text-muted">КБЖВ на 100 г: </span>
-                {nutritionLine(current.nutrition)}
-              </p>
+              <div className="flex min-h-[50px] flex-col justify-center gap-0.5 border-t border-line px-3.5 py-2.5">
+                <span className="text-[12px] font-semibold text-faint">КБЖВ на 100 г</span>
+                <span className="text-[14px] font-semibold">{nutritionLine(current.nutrition)}</span>
+              </div>
             )}
-          </div>
+          </Panel>
 
-          <div>
-            <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-muted">Як його впізнати</p>
+          <Panel>
+            <PanelHeader label="Як його впізнати" />
             {identifiers === null ? (
-              <Skeleton className="h-12" />
+              <div className="border-t border-line px-3.5 py-3">
+                <div className="shimmer h-6 rounded-[8px] bg-surface-2" />
+              </div>
             ) : identifiers.length === 0 ? (
-              <p className="text-[12.5px] leading-snug text-faint">
+              <p className="border-t border-line px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-faint">
                 Поки ні штрихкоду, ні назви з чека. Відскануй його чи додай із чека — і наступного разу він
                 впізнається сам, у тебе й у всіх.
               </p>
             ) : (
-              <div className="flex flex-col gap-1.5">
+              <>
                 {identifiers.map((i) => (
-                  <div key={i.id} className="rounded-2xl border border-line bg-surface">
-                    <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                  <div key={i.id} className="border-t border-line">
+                    <div className="flex h-12 items-center gap-2.5 pl-3.5 pr-2">
                       {i.kind === "ean" ? (
                         <Barcode size={16} className="shrink-0 text-muted" />
                       ) : (
                         <ReceiptText size={16} className="shrink-0 text-muted" />
                       )}
-                      <p className="min-w-0 flex-1 truncate text-[13px]">
+                      <p className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">
                         {i.kind === "ean" ? (
                           <>
                             Штрихкод <span className="font-mono">{i.raw}</span>
@@ -315,7 +320,7 @@ export function ProductSheet({
                       <button
                         onClick={() => setMenuFor((id) => (id === i.id ? null : i.id))}
                         aria-label="Дії"
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-surface-2"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-surface-2 active:bg-line"
                       >
                         <Ellipsis size={16} className="text-muted" />
                       </button>
@@ -343,54 +348,55 @@ export function ProductSheet({
                     )}
                   </div>
                 ))}
-              </div>
+              </>
             )}
-          </div>
+          </Panel>
 
           {merged.length > 0 && (
-            <div>
-              <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-muted">Обʼєднано з цією карткою</p>
-              <div className="flex flex-col gap-1.5">
-                {merged.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2.5 rounded-2xl border border-line bg-surface px-3.5 py-2.5">
-                    <p className="min-w-0 flex-1 text-[13px] leading-snug">
-                      <span className="block truncate font-bold">{p.name}</span>
-                      {productMeta(p) && <span className="block truncate text-[11.5px] text-muted">{productMeta(p)}</span>}
-                    </p>
-                    <Button size="sm" variant="outline" loading={busy} onClick={() => void unmerge(p)}>
-                      Розʼєднати
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <Panel>
+              <PanelHeader label="Обʼєднано з цією карткою" />
+              {merged.map((p) => (
+                <div key={p.id} className="flex min-h-[54px] items-center gap-2.5 border-t border-line px-3.5 py-2">
+                  <p className="min-w-0 flex-1 leading-snug">
+                    <span className="block truncate text-[14px] font-semibold">{p.name}</span>
+                    {productMeta(p) && (
+                      <span className="block truncate text-[11.5px] font-semibold text-faint">{productMeta(p)}</span>
+                    )}
+                  </p>
+                  <Button size="sm" variant="outline" loading={busy} onClick={() => void unmerge(p)}>
+                    Розʼєднати
+                  </Button>
+                </div>
+              ))}
+            </Panel>
           )}
 
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted">
-            {current.updatedAt && <span>Змінено {shortDate(current.updatedAt)}</span>}
-            <Dot />
-            <LinkButton
+          <Panel>
+            <LinkRow
               onClick={() =>
                 setHistory({ table: "products", rowId: current.id, version: current.version, title: "Історія змін" })
               }
+              aside={
+                current.updatedAt && (
+                  <span className="shrink-0 text-[12px] font-semibold text-faint">
+                    змінено {shortDate(current.updatedAt)}
+                  </span>
+                )
+              }
             >
               Історія змін
-            </LinkButton>
+            </LinkRow>
             {onMerged && !current.archived && (
-              <>
-                <Dot />
-                <LinkButton onClick={() => setMerge({ other: null })}>Це дублікат…</LinkButton>
-              </>
+              <LinkRow divided onClick={() => setMerge({ other: null })}>
+                Це дублікат…
+              </LinkRow>
             )}
             {!current.archived && (
-              <>
-                <Dot />
-                <LinkButton danger onClick={() => setArchiveAsk(true)}>
-                  Прибрати картку
-                </LinkButton>
-              </>
+              <LinkRow divided tone="danger" onClick={() => setArchiveAsk(true)}>
+                Прибрати картку
+              </LinkRow>
             )}
-          </p>
+          </Panel>
         </div>
       </Sheet>
 
@@ -464,17 +470,5 @@ export function ProductSheet({
         />
       )}
     </>
-  );
-}
-
-function Dot() {
-  return <span className="text-faint">·</span>;
-}
-
-function LinkButton({ children, onClick, danger }: { children: ReactNode; onClick: () => void; danger?: boolean }) {
-  return (
-    <button onClick={onClick} className={cn("font-bold", danger ? "text-berry" : "text-brand")}>
-      {children}
-    </button>
   );
 }

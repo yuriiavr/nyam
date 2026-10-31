@@ -2,7 +2,7 @@
 
 import { RotateCcw, TriangleAlert, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Button, Sheet, Skeleton, useToast } from "@/components/ui";
+import { Button, Panel, Sheet, useToast } from "@/components/ui";
 import { CAT_LABEL, ing } from "@/data/ingredients";
 import type { CommunityChange, CommunityTable } from "@/lib/product-types";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/supabase/products-api";
 import type { IngredientCat, Unit } from "@/lib/types";
 import { formatNumber, formatQuantity, unitLabel } from "@/lib/units";
+import { cn } from "@/lib/utils";
 import { ConfirmSheet, nutritionLine, shortDate } from "./ProductEditorSheet";
 
 /*
@@ -243,7 +244,7 @@ export function HistorySheet({
       <Sheet open={open} onClose={onClose} title={title}>
         <div className="flex flex-col gap-2.5 pb-4">
           {error && (
-            <div className="flex items-start gap-2 rounded-2xl border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] leading-snug text-berry">
+            <div className="flex items-start gap-2 rounded-[10px] border border-berry/30 bg-berry/10 px-3.5 py-3 text-[12.5px] font-semibold leading-snug text-berry">
               <TriangleAlert size={15} className="mt-0.5 shrink-0" />
               <p className="min-w-0 flex-1">{error}</p>
               <button onClick={() => void load()} className="shrink-0 font-bold" aria-label="Оновити історію">
@@ -254,42 +255,48 @@ export function HistorySheet({
 
           {list === null && !error && (
             <>
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
+              <div className="shimmer h-16 rounded-[10px] bg-surface-2" />
+              <div className="shimmer h-16 rounded-[10px] bg-surface-2" />
             </>
           )}
 
-          {list?.length === 0 && <p className="py-8 text-center text-[13px] text-muted">Змін ще не було.</p>}
+          {list?.length === 0 && (
+            <p className="py-8 text-center text-[13px] font-semibold text-muted">Змін ще не було.</p>
+          )}
 
-          {list?.map((c, index) => {
-            const head = `${shortDate(c.changedAt)}${c.actorName ? ` · ${c.actorName}` : ""}`;
-            const merged =
-              table === "products" && c.op === "merge" && s(c.after?.merged_into) && !s(c.before?.merged_into);
-            const restorable =
-              index > 0 && c.after != null && c.op !== "merge" && c.op !== "unmerge" && !s(c.after?.merged_into);
-            return (
-              <div key={c.id} className="rounded-2xl border border-line bg-surface px-3.5 py-3">
-                <p className="text-[13px] leading-snug">
-                  <span className="font-bold">{head}</span>
-                  <span className="text-muted"> — {describeChange(table, c, allNames)}</span>
-                </p>
-                {(restorable || (merged && onUnmerged && index === 0)) && (
-                  <div className="mt-2 flex gap-2">
-                    {restorable && (
-                      <Button size="sm" variant="secondary" onClick={() => setConfirm({ change: c, index })}>
-                        <Undo2 size={14} /> Повернути цю версію
-                      </Button>
-                    )}
-                    {merged && onUnmerged && index === 0 && (
-                      <Button size="sm" variant="outline" loading={busy} onClick={() => void unmerge()}>
-                        Розʼєднати
-                      </Button>
+          {list && list.length > 0 && (
+            <Panel>
+              {list.map((c, index) => {
+                const head = `${shortDate(c.changedAt)}${c.actorName ? ` · ${c.actorName}` : ""}`;
+                const merged =
+                  table === "products" && c.op === "merge" && s(c.after?.merged_into) && !s(c.before?.merged_into);
+                const restorable =
+                  index > 0 && c.after != null && c.op !== "merge" && c.op !== "unmerge" && !s(c.after?.merged_into);
+                return (
+                  <div key={c.id} className={cn("px-3.5 py-3", index > 0 && "border-t border-line")}>
+                    <p className="text-[13.5px] leading-snug">
+                      <span className="font-bold">{head}</span>
+                      <span className="font-semibold text-muted"> — {describeChange(table, c, allNames)}</span>
+                    </p>
+                    {(restorable || (merged && onUnmerged && index === 0)) && (
+                      <div className="mt-2.5 flex gap-2">
+                        {restorable && (
+                          <Button size="sm" variant="secondary" onClick={() => setConfirm({ change: c, index })}>
+                            <Undo2 size={14} /> Повернути цю версію
+                          </Button>
+                        )}
+                        {merged && onUnmerged && index === 0 && (
+                          <Button size="sm" variant="outline" loading={busy} onClick={() => void unmerge()}>
+                            Розʼєднати
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </Panel>
+          )}
         </div>
       </Sheet>
 

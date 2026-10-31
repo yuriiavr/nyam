@@ -169,9 +169,9 @@ export function PantryGroups({
   const urgent = [...grouping.expired, ...grouping.soon];
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2.5 lg:block lg:columns-2 lg:gap-3">
       {urgent.length > 0 && (
-        <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+        <div className="overflow-hidden rounded-[10px] border border-line bg-surface lg:mb-3 lg:[column-span:all]">
           <div className="flex h-11 items-center gap-2.5 pl-3.5 pr-2.5">
             <TriangleAlert size={16} strokeWidth={2.2} className="shrink-0 text-muted" />
             <span className="flex-1 text-[14px] font-extrabold">Варто вжити</span>
@@ -195,7 +195,7 @@ export function PantryGroups({
       )}
 
       {grouping.sections.map(({ cat, groups }) => (
-        <div key={cat} className="overflow-hidden rounded-[10px] border border-line bg-surface">
+        <div key={cat} className="overflow-hidden rounded-[10px] border border-line bg-surface lg:mb-3 lg:break-inside-avoid">
           <ListHeader label={CAT_LABEL[cat]} aside={groups.reduce((n, g) => n + g.rows.length, 0)} />
           <AnimatePresence initial={false}>
             {groups.map((group) => {

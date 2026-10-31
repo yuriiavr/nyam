@@ -98,7 +98,7 @@ export function IconButton({
         rest.onClick?.(e);
       }}
       className={cn(
-        "grid h-11 w-11 shrink-0 place-items-center rounded-[10px] bg-surface-2 text-ink transition-colors active:bg-line",
+        "grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] bg-surface-2 text-ink transition-colors active:bg-line",
         className,
       )}
       {...rest}
@@ -167,6 +167,147 @@ export function Card({
       {children}
     </div>
   );
+}
+
+/* ── Panel ────────────────────────────────────────────────────────────── */
+
+/**
+ * Картка-список з дизайну: заголовок дрібними великими літерами, далі рядки,
+ * розділені лінією. Так зібрані всі екрани — від головної до налаштувань.
+ */
+export function Panel({ className, children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn("overflow-hidden rounded-[10px] border border-line bg-surface", className)} {...rest}>
+      {children}
+    </div>
+  );
+}
+
+/** Заголовок панелі: «СЬОГОДНІ             Щоденник ›». */
+export function PanelHeader({
+  label,
+  aside,
+  icon,
+  tone,
+  className,
+}: {
+  label: ReactNode;
+  /** Праворуч: лічильник, посилання «Усе ›» тощо. Рядок — тьмяним. */
+  aside?: ReactNode;
+  icon?: ReactNode;
+  tone?: "brand";
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex h-9 items-center justify-between gap-3 pl-3.5 pr-3.5", className)}>
+      <span
+        className={cn(
+          "flex min-w-0 items-center gap-1.5 truncate text-[11px] font-extrabold uppercase tracking-[0.07em]",
+          tone === "brand" ? "text-brand" : "text-muted",
+        )}
+      >
+        {icon}
+        {label}
+      </span>
+      {typeof aside === "string" || typeof aside === "number" ? (
+        <span className="shrink-0 text-[11.5px] font-bold text-faint">{aside}</span>
+      ) : (
+        aside
+      )}
+    </div>
+  );
+}
+
+/** Квадратна кнопка шапки 38×38: налаштування, назад, «+». */
+export const TILE_BUTTON =
+  "grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] bg-surface-2 text-ink transition-colors active:bg-line";
+export const TILE_BUTTON_BRAND =
+  "grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] brand-gradient text-brand-ink";
+
+/** Перемикач 44×26 з дизайну. */
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        haptic(8);
+        onChange(!checked);
+      }}
+      className={cn(
+        "relative h-[26px] w-11 shrink-0 rounded-full transition-colors disabled:opacity-50",
+        checked ? "bg-brand" : "bg-line-strong",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute left-[3px] top-[3px] h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+          checked && "translate-x-[18px]",
+        )}
+      />
+    </button>
+  );
+}
+
+/**
+ * Три стовпчики БЖВ з дизайну: квадратик кольору й назва, тонка смужка і
+ * «62 / 110 г». Без цілі смужка показує частку нутрієнта в калоріях.
+ */
+export function MacroGrid({
+  nutrition,
+  goals,
+  className,
+}: {
+  nutrition: Nutrition;
+  goals?: { protein?: number; fat?: number; carbs?: number };
+  className?: string;
+}) {
+  const shares = macroShares(nutrition);
+  const parts = [
+    { key: "protein", label: "Білки", value: nutrition.protein, goal: goals?.protein, share: shares.protein, color: "var(--macro-protein)" },
+    { key: "fat", label: "Жири", value: nutrition.fat, goal: goals?.fat, share: shares.fat, color: "var(--macro-fat)" },
+    { key: "carbs", label: "Вуглеводи", value: nutrition.carbs, goal: goals?.carbs, share: shares.carbs, color: "var(--macro-carbs)" },
+  ] as const;
+  return (
+    <div className={cn("grid grid-cols-3 gap-3", className)}>
+      {parts.map((p) => {
+        const width = p.goal ? Math.min(100, (p.value / p.goal) * 100) : p.share * 100;
+        return (
+          <div key={p.key} className="flex min-w-0 flex-col gap-1.5">
+            <span className="flex items-center gap-[5px] truncate text-[11.5px] font-bold text-muted">
+              <span className="h-[7px] w-[7px] shrink-0 rounded-[2px]" style={{ background: p.color }} />
+              {p.label}
+            </span>
+            <div className="h-1 overflow-hidden rounded-[2px] bg-surface-2">
+              <div className="h-full rounded-[2px] transition-[width] duration-500" style={{ width: `${width}%`, background: p.color }} />
+            </div>
+            <span className="truncate text-[12px] font-bold">
+              {Math.round(p.value)}
+              <span className="text-faint">{p.goal ? ` / ${p.goal} г` : " г"}</span>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** «1 240» — тисячі через вузький пробіл, як у дизайні. */
+export function formatKcal(n: number): string {
+  return Math.round(n).toLocaleString("uk-UA");
 }
 
 /* ── Bottom sheet ─────────────────────────────────────────────────────── */
@@ -476,7 +617,7 @@ export function Segmented<T extends string>({
 }: {
   value: T;
   onChange: (v: T) => void;
-  options: Array<{ value: T; label: string; count?: ReactNode }>;
+  options: Array<{ value: T; label: string; count?: ReactNode; icon?: ReactNode }>;
   className?: string;
 }) {
   return (
@@ -511,6 +652,7 @@ export function Segmented<T extends string>({
                 active ? "text-ink" : "text-muted",
               )}
             >
+              {o.icon}
               {o.label}
               {o.count != null && o.count !== "" && (
                 <span className="text-[11.5px] text-faint">{o.count}</span>

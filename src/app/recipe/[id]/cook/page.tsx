@@ -1,11 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Lightbulb,
   Pause,
   Play,
   RotateCcw,
@@ -20,7 +19,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cookPath, useNow } from "@/components/CookingHost";
 import { CookedSheet, type CookedSave } from "@/components/diary/CookedSheet";
 import { SplitSheet, type SplitRequest } from "@/components/diary/SplitSheet";
-import { Button, EmptyState, Sheet, Stars, useToast } from "@/components/ui";
+import { RecipeMedia } from "@/components/RecipeCard";
+import { Button, EmptyState, Panel, PanelHeader, Sheet, Stars, useToast } from "@/components/ui";
 import { WeighSheet } from "@/components/WeighSheet";
 import { ing } from "@/data/ingredients";
 import {
@@ -49,7 +49,7 @@ import type { Consumed } from "@/lib/pantry";
 import { enablePushFromTimer } from "@/lib/push";
 import { mealFromRecipe, slotAt } from "@/lib/diary";
 import { diaryUserId, recipeById, useApp } from "@/lib/store";
-import type { PantryItem } from "@/lib/types";
+import type { PantryItem, Recipe } from "@/lib/types";
 import { formatQuantity, ingredientQtyLabel } from "@/lib/units";
 import { cn, formatClock, haptic, newId, plural } from "@/lib/utils";
 
@@ -313,84 +313,80 @@ export default function CookPage() {
   if (done) {
     const weighedCount = Object.keys(weighed).length;
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
-        <motion.div
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 16 }}
-          className="text-7xl"
-        >
-          🎉
-        </motion.div>
-        <h1 className="mt-4 font-display text-2xl font-extrabold leading-tight">Смачного!</h1>
-        <p className="mt-2 text-[14px] leading-relaxed text-muted">
-          «{recipe.title}» додано в історію приготувань.
-        </p>
-
-        <div className="mt-6 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4 text-left">
-          <p className="text-[13px] font-bold">Склад страви</p>
-          <p className="mt-1 text-[12px] leading-snug text-muted">
-            {cooked
-              ? `Як справді зварили · ${cooked.nutrition.kcal} ккал на всю страву`
-              : weighedCount > 0
-                ? `Зважено на ходу: ${weighedCount} ${plural(weighedCount, "продукт", "продукти", "продуктів")}, решта — як у рецепті. Порахуй — і калорії будуть за твоїми вагами.`
-                : "Як у рецепті. Клали інакше — виправ, і калорії з коморою підлаштуються."}
-          </p>
-
-          {consumed.length > 0 && (
-            <>
-              <p className="mt-3 text-[12px] font-bold">Списано з комори</p>
-              <ul className="mt-1.5 flex flex-col gap-1.5">
-                {consumed.map((c, i) => (
-                  // Один рядок комори може закрити дві потреби рецепта — id не унікальний.
-                  <li key={`${c.id}:${i}`} className="flex items-baseline gap-1.5 text-[12.5px] leading-snug">
-                    <span>{c.emoji}</span>
-                    {/* «Молоко Галичина 2,5%: −500 мл, лишилось 400 мл» — назва пачки, а не типу. */}
-                    <span className="min-w-0">
-                      <span className="font-semibold">{c.label}:</span>{" "}
-                      <span className="text-muted">−{c.used}</span>
-                      {", "}
-                      <span className={c.left ? "text-faint" : "text-berry"}>
-                        {c.left ? `лишилось ${c.left}` : "закінчилось"}
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          <Button
-            full
-            size="sm"
-            variant="secondary"
-            className="mt-3"
-            onClick={() => {
-              haptic(10);
-              setCookedOpen(true);
-            }}
+      <div className="flex min-h-dvh flex-col">
+        <div className="flex flex-1 flex-col gap-2.5 px-4 pb-4 pt-[calc(18px+env(safe-area-inset-top))]">
+          <motion.div
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+            className="flex flex-col items-center gap-2 pb-2 pt-3.5"
           >
-            {cooked ? "Змінити склад" : weighedCount > 0 ? "Порахувати за вагами" : "Уточнити, скільки чого пішло"}
-          </Button>
-          {consumed.length > 0 && (
-            <button onClick={undoConsume} className="mt-2.5 text-[12px] font-semibold text-muted underline">
-              Повернути в комору
-            </button>
-          )}
-        </div>
+            <RecipeMedia recipe={recipe} className="h-24 w-24" rounded="rounded-[24px]" emojiSize="text-[52px]" />
+            <h1 className="font-display text-[24px] font-bold">Смачного!</h1>
+            <p className="text-center text-[12.5px] font-semibold text-faint">«{recipe.title}» — в історії приготувань</p>
+          </motion.div>
 
-        <div className="mt-4 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
-          <p className="text-[13px] font-bold">{logged ? "Записано в щоденник ✓" : "Хто скільки зʼїв?"}</p>
-          <p className="mt-1 text-[12px] leading-snug text-muted">
-            {logged
-              ? "Залишок чекає в щоденнику — доїсте одним дотиком."
-              : "Порції за апетитом кожного — калорії ляжуть у щоденники."}
-          </p>
-          {!logged && (
-            <Button
-              full
-              size="sm"
-              className="mt-3"
+          {consumed.length > 0 && (
+            <Panel>
+              <PanelHeader label="Списано з комори" />
+              {consumed.map((c, i) => (
+                // Один рядок комори може закрити дві потреби рецепта — id не унікальний.
+                <div key={`${c.id}:${i}`} className="flex min-h-11 items-center gap-2.5 border-t border-line px-3.5 py-2">
+                  <span className="text-[16px]">{c.emoji}</span>
+                  {/* «Молоко Галичина 2,5%: −500 мл, лишилось 400 мл» — назва пачки, а не типу. */}
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{c.label}</span>
+                  <span className="shrink-0 text-right text-[12.5px] font-bold text-muted">
+                    −{c.used}
+                    <span className={cn("block text-[11px] font-semibold", c.left ? "text-faint" : "text-berry")}>
+                      {c.left ? `лишилось ${c.left}` : "закінчилось"}
+                    </span>
+                  </span>
+                </div>
+              ))}
+              <button
+                onClick={undoConsume}
+                className="flex h-11 w-full items-center border-t border-line px-3.5 text-left text-[13.5px] font-bold text-muted active:bg-surface-2"
+              >
+                Повернути в комору
+              </button>
+            </Panel>
+          )}
+
+          {/* Склад, як його справді зварили */}
+          <Panel>
+            <PanelHeader label="Склад страви" aside={cooked ? `${cooked.nutrition.kcal} ккал` : undefined} />
+            <p className="border-t border-line px-3.5 py-2.5 text-[12.5px] font-semibold leading-snug text-muted">
+              {cooked
+                ? "Як справді зварили — калорії й комора вже за цим складом."
+                : weighedCount > 0
+                  ? `Зважено на ходу: ${weighedCount} ${plural(weighedCount, "продукт", "продукти", "продуктів")}, решта — як у рецепті.`
+                  : "Як у рецепті. Клали інакше — виправ, і калорії з коморою підлаштуються."}
+            </p>
+            <button
+              onClick={() => {
+                haptic(10);
+                setCookedOpen(true);
+              }}
+              className="flex h-11 w-full items-center gap-2 border-t border-line px-3.5 text-left active:bg-surface-2"
+            >
+              <span className="flex-1 text-[13.5px] font-bold text-brand">
+                {cooked ? "Змінити склад" : weighedCount > 0 ? "Порахувати за вагами" : "Уточнити, скільки чого пішло"}
+              </span>
+              <ChevronRight size={15} strokeWidth={2.2} className="text-faint" />
+            </button>
+          </Panel>
+
+          {/* Хто скільки зʼїв */}
+          {logged ? (
+            <div className="flex h-14 items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5">
+              <span className="text-[20px]">✅</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-bold">Записано в щоденник</span>
+                <span className="block truncate text-[11.5px] font-semibold text-faint">Залишок доїсте одним дотиком</span>
+              </span>
+            </div>
+          ) : (
+            <button
               onClick={() => {
                 const meal = mealFromRecipe(recipe, {
                   id: mealId,
@@ -405,51 +401,51 @@ export default function CookPage() {
                   slot: slotAt(),
                 });
               }}
+              className="flex h-14 items-center gap-3 rounded-[10px] border border-brand/35 bg-surface px-3.5 text-left active:bg-surface-2"
             >
-              Розділити страву
-            </Button>
+              <span className="text-[20px]">🍽️</span>
+              <span className="flex-1 text-[14px] font-bold">Хто скільки зʼїв — у щоденник</span>
+              <span className="text-[13px] font-extrabold text-brand">›</span>
+            </button>
           )}
+
+          <Panel>
+            <PanelHeader label="Як вийшло?" />
+            <div className="flex justify-center border-t border-line pb-3.5 pt-2.5">
+              <Stars
+                value={rating}
+                size={32}
+                onChange={(v) => {
+                  setRating(v);
+                  rate(recipe.id, v);
+                  toast("Оцінку збережено", "⭐");
+                }}
+              />
+            </div>
+          </Panel>
         </div>
 
-        <div className="mt-4 w-full max-w-xs rounded-xl3 border border-line bg-surface p-4">
-          <p className="text-[13px] font-bold">Як вийшло?</p>
-          <div className="mt-2 flex justify-center">
-            <Stars
-              value={rating}
-              size={32}
-              onChange={(v) => {
-                setRating(v);
-                rate(recipe.id, v);
-                toast("Оцінку збережено", "⭐");
-              }}
-            />
+        <CookFooter>
+          <div className="flex gap-2">
+            <Link href={`/recipe/${recipe.id}`} aria-label="До рецепта" className={FOOTER_BACK}>
+              <ChevronLeft size={20} strokeWidth={2.2} />
+            </Link>
+            <Link href="/decide" className={cn(FOOTER_MAIN, "flex-1")}>
+              Обрати наступну страву
+            </Link>
           </div>
-        </div>
+        </CookFooter>
 
-        <div className="mt-6 flex w-full max-w-xs flex-col gap-2">
-          <Link href={`/recipe/${recipe.id}`}>
-            <Button full variant="secondary">
-              До рецепта
-            </Button>
-          </Link>
-          <Link href="/decide">
-            <Button full>Обрати наступну страву</Button>
-          </Link>
-        </div>
-
-        {/* Аркуші не в порталі — інакше успадкували б центрування екрана. */}
-        <div className="text-left">
-          <SplitSheet request={split} onClose={() => setSplit(null)} onDone={() => setLogged(true)} />
-          <CookedSheet
-            open={cookedOpen}
-            recipe={recipe}
-            pantryBefore={pantryBefore}
-            draft={cooked?.lines}
-            weights={weighed}
-            onClose={() => setCookedOpen(false)}
-            onSave={applyCooked}
-          />
-        </div>
+        <SplitSheet request={split} onClose={() => setSplit(null)} onDone={() => setLogged(true)} />
+        <CookedSheet
+          open={cookedOpen}
+          recipe={recipe}
+          pantryBefore={pantryBefore}
+          draft={cooked?.lines}
+          weights={weighed}
+          onClose={() => setCookedOpen(false)}
+          onSave={applyCooked}
+        />
       </div>
     );
   }
@@ -457,10 +453,61 @@ export default function CookPage() {
   // Сховище ще читається або сесія от-от відкриється.
   if (!session) return <div className="min-h-dvh bg-bg" />;
 
+  /** Рядок «дістав продукт» із вагою — у підготовці й у бічній колонці планшета. */
+  const ingredientRow = (item: Recipe["ingredients"][number]) => {
+    const def = ing(item.key);
+    const isChecked = session.checked.includes(item.key);
+    const w = session.weights[item.key];
+    return (
+      <div key={item.key} className="flex min-h-[52px] items-center border-t border-line">
+        <button
+          onClick={() => {
+            haptic(10);
+            toggleChecked(recipe.id, item.key);
+          }}
+          aria-pressed={isChecked}
+          className="flex min-w-0 flex-1 items-center gap-3 self-stretch px-3.5 text-left"
+        >
+          <span
+            className={cn(
+              "grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-[1.5px] transition-colors",
+              isChecked ? "border-brand bg-brand text-brand-ink" : "border-line-strong",
+            )}
+          >
+            {isChecked && <Check size={12} strokeWidth={3.5} />}
+          </span>
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate text-[14px] font-semibold",
+              isChecked ? "text-faint line-through" : "text-ink",
+            )}
+          >
+            {item.label ?? def.label}
+          </span>
+        </button>
+        {/* Вага — окремою кнопкою: рядок сам позначає «дістав». */}
+        <button
+          onClick={() => {
+            haptic(8);
+            setWeigh({ key: item.key });
+          }}
+          aria-label={`Зважити: ${def.label}`}
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 self-stretch px-3.5 text-[12.5px] font-bold",
+            w ? "text-brand" : "text-muted",
+          )}
+        >
+          {w ? `${formatQuantity(w.amount, w.unit)}${w.cooked ? " гот." : ""}` : ingredientQtyLabel(item)}
+          <Scale size={14} />
+        </button>
+      </div>
+    );
+  };
+  // Рецепт могли змінити після того, як продукти позначили: рахуємо лише наявні.
+  const checkedCount = recipe.ingredients.filter((i) => session.checked.includes(i.key)).length;
+
   /* ── Підготовка ───────────────────────────────────────────────────── */
   if (step === -1) {
-    // Рецепт могли змінити після того, як продукти позначили: рахуємо лише наявні.
-    const checkedCount = recipe.ingredients.filter((i) => session.checked.includes(i.key)).length;
     const allChecked = checkedCount === recipe.ingredients.length;
     return (
       <div className="flex min-h-dvh flex-col">
@@ -468,78 +515,34 @@ export default function CookPage() {
           title="Підготовка"
           subtitle={recipe.title}
           onExit={exitCooking}
+          progress={recipe.ingredients.length ? (checkedCount / recipe.ingredients.length) * 100 : 0}
         />
         <TimersStrip session={session} now={now} onStep={(n) => setStep(recipe.id, n)} />
 
-        <div className="flex-1 px-4 pt-4">
-          <p className="text-[13.5px] leading-relaxed text-muted">
-            Познач, що вже дістав із холодильника. Так нічого не забудеш посеред готування. Зважив — тицни у вагу
-            праворуч і запиши.
+        <div className="w-full flex-1 px-4 py-3.5 md:mx-auto md:max-w-[720px] md:px-6">
+          <Panel>
+            <div className="flex h-10 items-center justify-between px-3.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">Дістань продукти</span>
+              <span className="text-[12px] font-bold text-faint">
+                {checkedCount} з {recipe.ingredients.length}
+              </span>
+            </div>
+            {recipe.ingredients.map(ingredientRow)}
+          </Panel>
+          <p className="px-1 pt-2.5 text-[11.5px] font-semibold leading-snug text-faint">
+            Познач, що вже дістав. Зважив — тицни у вагу праворуч і запиши.
           </p>
-
-          <div className="mt-4 flex flex-col gap-2">
-            {recipe.ingredients.map((item) => {
-              const def = ing(item.key);
-              const isChecked = session.checked.includes(item.key);
-              const w = session.weights[item.key];
-              return (
-                <div
-                  key={item.key}
-                  className={`flex items-center rounded-2xl border transition-colors ${
-                    isChecked ? "border-mint/40 bg-mint/8" : "border-line bg-surface"
-                  }`}
-                >
-                  <button
-                    onClick={() => {
-                      haptic(10);
-                      toggleChecked(recipe.id, item.key);
-                    }}
-                    className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"
-                  >
-                    <span
-                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 ${
-                        isChecked ? "border-mint bg-mint text-bg" : "border-line"
-                      }`}
-                    >
-                      {isChecked && <Check size={15} strokeWidth={3} />}
-                    </span>
-                    <span className="text-lg">{def.emoji}</span>
-                    <span
-                      className={`min-w-0 flex-1 truncate text-[14px] font-semibold ${isChecked ? "text-muted line-through" : ""}`}
-                    >
-                      {def.label}
-                    </span>
-                  </button>
-                  {/* Вага — окремою кнопкою: рядок сам позначає «дістав». */}
-                  <button
-                    onClick={() => {
-                      haptic(8);
-                      setWeigh({ key: item.key });
-                    }}
-                    aria-label={`Зважити: ${def.label}`}
-                    className={cn(
-                      "flex shrink-0 items-center gap-1.5 self-stretch rounded-r-2xl px-3 text-[12.5px] font-bold",
-                      w ? "text-mint" : "text-muted",
-                    )}
-                  >
-                    {w ? `${formatQuantity(w.amount, w.unit)}${w.cooked ? " гот." : ""}` : ingredientQtyLabel(item)}
-                    <Scale size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
         </div>
 
-        <div className="pad-safe-b sticky bottom-0 glass border-t border-line p-4">
-          <Button full size="lg" onClick={() => setStep(recipe.id, 0)}>
+        <CookFooter>
+          <button onClick={() => setStep(recipe.id, 0)} className={FOOTER_MAIN}>
             {allChecked ? "Все на місці — почали" : "Почати готувати"}
-            <ChevronRight size={19} />
-          </Button>
-          <p className="mt-2 text-center text-[11.5px] text-muted">
+            <ChevronRight size={19} strokeWidth={2.4} />
+          </button>
+          <p className="text-center text-[11.5px] font-semibold text-faint">
             {checkedCount} з {recipe.ingredients.length} готово
           </p>
-        </div>
+        </CookFooter>
         {weighSheet}
       </div>
     );
@@ -555,18 +558,13 @@ export default function CookPage() {
         title={`Крок ${step + 1} з ${recipe.steps.length}`}
         subtitle={recipe.title}
         onExit={exitCooking}
+        progress={progress}
       />
-
-      <div className="h-1 bg-line">
-        <motion.div
-          className="h-full brand-gradient"
-          animate={{ width: `${progress}%` }}
-          transition={{ type: "spring", stiffness: 200, damping: 30 }}
-        />
-      </div>
 
       <TimersStrip session={session} now={now} onStep={(n) => setStep(recipe.id, n)} />
 
+      {/* Планшет (lg): крок ліворуч, продукти — бічною колонкою на 300 px. */}
+      <div className="flex flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-4 lg:px-5 lg:pt-4">
       <motion.div
         key={step}
         data-no-pull
@@ -579,17 +577,19 @@ export default function CookPage() {
         }}
         initial={{ opacity: 0, x: 30 }}
         animate={{ opacity: 1, x: 0 }}
-        className="flex flex-1 flex-col justify-center px-6 py-8"
+        className="flex flex-1 flex-col px-[22px] pb-4 pt-7 md:px-8 lg:rounded-[12px] lg:border lg:border-line lg:bg-surface lg:px-[26px] lg:pb-5 lg:pt-6"
       >
-        <span className="font-display text-[64px] font-extrabold leading-none text-line">
+        <span className="font-display text-[64px] font-bold leading-none text-line lg:text-[48px]">
           {String(step + 1).padStart(2, "0")}
         </span>
-        <p className="mt-4 text-[21px] font-semibold leading-relaxed">{currentStep?.text}</p>
+        <p className="mt-4 text-[21px] font-semibold leading-[1.5] [text-wrap:pretty] lg:text-[26px] lg:font-bold lg:leading-[1.35]">
+          {currentStep?.text}
+        </p>
 
         {currentStep?.tip && (
-          <div className="mt-5 flex gap-2.5 rounded-2xl border border-brand/25 bg-brand/8 p-3.5">
-            <Lightbulb size={17} className="mt-0.5 shrink-0 text-brand" />
-            <p className="text-[13.5px] leading-relaxed text-muted">{currentStep.tip}</p>
+          <div className="mt-[18px] flex gap-2.5 rounded-[10px] border border-line bg-surface px-3.5 py-3">
+            <span className="text-[15px]">💡</span>
+            <p className="text-[13.5px] leading-[1.5] text-muted">{currentStep.tip}</p>
           </div>
         )}
 
@@ -597,7 +597,7 @@ export default function CookPage() {
           Ваги того, що згадує крок: нарізав огірок — одразу записав 50 г.
           Перенос рядків, а не прокрутка: прокрутку вбік зʼїв би свайп кроків.
         */}
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-1.5">
           {mentioned.map((item) => {
             const w = session.weights[item.key];
             return (
@@ -608,14 +608,14 @@ export default function CookPage() {
                   setWeigh({ key: item.key });
                 }}
                 className={cn(
-                  "flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-bold",
-                  w ? "border-mint/50 bg-mint/10" : "border-line bg-surface text-muted",
+                  "flex h-8 max-w-full items-center gap-1.5 rounded-[8px] border px-2.5 text-[12.5px] font-bold",
+                  w ? "border-brand/40 bg-brand/10" : "border-line bg-surface text-muted",
                 )}
               >
                 <span>{ing(item.key).emoji}</span>
                 <span className="truncate">{item.label ?? ing(item.key).label}</span>
                 {w ? (
-                  <span className="shrink-0 text-mint">· {formatQuantity(w.amount, w.unit)}</span>
+                  <span className="shrink-0 text-brand">· {formatQuantity(w.amount, w.unit)}</span>
                 ) : (
                   <Scale size={13} className="shrink-0" />
                 )}
@@ -627,7 +627,7 @@ export default function CookPage() {
               haptic(8);
               setWeigh({ key: null });
             }}
-            className="flex items-center gap-1.5 rounded-full border border-dashed border-line px-3 py-1.5 text-[12.5px] font-bold text-muted"
+            className="flex h-8 items-center gap-1.5 rounded-[8px] border border-dashed border-line-strong px-2.5 text-[12.5px] font-bold text-muted"
           >
             <Scale size={13} />
             {mentioned.length ? "Інше" : "Записати вагу"}
@@ -635,34 +635,41 @@ export default function CookPage() {
         </div>
 
         {/* Таймер */}
-        <AnimatePresence>
-          {remaining == null && (
-            <motion.button
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              onClick={() => {
-                haptic(10);
-                setTimerSheet(true);
-              }}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl3 border border-line bg-surface p-3.5 text-[13.5px] font-semibold text-muted"
-            >
-              <Timer size={17} />
-              Поставити таймер на цей крок
-            </motion.button>
-          )}
-
-          {remaining != null && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mt-6 flex items-center gap-3 rounded-xl3 border border-line bg-surface p-4"
-            >
-              <Timer size={20} className={running ? "text-brand" : "text-muted"} />
+        <div className="mt-[22px] overflow-hidden rounded-[12px] border border-line bg-surface">
+          {remaining == null ? (
+            <div className="flex flex-col gap-2.5 px-3.5 py-3">
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">Таймер на цей крок</span>
+              <div className="grid grid-cols-4 gap-1.5">
+                {TIMER_PRESETS.map((sec) => (
+                  <button
+                    key={sec}
+                    onClick={() => {
+                      haptic(10);
+                      setCustomTime(recipe.id, step, sec);
+                    }}
+                    className="h-[38px] rounded-[8px] bg-surface-2 text-[13.5px] font-extrabold active:bg-line"
+                  >
+                    {sec / 60} хв
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  haptic(8);
+                  setTimerSheet(true);
+                }}
+                className="self-start text-[12.5px] font-bold text-brand"
+              >
+                Свій час…
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 p-3.5">
               <span
-                className={`flex-1 font-display text-3xl font-extrabold tabular-nums ${
-                  remaining === 0 ? "text-berry" : ""
-                }`}
+                className={cn(
+                  "flex-1 font-display text-[34px] font-bold tabular-nums",
+                  remaining === 0 ? "text-berry" : running ? "text-ink" : "text-muted",
+                )}
               >
                 {formatClock(remaining)}
               </span>
@@ -672,57 +679,68 @@ export default function CookPage() {
                   setTimerSheet(true);
                 }}
                 aria-label="Змінити час"
-                className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2 text-muted"
+                className={TIMER_TOOL}
               >
                 <SlidersHorizontal size={17} />
               </button>
-              <button
-                onClick={resetStepTimer}
-                aria-label="Скинути таймер"
-                className="grid h-10 w-10 place-items-center rounded-2xl bg-surface-2 text-muted"
-              >
+              <button onClick={resetStepTimer} aria-label="Скинути таймер" className={TIMER_TOOL}>
                 <RotateCcw size={17} />
               </button>
               <button
                 onClick={toggleTimer}
                 aria-label={running ? "Пауза" : "Старт"}
-                className="grid h-12 w-12 place-items-center rounded-2xl brand-gradient text-brand-ink"
+                className="grid h-[52px] w-[52px] place-items-center rounded-[12px] brand-gradient text-brand-ink"
               >
-                {running ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
+                {running ? <Pause size={20} className="fill-current" /> : <Play size={20} className="ml-0.5 fill-current" />}
               </button>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </div>
         {running && (
-          <p className="mt-2 text-center text-[11.5px] text-faint">
-            Можна йти на інший крок чи вийти — таймер іде далі.
+          <p className="mt-2 text-center text-[11.5px] font-semibold text-faint">
+            Можна йти на інший крок — таймер іде далі
           </p>
         )}
       </motion.div>
 
-      <div className="pad-safe-b sticky bottom-0 glass border-t border-line p-4">
+      <aside className="hidden lg:sticky lg:top-4 lg:block">
+        <Panel>
+          <div className="flex h-10 items-center justify-between px-3.5">
+            <span className="text-[11px] font-extrabold uppercase tracking-[0.07em] text-muted">Інгредієнти</span>
+            <span className="text-[12px] font-bold text-faint">
+              {checkedCount} з {recipe.ingredients.length}
+            </span>
+          </div>
+          {recipe.ingredients.map(ingredientRow)}
+        </Panel>
+      </aside>
+      </div>
+
+      <CookFooter>
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-4">
         <div className="flex gap-2">
-          <Button variant="secondary" size="lg" onClick={goPrev} className="w-14 px-0" aria-label="Назад">
-            <ChevronLeft size={20} />
-          </Button>
-          <Button full size="lg" onClick={goNext} className="flex-1">
+          <button onClick={goPrev} aria-label="Назад" className={FOOTER_BACK}>
+            <ChevronLeft size={20} strokeWidth={2.2} />
+          </button>
+          <button onClick={goNext} className={cn(FOOTER_MAIN, "flex-1")}>
             {step + 1 >= recipe.steps.length ? (
               <>
-                <Check size={19} />
+                <Check size={19} strokeWidth={2.6} />
                 Готово!
               </>
             ) : (
               <>
                 Далі
-                <ChevronRight size={19} />
+                <ChevronRight size={19} strokeWidth={2.4} />
               </>
             )}
-          </Button>
+          </button>
         </div>
-        <p className="mt-2 text-center text-[11px] text-muted">
-          Можна гортати кроки свайпом. Екран не згасне під час готування.
-        </p>
-      </div>
+        <span className="hidden items-center justify-center rounded-[12px] border border-dashed border-line-strong text-[13px] font-bold text-muted lg:flex">
+          Свайп ← → між кроками
+        </span>
+        </div>
+      </CookFooter>
 
       {weighSheet}
 
@@ -740,6 +758,22 @@ export default function CookPage() {
           toast(seconds > 0 ? "Час оновлено" : "Таймер прибрано", "⏱️");
         }}
       />
+    </div>
+  );
+}
+
+/** Швидкі таймери на крок без свого часу. */
+const TIMER_PRESETS = [60, 180, 300, 600];
+const TIMER_TOOL = "grid h-[42px] w-[42px] place-items-center rounded-[10px] bg-surface-2 text-muted active:bg-line";
+const FOOTER_BACK = "grid h-[52px] w-[54px] shrink-0 place-items-center rounded-[12px] bg-surface-2 active:bg-line";
+const FOOTER_MAIN =
+  "flex h-[52px] min-w-0 items-center justify-center gap-1.5 rounded-[12px] brand-gradient text-[15.5px] font-extrabold text-brand-ink";
+
+/** Низ екрана готування: головна дія завжди під пальцем. */
+function CookFooter({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="pad-safe-b sticky bottom-0 z-10 flex flex-col gap-2 border-t border-line bg-[rgb(7_7_9_/_0.9)] px-4 pb-4 pt-3 backdrop-blur-md md:px-6 lg:px-5">
+      {children}
     </div>
   );
 }
@@ -765,7 +799,7 @@ function TimersStrip({
   if (own.length === 0 && others.length === 0) return null;
 
   return (
-    <div className="no-scrollbar flex gap-2 overflow-x-auto border-b border-line px-4 py-2.5">
+    <div className="no-scrollbar flex gap-1.5 overflow-x-auto border-b border-line px-4 py-2.5">
       {own.map(({ step, timer }) => (
         <TimerChip
           key={`step:${step}`}
@@ -818,7 +852,7 @@ function TimerChip({
     <button
       onClick={onClick}
       className={cn(
-        "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[12.5px] font-bold",
+        "flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[8px] border px-2.5 text-[12.5px] font-bold tabular-nums",
         rang
           ? "border-berry/50 bg-berry/10 text-berry"
           : going
@@ -901,7 +935,7 @@ function TimerSheet({
           inputMode="numeric"
           autoFocus
           placeholder="10"
-          className="h-16 w-full rounded-2xl bg-surface-2 text-center font-display text-3xl font-extrabold tabular-nums"
+          className="h-16 w-full rounded-[10px] bg-surface-2 text-center font-display text-3xl font-bold tabular-nums"
         />
         <div className="mt-3 grid grid-cols-3 gap-2">
           {UNITS.map((u) => (
@@ -911,7 +945,7 @@ function TimerSheet({
                 haptic(8);
                 setUnit(u.key);
               }}
-              className={`rounded-2xl border py-2.5 text-[13px] font-bold ${
+              className={`rounded-[8px] border py-2.5 text-[13px] font-bold ${
                 unit === u.key
                   ? "border-brand bg-brand/10 text-brand"
                   : "border-line bg-surface text-muted"
@@ -933,25 +967,35 @@ function CookHeader({
   title,
   subtitle,
   onExit,
+  progress,
 }: {
   title: string;
   subtitle: string;
   onExit: () => void;
+  /** Скільки пройдено, 0–100: смужка під шапкою. */
+  progress: number;
 }) {
   return (
-    <header className="pad-safe-t glass sticky top-0 z-20 border-b border-line">
-      <div className="flex h-14 items-center gap-3 px-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-[15px] font-bold leading-tight">{title}</p>
-          <p className="truncate text-[11.5px] text-muted">{subtitle}</p>
-        </div>
+    <header className="pad-safe-t sticky top-0 z-20 bg-bg">
+      <div className="flex h-14 items-center gap-2.5 px-4 md:h-[72px] md:gap-3.5 md:px-5">
         <button
           onClick={onExit}
           aria-label="Вийти з режиму готування"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-surface-2"
+          className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] bg-surface-2 active:bg-line"
         >
-          <X size={19} />
+          <X size={18} strokeWidth={2.2} />
         </button>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-[16px] font-bold leading-tight md:text-[19px] md:font-extrabold">{title}</p>
+          <p className="truncate text-[12px] font-semibold text-faint">{subtitle}</p>
+        </div>
+      </div>
+      <div className="h-[3px] bg-surface-2">
+        <motion.div
+          className="h-full brand-gradient"
+          animate={{ width: `${progress}%` }}
+          transition={{ type: "spring", stiffness: 200, damping: 30 }}
+        />
       </div>
     </header>
   );

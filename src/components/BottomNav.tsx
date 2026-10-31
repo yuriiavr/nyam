@@ -54,7 +54,7 @@ export function BottomNav() {
   return (
     <nav
       style={{ bottom: "calc(env(safe-area-inset-bottom) + 14px)" }}
-      className="pointer-events-none fixed left-1/2 z-40 w-full max-w-[560px] -translate-x-1/2 px-[18px]"
+      className="pointer-events-none fixed left-1/2 z-40 w-full max-w-[560px] -translate-x-1/2 px-[18px] md:hidden"
     >
       <ul className="pointer-events-auto flex h-[62px] items-center justify-around rounded-[31px] border border-white/[0.07] bg-[rgb(22_22_26_/_0.82)] px-1.5 shadow-[0_18px_40px_-12px_rgb(0_0_0_/_0.8)] backdrop-blur-[24px] backdrop-saturate-[1.6] light:border-line light:bg-white/85 light:shadow-[var(--shadow-card)]">
         {TABS.map((tab) => {

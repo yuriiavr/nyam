@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Unbounded:wght@600;700;800&display=swap&subset=cyrillic" rel="stylesheet">
+<style>
+html,body{margin:0;background:#000;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;}
+a{color:#ff6b35;text-decoration:none;} a:hover{color:#ffb020;}
+::-webkit-scrollbar{display:none;}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#000;font-family:Manrope,system-ui,sans-serif;color:#f5f5f7;">
+<div style="padding:{{ bezelPad }};border-radius:{{ bezelRadius }};background:#1a1a1d;box-shadow:0 30px 80px -20px rgba(0,0,0,.9), inset 0 0 0 1px #2b2b31;">
+<div data-screen-label="Tablet 1024x600" style="position:relative;width:1024px;height:600px;overflow:hidden;border-radius:{{ screenRadius }};background:#070709;display:flex;">
+  <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(50rem 30rem at 60% -20%, rgba(255,107,53,.13), transparent 70%);"></div>
+
+  <sc-if value="{{ showRail }}" hint-placeholder-val="{{ true }}">
+  <nav style="position:relative;z-index:2;width:92px;flex-shrink:0;height:100%;display:flex;flex-direction:column;align-items:center;gap:4px;padding:16px 0 14px;border-right:1px solid #202025;background:rgba(13,13,16,.6);">
+    <div style="width:46px;height:46px;border-radius:16px;display:grid;place-items:center;font-size:24px;background:linear-gradient(135deg,#ff6b35,#ffb020);box-shadow:0 12px 30px -10px rgba(255,107,53,.6);margin-bottom:12px;">🍲</div>
+    <sc-for list="{{ nav }}" as="item" hint-placeholder-count="6">
+      <button onClick="{{ item.go }}" style="width:76px;height:58px;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:{{ item.bg }};color:{{ item.color }};">
+        <svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="{{ item.d }}"></path></svg>
+        <span style="font-size:11px;font-weight:700;letter-spacing:.01em;">{{ item.label }}</span>
+      </button>
+    </sc-for>
+    <div style="flex:1;"></div>
+    <button onClick="{{ goNotif }}" style="position:relative;width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:{{ notifBg }};color:{{ notifColor }};">
+      <svg width="22" height="22" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M10.268 21a2 2 0 0 0 3.464 0 M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></svg>
+      <span style="position:absolute;top:10px;right:11px;width:9px;height:9px;border-radius:50%;background:#f43f6a;box-shadow:0 0 0 2px #0d0d10;"></span>
+    </button>
+    <button onClick="{{ goMe }}" style="margin-top:6px;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:22px;background:linear-gradient(140deg,#ff6b35,#ffb020);box-shadow:0 0 0 2px #070709, 0 0 0 4px {{ meRing }};">👩‍🍳</button>
+  </nav>
+  </sc-if>
+
+  <!-- ─── СТРІЧКА ─── -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <main data-screen-label="Стрічка" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 24px;">
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">Добрий вечір, Олено</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;letter-spacing:-.01em;">Що будемо їсти?</h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:999px;border:1px solid rgba(255,107,53,.3);background:rgba(255,107,53,.1);color:#ff6b35;">
+        <svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
+        <span style="font-size:14px;font-weight:800;">5 днів</span>
+      </div>
+      <div style="height:40px;display:flex;align-items:center;padding:0 14px;border-radius:999px;background:#121215;border:1px solid #202025;font-size:14px;font-weight:700;color:#9b9ba3;gap:8px;">
+        <span>Сб, 31 жовтня</span><span style="color:#f5f5f7;">18:42</span>
+      </div>
+      <button style="width:48px;height:48px;border-radius:16px;background:#1c1c21;display:grid;place-items:center;color:#f5f5f7;">
+        <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M20 7h-9 M14 17H5 M17 14a3 3 0 1 0 0 6a3 3 0 1 0 0-6 M7 4a3 3 0 1 0 0 6a3 3 0 1 0 0-6"></path></svg>
+      </button>
+    </header>
+
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:0 24px 18px;">
+      <div style="min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:flex;flex-direction:column;gap:22px;padding-bottom:8px;">
+        <section style="border-radius:28px;border:1px solid rgba(255,107,53,.25);background:linear-gradient(135deg,rgba(255,107,53,.2),rgba(18,18,21,0) 60%),#121215;padding:20px;display:flex;gap:18px;align-items:stretch;flex-shrink:0;">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+            <p style="margin:0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#ff6b35;">Вечеря · не можеш обрати?</p>
+            <h2 style="margin:6px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:21px;font-weight:800;line-height:1.2;text-wrap:pretty;">Дозволь застосунку вирішити</h2>
+            <p style="margin:6px 0 0;font-size:14px;color:#9b9ba3;line-height:1.4;">7 способів обрати страву — від холодильника до рулетки.</p>
+            <div style="flex:1;"></div>
+            <button onClick="{{ goDecide }}" style="margin-top:14px;align-self:flex-start;height:44px;padding:0 18px;border-radius:16px;border:1px solid #202025;background:rgba(18,18,21,.6);display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;">
+              <svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:#ff6b35;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg>
+              Усі способи вибору
+            </button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,96px);gap:8px;">
+            <sc-for list="{{ quick }}" as="q" hint-placeholder-count="3">
+              <button onClick="{{ goDecide }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-radius:20px;border:1px solid #202025;background:#0d0d10;color:#ff6b35;">
+                <svg width="26" height="26" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="{{ q.d }}"></path></svg>
+                <span style="font-size:13px;font-weight:700;color:#f5f5f7;">{{ q.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="flex-shrink:0;">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;">
+            <h3 style="margin:0;font-family:Unbounded,Manrope,sans-serif;font-size:17px;font-weight:700;">Зараз готують</h3>
+            <span style="font-size:13px;color:#9b9ba3;flex:1;">Найпопулярніше за останні дні</span>
+            <a href="#" style="font-size:13px;font-weight:800;">Усе</a>
+          </div>
+          <div style="display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;">
+            <sc-for list="{{ trending }}" as="r" hint-placeholder-count="5">
+              <button onClick="{{ goRecipe }}" style="width:132px;flex-shrink:0;text-align:left;">
+                <div style="position:relative;width:132px;height:132px;border-radius:26px;overflow:hidden;display:grid;place-items:center;font-size:52px;background:{{ r.bg }};">
+                  <div style="position:absolute;inset:0;background:radial-gradient(circle at 25% 15%,rgba(255,255,255,.35),transparent 45%);"></div>
+                  <span style="position:relative;filter:drop-shadow(0 6px 10px rgba(0,0,0,.3));">{{ r.emoji }}</span>
+                  <sc-if value="{{ r.top }}" hint-placeholder-val="{{ false }}">
+                    <span style="position:absolute;left:8px;top:8px;padding:3px 8px;border-radius:999px;background:rgba(13,13,16,.8);font-size:11px;font-weight:800;color:#ff6b35;">#{{ r.rank }}</span>
+                  </sc-if>
+                </div>
+                <p style="margin:8px 0 0;font-size:13.5px;font-weight:700;line-height:1.25;height:34px;overflow:hidden;">{{ r.title }}</p>
+                <p style="margin:3px 0 0;font-size:12px;color:#9b9ba3;">{{ r.meta }}</p>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="flex-shrink:0;">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;">
+            <h3 style="margin:0;font-family:Unbounded,Manrope,sans-serif;font-size:17px;font-weight:700;">Стрічка</h3>
+            <span style="font-size:13px;color:#9b9ba3;">Від 6 кухарів, на яких ти підписана</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+            <sc-for list="{{ feed }}" as="f" hint-placeholder-count="4">
+              <article onClick="{{ goRecipe }}" style="cursor:pointer;display:flex;gap:12px;padding:12px;border-radius:24px;border:1px solid #202025;background:#121215;">
+                <div style="width:96px;height:96px;flex-shrink:0;border-radius:20px;display:grid;place-items:center;font-size:42px;background:{{ f.bg }};">{{ f.emoji }}</div>
+                <div style="min-width:0;flex:1;display:flex;flex-direction:column;">
+                  <p style="margin:0;font-size:12px;color:#9b9ba3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ f.author }}</p>
+                  <p style="margin:3px 0 0;font-size:15px;font-weight:700;line-height:1.25;">{{ f.title }}</p>
+                  <div style="flex:1;"></div>
+                  <div style="display:flex;align-items:center;gap:14px;font-size:12.5px;font-weight:700;color:#9b9ba3;">
+                    <span style="display:flex;align-items:center;gap:5px;"><svg width="15" height="15" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>{{ f.likes }}</span>
+                    <span style="display:flex;align-items:center;gap:5px;"><svg width="15" height="15" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0 M12 6v6l4 2"></path></svg>{{ f.time }}</span>
+                  </div>
+                </div>
+              </article>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+
+      <aside style="min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:flex;flex-direction:column;gap:12px;">
+        <button onClick="{{ goCook }}" style="flex-shrink:0;text-align:left;border-radius:24px;padding:16px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px -20px rgba(255,107,53,.55);">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:48px;height:48px;border-radius:16px;display:grid;place-items:center;font-size:26px;background:rgba(26,13,5,.15);">🍲</div>
+            <div style="min-width:0;flex:1;">
+              <p style="margin:0;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;">Готуєш зараз</p>
+              <p style="margin:2px 0 0;font-size:16px;font-weight:800;">Червоний борщ</p>
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+            <span style="font-size:13px;font-weight:700;">Крок {{ stepNo }} з {{ stepTotal }}</span>
+            <span style="font-family:Unbounded,Manrope,sans-serif;font-size:26px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;">{{ timerText }}</span>
+          </div>
+          <div style="height:6px;border-radius:99px;background:rgba(26,13,5,.18);overflow:hidden;"><div style="height:100%;width:{{ progressPct }};background:#1a0d05;border-radius:99px;"></div></div>
+        </button>
+
+        <div style="flex-shrink:0;border-radius:24px;border:1px solid #202025;background:#121215;padding:16px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+            <div>
+              <p style="margin:0;font-size:12.5px;color:#9b9ba3;">Сьогодні зʼїдено</p>
+              <p style="margin:3px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;line-height:1;">1 240 <span style="font-family:Manrope,sans-serif;font-size:13px;font-weight:700;color:#9b9ba3;">з 2 000 ккал</span></p>
+            </div>
+          </div>
+          <div style="margin-top:12px;height:8px;border-radius:99px;background:#1c1c21;overflow:hidden;"><div style="width:62%;height:100%;border-radius:99px;background:#ff6b35;"></div></div>
+          <div style="margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+            <sc-for list="{{ macros }}" as="m" hint-placeholder-count="3">
+              <div>
+                <p style="margin:0;font-size:11.5px;color:#9b9ba3;">{{ m.label }}</p>
+                <p style="margin:2px 0 5px;font-size:13px;font-weight:800;">{{ m.val }}</p>
+                <div style="height:4px;border-radius:99px;background:#1c1c21;overflow:hidden;"><div style="height:100%;width:{{ m.pct }};background:{{ m.color }};border-radius:99px;"></div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex-shrink:0;">
+          <p style="margin:4px 0 8px;font-size:13px;font-weight:800;">Схоже на твій смак</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <sc-for list="{{ forYou }}" as="y" hint-placeholder-count="3">
+              <button onClick="{{ goRecipe }}" style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:20px;border:1px solid #202025;background:#121215;text-align:left;">
+                <div style="width:48px;height:48px;flex-shrink:0;border-radius:16px;display:grid;place-items:center;font-size:24px;background:{{ y.bg }};">{{ y.emoji }}</div>
+                <div style="min-width:0;flex:1;">
+                  <p style="margin:0;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ y.title }}</p>
+                  <p style="margin:2px 0 0;font-size:12px;color:#ff6b35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">✦ {{ y.reason }}</p>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── ВИРІШИТИ ─── -->
+  <sc-if value="{{ isDecide }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Вирішити" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 24px;">
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">Вечеря · 7 способів</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;">Як обираємо сьогодні?</h1>
+      </div>
+      <button onClick="{{ toggleRepeat }}" style="height:44px;display:flex;align-items:center;gap:10px;padding:0 16px 0 10px;border-radius:999px;border:1px solid #202025;background:#121215;font-size:13.5px;font-weight:700;">
+        <span style="width:24px;height:24px;border-radius:8px;display:grid;place-items:center;background:{{ repeatBg }};border:{{ repeatBorder }};color:#1a0d05;">
+          <svg width="14" height="14" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M20 6L9 17l-5-5"></path></svg>
+        </span>
+        Без повторів за тиждень
+      </button>
+    </header>
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:1.25fr repeat(3,minmax(0,1fr));grid-template-rows:1fr 1fr;gap:12px;padding:0 24px 20px;">
+      <button onClick="{{ goRoulette }}" style="grid-row:span 2;position:relative;overflow:hidden;border-radius:28px;padding:22px;text-align:left;display:flex;flex-direction:column;background:linear-gradient(150deg,#ff6b35,#ffb020);color:#1a0d05;box-shadow:0 20px 60px -20px rgba(255,107,53,.45);">
+        <span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;">Найшвидше</span>
+        <span style="margin-top:6px;font-family:Unbounded,Manrope,sans-serif;font-size:28px;font-weight:800;line-height:1.1;">Рулетка</span>
+        <span style="margin-top:8px;font-size:14px;font-weight:600;line-height:1.4;">Барабан із 8 страв крутиться і зупиняється на одній.</span>
+        <div style="flex:1;display:grid;place-items:center;font-size:96px;">🎡</div>
+        <span style="height:52px;border-radius:18px;background:#1a0d05;color:#ffb020;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:800;">
+          <svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><path d="M2 12a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z M17.92 14l3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6 M6 18h.01 M10 14h.01 M15 6h.01 M18 9h.01"></path></svg>
+          Крутнути
+        </span>
+      </button>
+      <sc-for list="{{ modes }}" as="md" hint-placeholder-count="6">
+        <button onClick="{{ md.go }}" style="border-radius:24px;border:1px solid #202025;background:#121215;padding:16px;text-align:left;display:flex;flex-direction:column;gap:6px;min-height:0;">
+          <span style="width:48px;height:48px;border-radius:16px;display:grid;place-items:center;background:{{ md.tint }};color:{{ md.color }};margin-bottom:auto;">
+            <svg width="24" height="24" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="{{ md.d }}"></path></svg>
+          </span>
+          <span style="font-size:16px;font-weight:800;">{{ md.title }}</span>
+          <span style="font-size:12.5px;color:#9b9ba3;line-height:1.35;">{{ md.desc }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── РУЛЕТКА ─── -->
+  <sc-if value="{{ isRoulette }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Рулетка" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 24px;">
+      <button onClick="{{ goDecide }}" style="width:48px;height:48px;border-radius:16px;background:#1c1c21;display:grid;place-items:center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><path d="M15 18l-6-6 6-6"></path></svg>
+      </button>
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">Вирішити · 8 страв на барабані</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;">Рулетка</h1>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <sc-for list="{{ rouletteChips }}" as="c" hint-placeholder-count="3">
+          <span style="height:40px;display:flex;align-items:center;padding:0 14px;border-radius:999px;border:1px solid #202025;background:#121215;font-size:13px;font-weight:700;color:#9b9ba3;">{{ c }}</span>
+        </sc-for>
+      </div>
+    </header>
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:0 24px 20px;">
+      <div style="position:relative;border-radius:28px;border:1px solid #202025;background:#0d0d10;display:grid;place-items:center;overflow:hidden;">
+        <div style="position:absolute;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(255,107,53,.18),transparent 65%);"></div>
+        <div style="position:relative;width:408px;height:408px;">
+          <div style="position:absolute;inset:0;border-radius:50%;background:{{ wheelBg }};transform:rotate({{ wheelRot }});transition:{{ wheelTransition }};box-shadow:0 0 0 8px #1c1c21, 0 30px 60px -20px rgba(0,0,0,.8);">
+            <sc-for list="{{ wheel }}" as="w" hint-placeholder-count="8">
+              <span style="position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;display:grid;place-items:center;font-size:34px;transform:{{ w.tf }};">{{ w.emoji }}</span>
+            </sc-for>
+          </div>
+          <div style="position:absolute;left:50%;top:-14px;margin-left:-14px;width:28px;height:34px;background:#f5f5f7;clip-path:polygon(0 0,100% 0,50% 100%);filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));"></div>
+          <button onClick="{{ spin }}" style="position:absolute;left:50%;top:50%;width:104px;height:104px;margin:-52px 0 0 -52px;border-radius:50%;background:#070709;box-shadow:0 0 0 6px #1c1c21;display:grid;place-items:center;font-family:Unbounded,Manrope,sans-serif;font-size:14px;font-weight:800;color:#ffb020;">{{ spinLabel }}</button>
+        </div>
+      </div>
+      <aside style="display:flex;flex-direction:column;gap:12px;min-height:0;">
+        <div style="flex:1;border-radius:28px;border:1px solid #202025;background:#121215;padding:20px;display:flex;flex-direction:column;">
+          <p style="margin:0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#ff6b35;">{{ resultKicker }}</p>
+          <div style="margin-top:14px;height:150px;border-radius:24px;display:grid;place-items:center;font-size:72px;background:{{ result.bg }};">{{ result.emoji }}</div>
+          <h2 style="margin:14px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:21px;font-weight:800;line-height:1.2;">{{ result.title }}</h2>
+          <p style="margin:6px 0 0;font-size:14px;color:#9b9ba3;">{{ result.meta }}</p>
+          <div style="flex:1;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px;">
+            <button onClick="{{ spin }}" style="height:52px;border-radius:18px;background:#1c1c21;font-size:14.5px;font-weight:800;">Ще раз</button>
+            <button onClick="{{ goRecipe }}" style="height:52px;border-radius:18px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;font-size:14.5px;font-weight:800;">Відкрити рецепт</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── ПОШУК ─── -->
+  <sc-if value="{{ isExplore }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Пошук" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 24px;">
+      <div style="min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">Рецепти всієї спільноти</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;white-space:nowrap;">Відкривай нове</h1>
+      </div>
+      <div style="flex:1;height:52px;display:flex;align-items:center;gap:10px;padding:0 18px;border-radius:18px;background:#121215;border:1px solid #2b2b31;color:#66666e;">
+        <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M3 11a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M21 21l-4.3-4.3"></path></svg>
+        <span style="font-size:15px;font-weight:600;">Борщ, паста, курка, «швидко»…</span>
+      </div>
+    </header>
+    <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 24px 14px;">
+      <div style="display:flex;padding:4px;border-radius:16px;background:#121215;border:1px solid #202025;">
+        <sc-for list="{{ exploreTabs }}" as="t" hint-placeholder-count="4">
+          <button onClick="{{ t.go }}" style="height:40px;padding:0 16px;border-radius:12px;font-size:13.5px;font-weight:800;background:{{ t.bg }};color:{{ t.color }};">{{ t.label }}</button>
+        </sc-for>
+      </div>
+      <div style="width:1px;height:28px;background:#202025;margin:0 6px;"></div>
+      <sc-for list="{{ exploreChips }}" as="c" hint-placeholder-count="4">
+        <span style="height:40px;display:flex;align-items:center;padding:0 14px;border-radius:999px;border:1px solid #202025;font-size:13px;font-weight:700;color:#9b9ba3;white-space:nowrap;">{{ c }}</span>
+      </sc-for>
+    </div>
+    <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding:0 24px 20px;">
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px 14px;">
+        <sc-for list="{{ recipes }}" as="r" hint-placeholder-count="12">
+          <button onClick="{{ goRecipe }}" style="text-align:left;min-width:0;">
+            <div style="position:relative;aspect-ratio:1;border-radius:24px;overflow:hidden;display:grid;place-items:center;font-size:50px;background:{{ r.bg }};">
+              <div style="position:absolute;inset:0;background:radial-gradient(circle at 25% 15%,rgba(255,255,255,.35),transparent 45%);"></div>
+              <span style="position:relative;">{{ r.emoji }}</span>
+              <span style="position:absolute;right:8px;top:8px;padding:3px 8px;border-radius:999px;background:rgba(13,13,16,.8);font-size:11px;font-weight:800;color:#ffb020;">★ {{ r.rating }}</span>
+            </div>
+            <p style="margin:8px 0 0;font-size:13.5px;font-weight:700;line-height:1.25;height:34px;overflow:hidden;">{{ r.title }}</p>
+            <p style="margin:3px 0 0;font-size:12px;color:#9b9ba3;">{{ r.meta }}</p>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── КОМОРА ─── -->
+  <sc-if value="{{ isPantry }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Комора" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 24px;">
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">24 продукти · ≈ 1 860 ₴</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;">Комора</h1>
+      </div>
+      <button style="height:48px;padding:0 16px;border-radius:16px;background:#1c1c21;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;">
+        <svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M3 7V5a2 2 0 0 1 2-2h2 M17 3h2a2 2 0 0 1 2 2v2 M21 17v2a2 2 0 0 1-2 2h-2 M7 21H5a2 2 0 0 1-2-2v-2 M8 7v10 M12 7v10 M17 7v10"></path></svg>Штрихкод
+      </button>
+      <button style="height:48px;padding:0 16px;border-radius:16px;background:#1c1c21;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;">🧾 Чек</button>
+      <button onClick="{{ goShopping }}" style="height:48px;padding:0 16px;border-radius:16px;background:#1c1c21;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;">🛒 Покупки</button>
+      <button style="height:48px;padding:0 18px;border-radius:16px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;">
+        <svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;"><path d="M12 5v14 M5 12h14"></path></svg>Додати
+      </button>
+    </header>
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px;padding:0 24px 20px;">
+      <div style="min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:flex;flex-direction:column;gap:16px;">
+        <section style="flex-shrink:0;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#f43f6a;">Варто вжити</p>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
+            <sc-for list="{{ urgent }}" as="u" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:20px;background:#121215;border:1px solid {{ u.border }};">
+                <span style="width:44px;height:44px;flex-shrink:0;border-radius:14px;display:grid;place-items:center;font-size:24px;background:#1c1c21;">{{ u.emoji }}</span>
+                <div style="min-width:0;">
+                  <p style="margin:0;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ u.name }}</p>
+                  <p style="margin:2px 0 0;font-size:12.5px;font-weight:800;color:{{ u.color }};">{{ u.when }}</p>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+        <section style="flex-shrink:0;">
+          <p style="margin:0 0 10px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#9b9ba3;">У коморі</p>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+            <sc-for list="{{ pantry }}" as="p" hint-placeholder-count="12">
+              <div style="height:56px;display:flex;align-items:center;gap:10px;padding:0 14px 0 10px;border-radius:16px;background:#121215;border:1px solid #202025;">
+                <span style="font-size:22px;width:28px;text-align:center;">{{ p.emoji }}</span>
+                <span style="flex:1;min-width:0;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.name }}</span>
+                <span style="font-size:12.5px;color:#9b9ba3;font-weight:700;white-space:nowrap;">{{ p.qty }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+      <aside style="min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:flex;flex-direction:column;gap:12px;">
+        <div style="flex-shrink:0;border-radius:24px;padding:16px;border:1px solid rgba(255,107,53,.3);background:linear-gradient(135deg,rgba(255,107,53,.18),rgba(18,18,21,0) 70%),#121215;">
+          <p style="margin:0;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#ff6b35;">Що докупити</p>
+          <p style="margin:6px 0 0;font-size:16px;font-weight:800;line-height:1.3;">Купи вершки — відкриються ще 4 рецепти</p>
+          <p style="margin:4px 0 0;font-size:13px;color:#9b9ba3;">Карбонара, крем-суп з гарбуза, лосось…</p>
+          <button onClick="{{ goShopping }}" style="margin-top:12px;height:44px;width:100%;border-radius:14px;background:#1c1c21;font-size:13.5px;font-weight:800;">У список покупок</button>
+        </div>
+        <p style="margin:4px 0 0;font-size:13px;font-weight:800;">Можна приготувати зараз</p>
+        <sc-for list="{{ canCook }}" as="y" hint-placeholder-count="3">
+          <button onClick="{{ goRecipe }}" style="flex-shrink:0;display:flex;align-items:center;gap:12px;padding:10px;border-radius:20px;border:1px solid #202025;background:#121215;text-align:left;">
+            <div style="width:48px;height:48px;flex-shrink:0;border-radius:16px;display:grid;place-items:center;font-size:24px;background:{{ y.bg }};">{{ y.emoji }}</div>
+            <div style="min-width:0;flex:1;">
+              <p style="margin:0;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ y.title }}</p>
+              <p style="margin:2px 0 0;font-size:12px;color:#9b9ba3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ y.note }}</p>
+            </div>
+            <span style="font-size:13px;font-weight:800;color:{{ y.color }};">{{ y.pct }}</span>
+          </button>
+        </sc-for>
+      </aside>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── ТИЖДЕНЬ ─── -->
+  <sc-if value="{{ isPlan }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="План на тиждень" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 24px;">
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">26 жовтня — 1 листопада · без повторів</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;">План на тиждень</h1>
+      </div>
+      <button style="height:48px;padding:0 16px;border-radius:16px;background:#1c1c21;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;">
+        <svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8 M21 3v5h-5 M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16 M8 16H3v5"></path></svg>Згенерувати знову
+      </button>
+      <button onClick="{{ goShopping }}" style="height:48px;padding:0 18px;border-radius:16px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;">🛒 Список покупок · 14</button>
+    </header>
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:72px repeat(7,minmax(0,1fr));grid-template-rows:auto repeat(3,minmax(0,1fr));gap:8px;padding:0 24px 20px;">
+      <span></span>
+      <sc-for list="{{ days }}" as="d" hint-placeholder-count="7">
+        <div style="height:48px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:{{ d.bg }};color:{{ d.color }};">
+          <span style="font-size:11.5px;font-weight:800;text-transform:uppercase;">{{ d.wd }}</span>
+          <span style="font-size:15px;font-weight:800;">{{ d.n }}</span>
+        </div>
+      </sc-for>
+      <sc-for list="{{ planRows }}" as="row" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;font-size:12.5px;font-weight:800;color:#9b9ba3;">{{ row.label }}</div>
+        <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="7">
+          <button onClick="{{ goRecipe }}" style="min-height:0;border-radius:18px;border:1px solid {{ c.border }};background:#121215;padding:10px;text-align:left;display:flex;flex-direction:column;gap:6px;overflow:hidden;">
+            <span style="width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:{{ c.bg }};flex-shrink:0;">{{ c.emoji }}</span>
+            <span style="font-size:12.5px;font-weight:700;line-height:1.25;">{{ c.title }}</span>
+          </button>
+        </sc-for>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── ПОКУПКИ ─── -->
+  <sc-if value="{{ isShopping }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Список покупок" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 24px;">
+      <button onClick="{{ goPlan }}" style="width:48px;height:48px;border-radius:16px;background:#1c1c21;display:grid;place-items:center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><path d="M15 18l-6-6 6-6"></path></svg>
+      </button>
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">З плану на тиждень · спільний з сімʼєю</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;">Список покупок</h1>
+      </div>
+      <div style="text-align:right;">
+        <p style="margin:0;font-size:12.5px;color:#9b9ba3;font-weight:700;">Куплено {{ shopDone }} з {{ shopTotal }}</p>
+        <p style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:20px;font-weight:800;">≈ 1 340 ₴</p>
+      </div>
+    </header>
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:0 24px 20px;">
+      <sc-for list="{{ shop }}" as="cat" hint-placeholder-count="4">
+        <section style="min-height:0;border-radius:24px;border:1px solid #202025;background:#0d0d10;padding:14px 8px 8px;display:flex;flex-direction:column;">
+          <p style="margin:0 8px 8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#9b9ba3;">{{ cat.emoji }} {{ cat.name }}</p>
+          <sc-for list="{{ cat.items }}" as="it" hint-placeholder-count="3">
+            <button onClick="{{ it.toggle }}" style="width:100%;min-height:52px;display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:14px;text-align:left;opacity:{{ it.opacity }};">
+              <span style="width:26px;height:26px;flex-shrink:0;border-radius:9px;display:grid;place-items:center;background:{{ it.boxBg }};border:{{ it.boxBorder }};color:#1a0d05;">
+                <svg width="14" height="14" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M20 6L9 17l-5-5"></path></svg>
+              </span>
+              <span style="flex:1;min-width:0;">
+                <span style="display:block;font-size:14px;font-weight:700;text-decoration:{{ it.deco }};">{{ it.name }}</span>
+                <span style="display:block;font-size:12px;color:#9b9ba3;">{{ it.qty }}</span>
+              </span>
+              <span style="font-size:12.5px;font-weight:700;color:#9b9ba3;white-space:nowrap;">{{ it.price }}</span>
+            </button>
+          </sc-for>
+        </section>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── ЩОДЕННИК ─── -->
+  <sc-if value="{{ isDiary }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Щоденник" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 24px;">
+      <div style="min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">Сьогодні, 31 жовтня</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;">Щоденник</h1>
+      </div>
+      <div style="flex:1;display:flex;justify-content:flex-end;gap:6px;">
+        <sc-for list="{{ diaryDays }}" as="d" hint-placeholder-count="7">
+          <div style="width:52px;height:56px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:{{ d.bg }};color:{{ d.color }};">
+            <span style="font-size:11px;font-weight:800;text-transform:uppercase;">{{ d.wd }}</span>
+            <span style="font-size:16px;font-weight:800;">{{ d.n }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </header>
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:0 24px 20px;">
+      <div style="min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start;">
+        <sc-for list="{{ meals }}" as="ml" hint-placeholder-count="4">
+          <section style="border-radius:24px;border:1px solid #202025;background:#121215;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-height:150px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:18px;">{{ ml.emoji }}</span>
+              <span style="flex:1;font-family:Unbounded,Manrope,sans-serif;font-size:15px;font-weight:700;">{{ ml.label }}</span>
+              <span style="font-size:13px;font-weight:800;color:#9b9ba3;">{{ ml.kcal }}</span>
+            </div>
+            <sc-for list="{{ ml.items }}" as="e" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #202025;">
+                <span style="flex:1;min-width:0;font-size:14px;font-weight:700;">{{ e.name }} <span style="color:#9b9ba3;font-weight:600;">· {{ e.qty }}</span></span>
+                <span style="font-size:13px;font-weight:700;color:#9b9ba3;">{{ e.kcal }}</span>
+              </div>
+            </sc-for>
+            <div style="flex:1;"></div>
+            <button style="height:44px;border-radius:14px;border:1px dashed #2b2b31;font-size:13.5px;font-weight:800;color:#ff6b35;display:flex;align-items:center;justify-content:center;gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;"><path d="M12 5v14 M5 12h14"></path></svg>Додати
+            </button>
+          </section>
+        </sc-for>
+      </div>
+      <aside style="min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:flex;flex-direction:column;gap:12px;">
+        <div style="flex-shrink:0;border-radius:24px;border:1px solid #202025;background:#121215;padding:16px;">
+          <p style="margin:0;font-size:12.5px;color:#9b9ba3;">Зʼїдено сьогодні</p>
+          <p style="margin:3px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:28px;font-weight:800;line-height:1;">1 240 <span style="font-family:Manrope,sans-serif;font-size:13px;font-weight:700;color:#9b9ba3;">з 2 000 ккал</span></p>
+          <div style="margin-top:12px;height:8px;border-radius:99px;background:#1c1c21;overflow:hidden;"><div style="width:62%;height:100%;border-radius:99px;background:#ff6b35;"></div></div>
+          <div style="margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+            <sc-for list="{{ macros }}" as="m" hint-placeholder-count="3">
+              <div>
+                <p style="margin:0;font-size:11.5px;color:#9b9ba3;">{{ m.label }}</p>
+                <p style="margin:2px 0 5px;font-size:13px;font-weight:800;">{{ m.val }}</p>
+                <div style="height:4px;border-radius:99px;background:#1c1c21;overflow:hidden;"><div style="height:100%;width:{{ m.pct }};background:{{ m.color }};border-radius:99px;"></div></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex-shrink:0;border-radius:24px;border:1px solid #202025;background:#121215;padding:16px;">
+          <p style="margin:0 0 12px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#9b9ba3;">Два тижні</p>
+          <div style="height:96px;display:flex;align-items:flex-end;gap:5px;position:relative;">
+            <div style="position:absolute;left:0;right:0;bottom:{{ goalLine }};border-top:1px dashed #2b2b31;"></div>
+            <sc-for list="{{ twoWeeks }}" as="b" hint-placeholder-count="14">
+              <div style="flex:1;height:{{ b.h }};border-radius:5px;background:{{ b.bg }};"></div>
+            </sc-for>
+          </div>
+          <p style="margin:10px 0 0;font-size:12.5px;color:#9b9ba3;">У середньому 1 860 ккал на день</p>
+        </div>
+        <div style="flex-shrink:0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          <sc-for list="{{ diaryAdd }}" as="a" hint-placeholder-count="3">
+            <button style="height:64px;border-radius:18px;background:#1c1c21;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:800;"><span style="font-size:20px;">{{ a.emoji }}</span>{{ a.label }}</button>
+          </sc-for>
+        </div>
+      </aside>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── РЕЦЕПТ ─── -->
+  <sc-if value="{{ isRecipe }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Рецепт" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:grid;grid-template-columns:360px minmax(0,1fr);">
+    <div style="position:relative;margin:16px 0 16px 16px;border-radius:28px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(140deg,#c026d3,#f43f6a);">
+      <div style="position:absolute;inset:0;background:radial-gradient(circle at 25% 15%,rgba(255,255,255,.4),transparent 45%);"></div>
+      <span style="position:relative;font-size:140px;filter:drop-shadow(0 16px 24px rgba(0,0,0,.35));">🍲</span>
+      <button onClick="{{ goHome }}" style="position:absolute;left:14px;top:14px;width:48px;height:48px;border-radius:16px;background:rgba(13,13,16,.75);display:grid;place-items:center;color:#f5f5f7;">
+        <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><path d="M15 18l-6-6 6-6"></path></svg>
+      </button>
+      <div style="position:absolute;left:14px;right:14px;bottom:14px;display:flex;gap:8px;">
+        <button onClick="{{ toggleLike }}" style="flex:1;height:48px;border-radius:16px;background:rgba(13,13,16,.75);display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:800;color:{{ likeColor }};">
+          <svg width="18" height="18" viewBox="0 0 24 24" style="fill:{{ likeFill }};stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>{{ likeCount }}
+        </button>
+        <button onClick="{{ toggleSave }}" style="flex:1;height:48px;border-radius:16px;background:rgba(13,13,16,.75);display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:800;color:{{ saveColor }};">
+          <svg width="18" height="18" viewBox="0 0 24 24" style="fill:{{ saveFill }};stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path></svg>{{ saveLabel }}
+        </button>
+      </div>
+    </div>
+    <div style="min-height:0;display:flex;flex-direction:column;padding:16px 24px 16px 22px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:18px;background:linear-gradient(140deg,#ff6b35,#ffb020);">👩‍🍳</span>
+        <span style="font-size:13.5px;font-weight:700;">Марія Коваль <span style="color:#9b9ba3;font-weight:600;">@mariia · 3 дні тому</span></span>
+        <span style="flex:1;"></span>
+        <span style="height:32px;display:flex;align-items:center;padding:0 12px;border-radius:999px;background:#1c1c21;font-size:12.5px;font-weight:800;color:#ffb020;">★ 4,8 · 214 оцінок</span>
+      </div>
+      <h1 style="margin:12px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:28px;font-weight:800;line-height:1.15;">Червоний борщ</h1>
+      <p style="margin:6px 0 0;font-size:14.5px;color:#9b9ba3;line-height:1.45;max-width:520px;">Насичений, з кислинкою і засмажкою. Бабусин рецепт — 1,2 тис. людей вже готували.</p>
+      <div style="margin-top:14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;">
+        <sc-for list="{{ recipeStats }}" as="st" hint-placeholder-count="4">
+          <div style="border-radius:16px;background:#121215;border:1px solid #202025;padding:10px 12px;">
+            <p style="margin:0;font-size:11.5px;color:#9b9ba3;font-weight:700;">{{ st.label }}</p>
+            <p style="margin:2px 0 0;font-size:15px;font-weight:800;">{{ st.val }}</p>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:baseline;gap:10px;">
+        <h2 style="margin:0;font-family:Unbounded,Manrope,sans-serif;font-size:16px;font-weight:700;">Інгредієнти</h2>
+        <span style="font-size:13px;color:#9b9ba3;font-weight:700;">є 9 з 11 · бракує 2</span>
+      </div>
+      <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;margin-top:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;align-content:start;">
+        <sc-for list="{{ recipeIngs }}" as="ig" hint-placeholder-count="10">
+          <div style="height:40px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #202025;">
+            <span style="font-size:17px;">{{ ig.emoji }}</span>
+            <span style="flex:1;min-width:0;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ig.name }}</span>
+            <span style="font-size:12.5px;font-weight:700;color:{{ ig.color }};white-space:nowrap;">{{ ig.qty }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 2fr;gap:10px;">
+        <button onClick="{{ goShopping }}" style="height:56px;border-radius:18px;background:#1c1c21;font-size:14.5px;font-weight:800;">+2 у покупки</button>
+        <button onClick="{{ goCook }}" style="height:56px;border-radius:18px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px;font-weight:800;box-shadow:0 14px 34px -14px rgba(255,107,53,.6);">
+          <svg width="20" height="20" viewBox="0 0 24 24" style="fill:currentColor;"><path d="M7 4l13 8-13 8z"></path></svg>Почати готувати
+        </button>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── ПРОФІЛЬ ─── -->
+  <sc-if value="{{ isMe }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Профіль" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;padding:20px 24px;">
+    <aside style="display:flex;flex-direction:column;gap:12px;min-height:0;">
+      <div style="border-radius:28px;border:1px solid #202025;background:#121215;padding:20px;display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <span style="width:88px;height:88px;border-radius:50%;display:grid;place-items:center;font-size:44px;background:linear-gradient(140deg,#ff6b35,#ffb020);box-shadow:0 20px 50px -20px rgba(255,107,53,.6);">👩‍🍳</span>
+        <h1 style="margin:12px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:19px;font-weight:800;">Олена Іваненко</h1>
+        <p style="margin:2px 0 0;font-size:13px;color:#9b9ba3;">@olena · Київ</p>
+        <div style="margin-top:16px;width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">
+          <sc-for list="{{ meStats }}" as="ms" hint-placeholder-count="3">
+            <div>
+              <p style="margin:0;font-family:Unbounded,Manrope,sans-serif;font-size:18px;font-weight:800;">{{ ms.val }}</p>
+              <p style="margin:2px 0 0;font-size:11.5px;color:#9b9ba3;font-weight:700;">{{ ms.label }}</p>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:20px;border:1px solid rgba(255,107,53,.3);background:rgba(255,107,53,.08);">
+        <span style="font-size:22px;">🔥</span>
+        <span style="flex:1;font-size:13.5px;font-weight:700;">5 днів поспіль готуєш удома</span>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+        <button style="height:48px;border-radius:16px;background:#1c1c21;font-size:13.5px;font-weight:800;">👨‍👩‍👧 Сімʼя</button>
+        <button style="height:48px;border-radius:16px;background:#1c1c21;font-size:13.5px;font-weight:800;">⚙️ Налаштування</button>
+      </div>
+    </aside>
+    <section style="min-height:0;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div style="display:flex;padding:4px;border-radius:16px;background:#121215;border:1px solid #202025;">
+          <sc-for list="{{ meTabs }}" as="t" hint-placeholder-count="3">
+            <button onClick="{{ t.go }}" style="height:40px;padding:0 16px;border-radius:12px;font-size:13.5px;font-weight:800;background:{{ t.bg }};color:{{ t.color }};">{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <span style="flex:1;"></span>
+        <button style="height:44px;padding:0 16px;border-radius:14px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:800;">
+          <svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;"><path d="M12 5v14 M5 12h14"></path></svg>Новий рецепт
+        </button>
+      </div>
+      <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 14px;align-content:start;">
+        <sc-for list="{{ meRecipes }}" as="r" hint-placeholder-count="8">
+          <button onClick="{{ goRecipe }}" style="text-align:left;min-width:0;">
+            <div style="position:relative;aspect-ratio:1;border-radius:24px;overflow:hidden;display:grid;place-items:center;font-size:52px;background:{{ r.bg }};">
+              <div style="position:absolute;inset:0;background:radial-gradient(circle at 25% 15%,rgba(255,255,255,.35),transparent 45%);"></div>
+              <span style="position:relative;">{{ r.emoji }}</span>
+            </div>
+            <p style="margin:8px 0 0;font-size:13.5px;font-weight:700;line-height:1.25;height:34px;overflow:hidden;">{{ r.title }}</p>
+            <p style="margin:3px 0 0;font-size:12px;color:#9b9ba3;">{{ r.meta }}</p>
+          </button>
+        </sc-for>
+      </div>
+    </section>
+  </main>
+  </sc-if>
+
+  <!-- ─── СПОВІЩЕННЯ ─── -->
+  <sc-if value="{{ isNotif }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Сповіщення" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:76px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 24px;">
+      <div style="flex:1;min-width:0;">
+        <p style="margin:0;font-size:13px;color:#9b9ba3;font-weight:600;">7 подій · 3 нові</p>
+        <h1 style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:24px;font-weight:800;">Сповіщення</h1>
+      </div>
+      <button style="height:44px;padding:0 16px;border-radius:14px;background:#1c1c21;font-size:13.5px;font-weight:800;">Позначити прочитаними</button>
+    </header>
+    <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding:0 24px 20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-content:start;">
+      <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="7">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:20px;background:{{ n.bg }};border:1px solid {{ n.border }};">
+          <span style="width:44px;height:44px;flex-shrink:0;border-radius:50%;display:grid;place-items:center;font-size:22px;background:{{ n.avBg }};">{{ n.emoji }}</span>
+          <div style="flex:1;min-width:0;">
+            <p style="margin:0;font-size:14px;line-height:1.35;"><span style="font-weight:800;">{{ n.who }}</span> <span style="color:#c9c9cf;">{{ n.text }}</span></p>
+            <p style="margin:3px 0 0;font-size:12px;color:#9b9ba3;font-weight:700;">{{ n.time }}</p>
+          </div>
+          <sc-if value="{{ n.thumb }}" hint-placeholder-val="{{ false }}">
+            <span style="width:44px;height:44px;flex-shrink:0;border-radius:14px;display:grid;place-items:center;font-size:22px;background:{{ n.thumbBg }};">{{ n.thumb }}</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ─── ГОТУВАННЯ ─── -->
+  <sc-if value="{{ isCook }}" hint-placeholder-val="{{ false }}">
+  <main data-screen-label="Режим готування" style="position:relative;z-index:1;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;">
+    <header style="height:72px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 20px;">
+      <button onClick="{{ goHome }}" style="width:48px;height:48px;border-radius:16px;background:#1c1c21;display:grid;place-items:center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><path d="M18 6L6 18 M6 6l12 12"></path></svg>
+      </button>
+      <div style="min-width:0;">
+        <p style="margin:0;font-size:12.5px;color:#9b9ba3;font-weight:600;">Крок {{ stepNo }} з {{ stepTotal }}</p>
+        <h1 style="margin:1px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:19px;font-weight:800;white-space:nowrap;">Червоний борщ</h1>
+      </div>
+      <div style="flex:1;display:flex;gap:5px;margin-left:12px;">
+        <sc-for list="{{ segs }}" as="sg" hint-placeholder-count="8">
+          <button onClick="{{ sg.go }}" style="flex:1;height:22px;display:flex;align-items:center;"><span style="display:block;width:100%;height:6px;border-radius:99px;background:{{ sg.bg }};"></span></button>
+        </sc-for>
+      </div>
+      <span style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:#9b9ba3;font-weight:700;padding-left:6px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#34d399;"></span>Екран не гасне
+      </span>
+    </header>
+
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:0 20px;">
+      <section style="min-height:0;display:flex;flex-direction:column;gap:14px;">
+        <div style="flex:1;min-height:0;border-radius:28px;border:1px solid #202025;background:#121215;padding:24px 26px;display:flex;flex-direction:column;overflow:hidden;">
+          <span style="font-family:Unbounded,Manrope,sans-serif;font-size:15px;font-weight:800;color:#ff6b35;">Крок {{ stepNoPad }}</span>
+          <p style="margin:10px 0 0;font-size:26px;font-weight:700;line-height:1.35;text-wrap:pretty;letter-spacing:-.005em;">{{ step.text }}</p>
+          <div style="flex:1;"></div>
+          <sc-if value="{{ step.tip }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:18px;background:#1c1c21;">
+              <span style="font-size:18px;">💡</span>
+              <p style="margin:0;font-size:14px;line-height:1.45;color:#c9c9cf;">{{ step.tip }}</p>
+            </div>
+          </sc-if>
+        </div>
+        <sc-if value="{{ hasTimer }}" hint-placeholder-val="{{ true }}">
+        <div style="flex-shrink:0;height:96px;border-radius:24px;border:1px solid {{ timerBorder }};background:#121215;padding:0 14px 0 22px;display:flex;align-items:center;gap:16px;">
+          <div style="flex:1;min-width:0;">
+            <p style="margin:0;font-size:12.5px;color:#9b9ba3;font-weight:700;">{{ timerLabel }}</p>
+            <p style="margin:2px 0 0;font-family:Unbounded,Manrope,sans-serif;font-size:42px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:{{ timerColor }};">{{ timerText }}</p>
+          </div>
+          <button onClick="{{ addMin }}" style="height:56px;padding:0 16px;border-radius:18px;background:#1c1c21;font-size:15px;font-weight:800;">+1 хв</button>
+          <button onClick="{{ resetTimer }}" style="width:56px;height:56px;border-radius:18px;background:#1c1c21;display:grid;place-items:center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8 M3 3v5h5"></path></svg>
+          </button>
+          <button onClick="{{ toggleTimer }}" style="width:68px;height:68px;border-radius:24px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:grid;place-items:center;box-shadow:0 14px 34px -12px rgba(255,107,53,.6);">
+            <svg width="26" height="26" viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><path d="{{ playD }}"></path></svg>
+          </button>
+        </div>
+        </sc-if>
+      </section>
+
+      <aside style="min-height:0;display:flex;flex-direction:column;border-radius:28px;border:1px solid #202025;background:#0d0d10;overflow:hidden;">
+        <div style="padding:16px 18px 10px;display:flex;align-items:baseline;justify-content:space-between;">
+          <span style="font-size:15px;font-weight:800;">Інгредієнти</span>
+          <span style="font-size:12.5px;color:#9b9ba3;font-weight:700;">{{ checkedCount }} з {{ ingTotal }} · 6 порц.</span>
+        </div>
+        <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding:0 8px 8px;display:flex;flex-direction:column;">
+          <sc-for list="{{ ings }}" as="ig" hint-placeholder-count="8">
+            <button onClick="{{ ig.toggle }}" style="width:100%;min-height:48px;display:flex;align-items:center;gap:12px;padding:6px 10px;border-radius:14px;text-align:left;opacity:{{ ig.opacity }};">
+              <span style="width:26px;height:26px;flex-shrink:0;border-radius:9px;display:grid;place-items:center;background:{{ ig.boxBg }};border:{{ ig.boxBorder }};color:#1a0d05;">
+                <svg width="14" height="14" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;"><path d="M20 6L9 17l-5-5"></path></svg>
+              </span>
+              <span style="font-size:18px;">{{ ig.emoji }}</span>
+              <span style="flex:1;min-width:0;font-size:14.5px;font-weight:700;text-decoration:{{ ig.deco }};">{{ ig.name }}</span>
+              <span style="font-size:13px;color:#9b9ba3;font-weight:600;white-space:nowrap;flex-shrink:0;">{{ ig.qty }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </aside>
+    </div>
+
+    <footer style="height:84px;flex-shrink:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:14px 20px;">
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:12px;">
+        <button onClick="{{ prevStep }}" style="border-radius:20px;background:#1c1c21;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:800;opacity:{{ prevOpacity }};">
+          <svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><path d="M15 18l-6-6 6-6"></path></svg>Назад
+        </button>
+        <button onClick="{{ nextStep }}" style="border-radius:20px;background:linear-gradient(135deg,#ff6b35,#ffb020);color:#1a0d05;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px;font-weight:800;box-shadow:0 14px 34px -14px rgba(255,107,53,.6);">
+          {{ nextLabel }}<svg width="20" height="20" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><path d="M9 18l6-6-6-6"></path></svg>
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;border-radius:20px;border:1px dashed #2b2b31;font-size:13.5px;color:#9b9ba3;font-weight:700;">Свайп ← → між кроками</div>
+    </footer>
+  </main>
+  </sc-if>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;explore&quot;,&quot;decide&quot;,&quot;roulette&quot;,&quot;pantry&quot;,&quot;plan&quot;,&quot;shopping&quot;,&quot;diary&quot;,&quot;recipe&quot;,&quot;cook&quot;,&quot;me&quot;,&quot;notif&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;bezel&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const IC = {
+  home: "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8 M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+  compass: "M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0 M16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z",
+  sparkles: "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z M20 3v4 M22 5h-4",
+  fridge: "M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z M5 10h14 M15 7v6",
+  calendar: "M8 2v4 M16 2v4 M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M3 10h18",
+  diary: "M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4 M2 6h4 M2 10h4 M2 14h4 M2 18h4 M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z",
+  dices: "M2 12a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z M17.92 14l3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6 M6 18h.01 M10 14h.01 M15 6h.01 M18 9h.01",
+  buoy: "M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0 M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0 M4.93 4.93l4.24 4.24 M14.83 9.17l4.24-4.24 M14.83 14.83l4.24 4.24 M9.17 14.83l-4.24 4.24",
+  swords: "M14.5 17.5L3 6V3h3l11.5 11.5 M13 19l6-6 M16 16l4 4 M19 21l2-2 M14.5 6.5L18 3h3v3l-3.5 3.5 M5 14l4 4 M7 17l-3 3 M3 19l2 2",
+  users: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M5 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
+  zap: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
+};
+const g = (a, b) => `linear-gradient(140deg, ${a}, ${b})`;
+const STEPS = [
+  { text: "Свинину залий 3 л холодної води, доведи до кипіння, зніми піну й вари на слабкому вогні.", tip: "Піну знімай шумівкою перші 10 хвилин — бульйон буде прозорим.", min: 90 },
+  { text: "Буряк натри на крупній тертці, збризни лимонним соком і туши з томатною пастою.", tip: "Кислота зберігає колір — борщ лишиться яскраво-червоним.", min: 15 },
+  { text: "Цибулю й моркву обсмаж на олії до золотистого кольору, помішуючи.", tip: "Не поспішай: саме засмажка дає борщу солодкуватий смак.", min: 8 },
+  { text: "Картоплю наріж кубиками й додай у бульйон.", tip: "", min: 10 },
+  { text: "Додай нашатковану капусту.", tip: "Молоду капусту клади пізніше — їй вистачить 3 хвилин.", min: 5 },
+  { text: "Переклади буряк і засмажку в каструлю, посоли й поперчи до смаку.", tip: "", min: 0 },
+  { text: "Додай подрібнений часник і зелень, одразу вимкни вогонь.", tip: "", min: 0 },
+  { text: "Дай борщу настоятися під кришкою. Подавай зі сметаною і пампушками.", tip: "Наступного дня він ще смачніший.", min: 20 },
+];
+const INGS = [
+  ["🥩", "Свинина на кістці", "500 г"], ["🫜", "Буряк", "2 шт"], ["🥔", "Картопля", "3 шт"], ["🥬", "Капуста", "300 г"],
+  ["🥕", "Морква", "1 шт"], ["🧅", "Цибуля", "1 шт"], ["🍅", "Томатна паста", "2 ст. л."], ["🧄", "Часник", "3 зубчики"],
+  ["🍋", "Лимонний сік", "1 ч. л."], ["🌿", "Кріп і петрушка", "пучок"], ["🥛", "Сметана", "для подачі"],
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: this.props.startScreen ?? "home",
+    step: 2,
+    left: 6 * 60 + 42,
+    running: true,
+    repeat: true,
+    rot: 0, spinning: false, exploreTab: 0, meTab: 0, liked: false, saved: true,
+    bought: [false, false, true, false, false, false, false, false, true, false, false, false, false],
+    checked: [true, true, true, false, true, true, true, false, false, false, false],
+  };
+  componentDidMount() {
+    this.t = setInterval(() => {
+      if (this.state.running && this.state.left > 0) this.setState(s => ({ left: s.left - 1 }));
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.t); clearTimeout(this.sp); }
+  extraVals(s, go) {
+    const R = (emoji, title, meta, a, b, rating) => ({ emoji, title, meta, bg: g(a, b), rating });
+    const all = [
+      R("🍲", "Червоний борщ", "2 год · 1,2 тис.", "#c026d3", "#f43f6a", "4,8"),
+      R("🥔", "Деруни зі сметаною", "40 хв · 860", "#f59e0b", "#ff6b35", "4,7"),
+      R("🥞", "Сирники як у дитинстві", "25 хв · 740", "#fbbf24", "#fb7185", "4,9"),
+      R("🥟", "Вареники з картоплею", "1 год · 520", "#fcd34d", "#f97316", "4,8"),
+      R("🍝", "Справжня карбонара", "20 хв · 610", "#fbbf24", "#facc15", "4,6"),
+      R("🍜", "Том ям з креветками", "35 хв · 480", "#f43f6a", "#ff6b35", "4,5"),
+      R("🍗", "Курка теріякі з рисом", "30 хв · 450", "#b45309", "#f59e0b", "4,6"),
+      R("🥢", "Удон з овочами у воку", "20 хв · 330", "#ea580c", "#facc15", "4,4"),
+      R("🍳", "Шакшука", "25 хв · 410", "#dc2626", "#f97316", "4,7"),
+      R("🎃", "Крем-суп з гарбуза", "45 хв · 312", "#f97316", "#fbbf24", "4,6"),
+      R("🫓", "Хумус за 10 хвилин", "10 хв · 280", "#d97706", "#fbbf24", "4,5"),
+      R("🥗", "Грецький салат", "15 хв · 390", "#22c55e", "#38bdf8", "4,6"),
+      R("🍔", "Домашній бургер", "40 хв · 360", "#b91c1c", "#f59e0b", "4,7"),
+      R("🍚", "Плов у казані", "1,5 год · 528", "#c2410c", "#f59e0b", "4,9"),
+      R("🐟", "Лосось з лимоном у духовці", "30 хв · 204", "#fb7185", "#fdba74", "4,7"),
+      R("🍕", "Піца Маргарита вдома", "1 год · 470", "#dc2626", "#facc15", "4,8"),
+      R("🍰", "Тірамісу без випікання", "20 хв · 690", "#78350f", "#d97706", "4,9"),
+      R("🍄", "Гречка з грибами і цибулею", "35 хв · 260", "#78716c", "#a8a29e", "4,5"),
+    ];
+    const tabs = (list, key) => list.map((label, i) => ({
+      label, bg: s[key] === i ? "#1c1c21" : "transparent", color: s[key] === i ? "#f5f5f7" : "#9b9ba3",
+      go: () => this.setState({ [key]: i }),
+    }));
+    const order = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17], [13, 2, 16, 0, 15, 3, 1, 12, 14, 8, 4, 9, 6, 5, 7, 10, 11, 17], [17, 14, 11, 10, 9, 7, 5, 4, 3, 2, 1, 0, 6, 8, 12, 13, 15, 16], [2, 16, 13, 0, 3, 15, 8, 1, 12, 14, 4, 9, 6, 5, 7, 10, 11, 17]][s.exploreTab];
+    // roulette
+    const W = [0, 1, 4, 8, 13, 5, 17, 15];
+    const colors = ["#c026d3", "#f59e0b", "#facc15", "#dc2626", "#c2410c", "#f43f6a", "#78716c", "#ea580c"];
+    const resIdx = Math.floor(((360 - (s.rot % 360)) % 360) / 45);
+    const result = all[W[resIdx]];
+    const wd = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"], dn = [26, 27, 28, 29, 30, 31, 1];
+    const plan = [[2, 10, 8, 3, 16, 12, 1], [0, 9, 11, 5, 14, 4, 13], [6, 17, 4, 7, 15, 0, 3]];
+    const shopCats = [
+      ["🥬", "Овочі", [["Буряк", "2 шт", "18 ₴"], ["Капуста", "1 головка", "32 ₴"], ["Кабачок", "2 шт", "46 ₴"], ["Лимон", "1 шт", "22 ₴"]]],
+      ["🥩", "Мʼясо й риба", [["Свинина на кістці", "500 г", "145 ₴"], ["Лосось", "400 г", "420 ₴"], ["Креветки", "300 г", "260 ₴"]]],
+      ["🥛", "Молочне", [["Вершки 33%", "200 мл", "64 ₴"], ["Кисломолочний сир", "500 г", "98 ₴"], ["Сметана 20%", "300 г", "52 ₴"]]],
+      ["🥫", "Бакалія", [["Соєвий соус", "1 пляшка", "75 ₴"], ["Рис басматі", "1 кг", "89 ₴"], ["Локшина удон", "2 пачки", "110 ₴"]]],
+    ];
+    let k = 0;
+    const shop = shopCats.map(([emoji, name, items]) => ({
+      emoji, name,
+      items: items.map(([n, qty, price]) => {
+        const i = k++, c = s.bought[i];
+        return {
+          name: n, qty, price, opacity: c ? 0.5 : 1, deco: c ? "line-through" : "none",
+          boxBg: c ? "#34d399" : "transparent", boxBorder: c ? "0" : "2px solid #2b2b31",
+          toggle: () => this.setState(x => { const b = x.bought.slice(); b[i] = !b[i]; return { bought: b }; }),
+        };
+      }),
+    }));
+    const tw = [1720, 2100, 1940, 1650, 2280, 1890, 1760, 2010, 1580, 1930, 2150, 1800, 1990, 1240];
+    return {
+      rouletteChips: ["≤ 60 хв", "Без повторів", "Вечеря"],
+      wheelBg: `conic-gradient(${colors.map((c, i) => `${c} ${i * 45}deg ${(i + 1) * 45}deg`).join(",")})`,
+      wheelRot: `${s.rot}deg`,
+      wheelTransition: s.spinning ? "transform 3.2s cubic-bezier(.17,.67,.2,1)" : "none",
+      wheel: W.map((ix, i) => ({ emoji: all[ix].emoji, tf: `rotate(${i * 45 + 22.5}deg) translateY(-140px) rotate(${-(i * 45 + 22.5)}deg)` })),
+      spinLabel: s.spinning ? "…" : "Крутнути",
+      spin: () => {
+        if (this.state.spinning) return;
+        this.setState(x => ({ spinning: true, rot: x.rot + 1440 + Math.floor(Math.random() * 360) }));
+        clearTimeout(this.sp);
+        this.sp = setTimeout(() => this.setState({ spinning: false }), 3300);
+      },
+      resultKicker: s.spinning ? "Крутиться…" : "Сьогодні на вечерю",
+      result: s.spinning ? { emoji: "🎡", title: "Ще мить…", meta: "Барабан зупиняється", bg: "#1c1c21" } : result,
+      exploreTabs: tabs(["У тренді", "Топ", "Нове", "Оцінки"], "exploreTab"),
+      exploreChips: ["До 30 хв", "Супи", "Вегетаріанське", "Десерти"],
+      recipes: order.map(i => all[i]),
+      urgent: [
+        { emoji: "🥛", name: "Молоко 2,5%", when: "Спливає завтра", color: "#f43f6a", border: "rgba(244,63,106,.35)" },
+        { emoji: "🥒", name: "Кабачок", when: "Ще 2 дні", color: "#ffb020", border: "rgba(255,176,32,.3)" },
+        { emoji: "🍗", name: "Куряче філе", when: "Ще 3 дні", color: "#ffb020", border: "rgba(255,176,32,.3)" },
+      ],
+      pantry: [["🥚", "Яйця", "8 шт"], ["🥔", "Картопля", "2 кг"], ["🧅", "Цибуля", "5 шт"], ["🥕", "Морква", "4 шт"], ["🌾", "Гречка", "900 г"], ["🍚", "Рис", "1 кг"], ["🧀", "Твердий сир", "250 г"], ["🥣", "Сметана", "300 г"], ["🧈", "Масло вершкове", "180 г"], ["🍅", "Томатна паста", "1 банка"], ["🧄", "Часник", "1 голівка"], ["🍄", "Печериці", "400 г"], ["🌾", "Борошно", "1,5 кг"], ["🫒", "Олія", "0,8 л"], ["🍝", "Макарони", "500 г"]].map(([emoji, name, qty]) => ({ emoji, name, qty })),
+      canCook: [
+        { ...all[17], note: "усе є в коморі", pct: "100%", color: "#34d399" },
+        { emoji: "🍳", title: "Омлет з сиром за 7 хвилин", bg: g("#facc15", "#fb923c"), note: "усе є в коморі", pct: "100%", color: "#34d399" },
+        { ...all[1], note: "бракує: зелень", pct: "90%", color: "#ffb020" },
+        { ...all[2], note: "бракує: кисломолочний сир", pct: "75%", color: "#ffb020" },
+      ],
+      days: wd.map((w, i) => ({ wd: w, n: dn[i], bg: i === 5 ? "linear-gradient(135deg,#ff6b35,#ffb020)" : "#121215", color: i === 5 ? "#1a0d05" : i < 5 ? "#66666e" : "#f5f5f7" })),
+      planRows: ["Сніданок", "Обід", "Вечеря"].map((label, r) => ({
+        label, cells: plan[r].map((ix, d) => ({ ...all[ix], border: d === 5 ? "rgba(255,107,53,.4)" : "#202025" })),
+      })),
+      shop, shopTotal: k, shopDone: s.bought.filter(Boolean).length,
+      diaryDays: wd.map((w, i) => ({ wd: w, n: dn[i], bg: i === 5 ? "linear-gradient(135deg,#ff6b35,#ffb020)" : "#121215", color: i === 5 ? "#1a0d05" : i > 5 ? "#66666e" : "#f5f5f7" })),
+      meals: [
+        { emoji: "🌅", label: "Сніданок", kcal: "480 ккал", items: [{ name: "Сирники", qty: "3 шт", kcal: "420" }, { name: "Кава з молоком", qty: "250 мл", kcal: "60" }] },
+        { emoji: "☀️", label: "Обід", kcal: "470 ккал", items: [{ name: "Червоний борщ", qty: "1 порція", kcal: "310" }, { name: "Хліб житній", qty: "2 скибки", kcal: "160" }] },
+        { emoji: "🍎", label: "Перекус", kcal: "290 ккал", items: [{ name: "Яблуко", qty: "1 шт", kcal: "80" }, { name: "Грецький йогурт", qty: "200 г", kcal: "210" }] },
+        { emoji: "🌙", label: "Вечеря", kcal: "—", items: [] },
+      ],
+      twoWeeks: tw.map((v, i) => ({ h: `${(v / 2400) * 100}%`, bg: i === 13 ? "#ff6b35" : v > 2000 ? "#f43f6a" : "#2b2b31" })),
+      goalLine: `${(2000 / 2400) * 100}%`,
+      diaryAdd: [{ emoji: "📷", label: "Скан" }, { emoji: "🔎", label: "Пошук" }, { emoji: "💬", label: "Словами" }],
+      likeColor: s.liked ? "#f43f6a" : "#f5f5f7", likeFill: s.liked ? "currentColor" : "none", likeCount: s.liked ? "2,4 тис." : "2,4 тис.",
+      saveColor: s.saved ? "#ff6b35" : "#f5f5f7", saveFill: s.saved ? "currentColor" : "none", saveLabel: s.saved ? "Збережено" : "Зберегти",
+      toggleLike: () => this.setState(x => ({ liked: !x.liked })),
+      toggleSave: () => this.setState(x => ({ saved: !x.saved })),
+      recipeStats: [{ label: "Час", val: "2 год" }, { label: "Порції", val: "6" }, { label: "Складність", val: "Середня" }, { label: "На порцію", val: "310 ккал" }],
+      recipeIngs: INGS.map(([emoji, name, qty], i) => ({ emoji, name, qty: i === 0 || i === 1 ? "немає" : qty, color: i === 0 || i === 1 ? "#f43f6a" : "#9b9ba3" })),
+      meStats: [{ val: "12", label: "рецептів" }, { val: "248", label: "підписники" }, { val: "64", label: "готувала" }],
+      meTabs: tabs(["Мої", "Збережені", "Історія"], "meTab"),
+      meRecipes: [[2, 9, 17, 10, 16, 6, 11, 14], [0, 13, 15, 4, 3, 5, 12, 1], [0, 2, 1, 17, 8, 6, 9, 10]][s.meTab].map(i => all[i]),
+      notifs: [
+        { emoji: "👩‍🍳", who: "Марія Коваль", text: "вподобала твої «Сирники як у дитинстві»", time: "5 хв тому", thumb: "🥞", thumbBg: g("#fbbf24", "#fb7185"), unread: true },
+        { emoji: "🔥", who: "Тарас Шеф", text: "підписався на тебе", time: "1 год тому", unread: true },
+        { emoji: "⏰", who: "Таймер", text: "засмажка для борщу готова", time: "2 год тому", thumb: "🍲", thumbBg: g("#c026d3", "#f43f6a"), unread: true },
+        { emoji: "🧊", who: "Комора", text: "Молоко 2,5% спливає завтра — є 3 рецепти", time: "3 год тому" },
+        { emoji: "🥑", who: "Ірина Здорово", text: "приготувала твій «Курячий суп» і поставила ★5", time: "вчора", thumb: "🍲", thumbBg: g("#eab308", "#fde047") },
+        { emoji: "🍰", who: "Солодка Оля", text: "прокоментувала «Тірамісу»: «Додала какао — бомба!»", time: "вчора", thumb: "🍰", thumbBg: g("#78350f", "#d97706") },
+        { emoji: "👨‍👩‍👧", who: "Андрій", text: "додав у список покупок 4 продукти", time: "2 дні тому" },
+      ].map(n => ({ ...n, thumb: n.thumb || "", bg: n.unread ? "rgba(255,107,53,.07)" : "#121215", border: n.unread ? "rgba(255,107,53,.25)" : "#202025", avBg: n.who === "Таймер" || n.who === "Комора" ? "#1c1c21" : g("#ff6b35", "#ffb020") })),
+    };
+  }
+  setStep(i) {
+    const n = Math.max(0, Math.min(STEPS.length - 1, i));
+    this.setState({ step: n, left: STEPS[n].min * 60, running: false });
+  }
+  renderVals() {
+    const s = this.state;
+    const go = screen => () => this.setState({ screen });
+    const navDef = [
+      ["home", "Стрічка", IC.home], ["explore", "Пошук", IC.compass], ["decide", "Вирішити", IC.sparkles],
+      ["pantry", "Комора", IC.fridge], ["plan", "Тиждень", IC.calendar], ["diary", "Щоденник", IC.diary],
+    ];
+    const parent = { roulette: "decide", shopping: "plan" }[s.screen] || s.screen;
+    const nav = navDef.map(([id, label, d]) => {
+      const active = parent === id;
+      const isDecide = id === "decide";
+      return {
+        label, d,
+        go: go(id),
+        bg: isDecide ? "linear-gradient(135deg,#ff6b35,#ffb020)" : active ? "#1c1c21" : "transparent",
+        color: isDecide ? "#1a0d05" : active ? "#ff6b35" : "#9b9ba3",
+      };
+    });
+    const mm = Math.floor(s.left / 60), ss = s.left % 60;
+    const step = STEPS[s.step];
+    const checkedCount = s.checked.filter(Boolean).length;
+    const done = s.left === 0;
+    const bezel = this.props.bezel ?? true;
+    return {
+      bezelPad: bezel ? "18px" : "0",
+      bezelRadius: bezel ? "38px" : "0",
+      screenRadius: bezel ? "14px" : "0",
+      showRail: s.screen !== "cook",
+      isHome: s.screen === "home", isDecide: s.screen === "decide", isCook: s.screen === "cook",
+      isRoulette: s.screen === "roulette", isExplore: s.screen === "explore", isPantry: s.screen === "pantry",
+      isPlan: s.screen === "plan", isShopping: s.screen === "shopping", isDiary: s.screen === "diary",
+      isRecipe: s.screen === "recipe", isMe: s.screen === "me", isNotif: s.screen === "notif",
+      nav,
+      goDecide: go("decide"), goCook: go("cook"), goHome: go("home"), goRecipe: go("recipe"),
+      goRoulette: go("roulette"), goShopping: go("shopping"), goPlan: go("plan"), goMe: go("me"), goNotif: go("notif"),
+      notifBg: s.screen === "notif" ? "#1c1c21" : "transparent",
+      notifColor: s.screen === "notif" ? "#ff6b35" : "#9b9ba3",
+      meRing: s.screen === "me" ? "#ff6b35" : "#2b2b31",
+      ...this.extraVals(s, go),
+      quick: [{ label: "Рулетка", d: IC.dices }, { label: "Холодильник", d: IC.fridge }, { label: "Врятувати", d: IC.buoy }],
+      trending: [
+        ["🍲", "Червоний борщ", "2 год · 1,2 тис.", "#c026d3", "#f43f6a"],
+        ["🥔", "Деруни зі сметаною", "40 хв · 860", "#f59e0b", "#ff6b35"],
+        ["🥞", "Сирники як у дитинстві", "25 хв · 740", "#fbbf24", "#fb7185"],
+        ["🍝", "Справжня карбонара", "20 хв · 610", "#fbbf24", "#facc15"],
+        ["🍜", "Том ям з креветками", "35 хв · 480", "#f43f6a", "#ff6b35"],
+        ["🍳", "Шакшука", "25 хв · 410", "#dc2626", "#f97316"],
+      ].map(([emoji, title, meta, a, b], i) => ({ emoji, title, meta, bg: g(a, b), top: i < 3, rank: i + 1 })),
+      feed: [
+        ["🎃", "Марія Коваль · 2 год тому", "Крем-суп з гарбуза", "312", "45 хв", "#f97316", "#fbbf24"],
+        ["🍚", "Тарас Шеф · вчора", "Плов у казані", "528", "1,5 год", "#c2410c", "#f59e0b"],
+        ["🐟", "Ірина Здорово · вчора", "Лосось з лимоном у духовці", "204", "30 хв", "#fb7185", "#fdba74"],
+        ["🍰", "Солодка Оля · 2 дні тому", "Тірамісу без випікання", "690", "20 хв", "#78350f", "#d97706"],
+      ].map(([emoji, author, title, likes, time, a, b]) => ({ emoji, author, title, likes, time, bg: g(a, b) })),
+      macros: [
+        { label: "Білки", val: "62 / 90 г", pct: "69%", color: "#38bdf8" },
+        { label: "Жири", val: "48 / 70 г", pct: "68%", color: "#ffb020" },
+        { label: "Вуглеводи", val: "131 / 250 г", pct: "52%", color: "#34d399" },
+      ],
+      forYou: [
+        ["🍄", "Гречка з грибами і цибулею", "усе є в коморі", "#78716c", "#a8a29e"],
+        ["🥘", "Овочеве рагу з холодильника", "кабачок спливає завтра", "#16a34a", "#eab308"],
+        ["🍗", "Курка теріякі з рисом", "схоже на те, що ти лайкала", "#b45309", "#f59e0b"],
+      ].map(([emoji, title, reason, a, b]) => ({ emoji, title, reason, bg: g(a, b) })),
+      repeatBg: s.repeat ? "linear-gradient(135deg,#ff6b35,#ffb020)" : "transparent",
+      repeatBorder: s.repeat ? "0" : "2px solid #2b2b31",
+      toggleRepeat: () => this.setState(x => ({ repeat: !x.repeat })),
+      modes: [
+        ["Холодильник", "% збігу з коморою і чого бракує", IC.fridge, "#38bdf8"],
+        ["Дуель", "Переможець лишається, поки не поб'ють", IC.swords, "#f43f6a"],
+        ["Разом", "Компанія голосує — шукаємо спільне «так»", IC.users, "#a78bfa"],
+        ["Врятувати", "Страви з того, що скоро зіпсується", IC.buoy, "#34d399"],
+        ["Поки є світло", "Встигнути між відключеннями", IC.zap, "#ffb020"],
+        ["Тиждень", "Меню на 7 днів і список покупок", IC.calendar, "#ff6b35"],
+      ].map(([title, desc, d, color], i) => ({ title, desc, d, color, tint: `color-mix(in oklab, ${color} 16%, transparent)`, go: go(["pantry", "recipe", "recipe", "pantry", "recipe", "plan"][i]) })),
+      step,
+      stepNo: s.step + 1, stepNoPad: String(s.step + 1).padStart(2, "0"), stepTotal: STEPS.length,
+      progressPct: `${((s.step + 1) / STEPS.length) * 100}%`,
+      segs: STEPS.map((_, i) => ({
+        bg: i < s.step ? "#ff6b35" : i === s.step ? "linear-gradient(90deg,#ff6b35,#ffb020)" : "#202025",
+        go: () => this.setStep(i),
+      })),
+      hasTimer: step.min > 0,
+      timerText: `${mm}:${String(ss).padStart(2, "0")}`,
+      timerLabel: done ? "Готово!" : s.running ? `Таймер кроку · ${step.min} хв` : "Таймер на паузі",
+      timerColor: done ? "#34d399" : "#f5f5f7",
+      timerBorder: s.running ? "rgba(255,107,53,.35)" : "#202025",
+      playD: s.running ? "M6 4h4v16H6z M14 4h4v16h-4z" : "M7 4l13 8-13 8z",
+      toggleTimer: () => this.setState(x => ({ running: !x.running })),
+      addMin: () => this.setState(x => ({ left: x.left + 60 })),
+      resetTimer: () => this.setState({ left: step.min * 60, running: false }),
+      prevStep: () => this.setStep(s.step - 1),
+      nextStep: () => s.step === STEPS.length - 1 ? this.setState({ screen: "home" }) : this.setStep(s.step + 1),
+      nextLabel: s.step === STEPS.length - 1 ? "Готово" : "Далі",
+      prevOpacity: s.step === 0 ? 0.4 : 1,
+      checkedCount, ingTotal: INGS.length,
+      ings: INGS.map(([emoji, name, qty], i) => {
+        const c = s.checked[i];
+        return {
+          emoji, name, qty,
+          boxBg: c ? "#34d399" : "transparent", boxBorder: c ? "0" : "2px solid #2b2b31",
+          opacity: c ? 0.55 : 1, deco: c ? "line-through" : "none",
+          toggle: () => this.setState(x => { const k = x.checked.slice(); k[i] = !k[i]; return { checked: k }; }),
+        };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>
